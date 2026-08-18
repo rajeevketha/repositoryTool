@@ -17,6 +17,12 @@ Optional GitHub storage versions each Jira ticket (`PROJ-123-v1`) so later orgs 
 
 Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Search the type list for any other Metadata API type (Apex, LWC, Experience Cloud, settings, and so on). **Load all types from source org** refreshes the list from that sandbox.
 
+## One-minute user manual
+
+Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minute). Open [docs/user-manual.html](docs/user-manual.html) in a browser to replay the same slides.
+
+The flow is: detect orgs → pick components → deploy to the target org. Git is optional if you want `PROJ-123-v1` for later orgs.
+
 ## Install (unpacked Chrome extension)
 
 1. Clone this repository.

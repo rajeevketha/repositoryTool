@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OrgFlow — simple user manual</title>
+  <style>
+    :root {
+      --navy: #032d60;
+      --blue: #0176d3;
+      --teal: #0b7056;
+      --bg: #071830;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #071830;
+      color: #fff;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      overflow: hidden;
+    }
+    .stage {
+      width: 1280px;
+      height: 720px;
+      position: relative;
+      background: radial-gradient(circle at 20% 20%, #0b3a6e, #071830 55%);
+    }
+    .slide {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      padding: 48px 56px;
+      display: flex;
+      gap: 36px;
+    }
+    .slide.on { opacity: 1; }
+    .copy { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .step {
+      font-size: 14px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #7ec2ff;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    h1, h2 { margin: 0 0 16px; font-size: 42px; line-height: 1.15; }
+    p { margin: 0 0 12px; font-size: 22px; line-height: 1.4; color: #d7e6f5; max-width: 560px; }
+    .note { font-size: 16px; color: #9bb4c9; }
+    .panel {
+      width: 380px;
+      background: #f4f6f9;
+      color: #181818;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 18px 50px rgba(0,0,0,.35);
+      align-self: center;
+      font-size: 13px;
+    }
+    .ph {
+      background: linear-gradient(135deg, #032d60, #014486);
+      color: #fff;
+      padding: 12px 14px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .ph strong { display: block; font-size: 14px; }
+    .ph span { font-size: 11px; opacity: .8; }
+    .status { background: #eaf6ed; color: #2e844a; padding: 8px 12px; font-size: 12px; }
+    .tabs { display: grid; grid-template-columns: repeat(4,1fr); background: #fff; }
+    .tabs div { padding: 9px 4px; text-align: center; font-weight: 700; color: #5c6a77; border-bottom: 2px solid transparent; }
+    .tabs .a { color: #0176d3; border-bottom-color: #0176d3; }
+    .body { padding: 12px; }
+    label { display: block; font-weight: 700; color: #032d60; margin: 8px 0 4px; }
+    .box, .sel {
+      border: 1px solid #c9d3dd;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+    }
+    .btn {
+      margin-top: 8px;
+      background: #0b7056;
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-weight: 700;
+      width: 100%;
+      text-align: center;
+    }
+    .btn.blue { background: #0176d3; }
+    .btn.gray { background: #eef3f8; color: #032d60; }
+    .chk { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+    .hl { background: #e8f4ff; outline: 2px solid #0176d3; border-radius: 8px; padding: 6px; }
+    .dot {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: #0176d3;
+    }
+    .progress {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: #123456;
+    }
+    .bar { height: 100%; width: 0; background: #0176d3; }
+    .brand-row { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+    .logo {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: #032d60 url("../extension/icons/icon128.png") center/cover;
+    }
+    .big-flow { display: flex; gap: 16px; align-items: center; margin-top: 22px; }
+    .org {
+      background: #0e2f5a; border: 1px solid #1b5a96; border-radius: 12px;
+      padding: 16px 18px; min-width: 150px; text-align: center;
+    }
+    .arrow { font-size: 28px; color: #7ec2ff; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <section class="slide on" data-ms="7000">
+      <div class="copy">
+        <div class="brand-row"><div class="logo"></div><div class="step">User manual · 1 minute</div></div>
+        <h1>OrgFlow for configurators</h1>
+        <p>Build fields, layouts, and flows in a sandbox. Deploy that same package to QA, UAT, or production.</p>
+        <p class="note">Chrome extension · no Salesforce CLI required</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="dot"></div><div><strong>OrgFlow</strong><span>Config sandbox → other orgs</span></div></div>
+        <div class="status">Log into your Salesforce orgs, then pick configuration to deploy.</div>
+        <div class="tabs"><div class="a">Deploy</div><div>Versions</div><div>Components</div><div>Setup</div></div>
+        <div class="body">
+          <div class="box">Nothing selected yet — pick fields, layouts, flows…</div>
+          <div class="btn">Deploy configuration to target org</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="10000">
+      <div class="copy">
+        <div class="step">Step 1 · Setup</div>
+        <h2>Log into both orgs in Chrome</h2>
+        <p>Open the sandbox you configured and the org you want to update. Then click Detect logged-in orgs.</p>
+        <p class="note">OrgFlow uses your Salesforce session. GitHub is optional.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="dot"></div><div><strong>OrgFlow</strong><span>Setup</span></div></div>
+        <div class="tabs"><div>Deploy</div><div>Versions</div><div>Components</div><div class="a">Setup</div></div>
+        <div class="body">
+          <label>Salesforce orgs</label>
+          <div class="box hl">Dev sandbox (source)</div>
+          <div class="box" style="margin-top:6px">UAT (target)</div>
+          <div class="btn blue">Detect logged-in orgs</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="14000">
+      <div class="copy">
+        <div class="step">Step 2 · Components</div>
+        <h2>Pick what you changed</h2>
+        <p>Search a type (Fields, Flows, Layouts…). Load members from the sandbox and tick the ones for this Jira.</p>
+        <p class="note">Every Salesforce metadata type is searchable. Common config types sit at the top.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="dot"></div><div><strong>OrgFlow</strong><span>Components</span></div></div>
+        <div class="tabs"><div>Deploy</div><div>Versions</div><div class="a">Components</div><div>Setup</div></div>
+        <div class="body">
+          <div class="sel">Search types: field</div>
+          <div class="hl" style="margin-top:8px"><strong>Fields</strong><div style="color:#5c6a77">CustomField</div></div>
+          <div class="chk">☑ Account.Customer_Status__c</div>
+          <div class="chk">☑ Account.Industry__c</div>
+          <div class="chk">☐ Account.Old_Field__c</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="12000">
+      <div class="copy">
+        <div class="step">Step 3 · Deploy</div>
+        <h2>Push to the other org</h2>
+        <p>Choose source = sandbox, target = QA/UAT/prod. Add the Jira number and a short comment.</p>
+        <p class="note">Use Validate only first if you want a dry run. Config-only packages can skip tests.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="dot"></div><div><strong>OrgFlow</strong><span>Deploy</span></div></div>
+        <div class="status">2 orgs · 2 components ready to deploy</div>
+        <div class="tabs"><div class="a">Deploy</div><div>Versions</div><div>Components</div><div>Setup</div></div>
+        <div class="body">
+          <label>Jira ticket</label>
+          <div class="box">PROJ-123</div>
+          <label>Source → Target</label>
+          <div class="box">Dev sandbox → UAT</div>
+          <div class="btn">Deploy configuration to target org</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="10000">
+      <div class="copy">
+        <div class="step">Optional · Version</div>
+        <h2>Save it as PROJ-123-v1</h2>
+        <p>If more orgs need the same change later, Save version to Git. Then Deploy a saved Jira version — no re-picking.</p>
+        <p class="note">You can deploy without Git. Git is only for reuse.</p>
+        <div class="big-flow">
+          <div class="org">Sandbox<br/>v1</div>
+          <div class="arrow">→</div>
+          <div class="org">QA</div>
+          <div class="arrow">→</div>
+          <div class="org">Prod</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="8000">
+      <div class="copy">
+        <div class="step">That’s it</div>
+        <h2>Three clicks, one package</h2>
+        <p>1. Detect orgs · 2. Pick components · 3. Deploy to the target org.</p>
+        <p class="note">Load the unpacked extension folder in chrome://extensions to start.</p>
+      </div>
+    </section>
+
+    <div class="progress"><div class="bar" id="bar"></div></div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const slides = [...document.querySelectorAll(".slide")];
+    const bar = document.getElementById("bar");
+    const times = slides.map((s) => Number(s.dataset.ms));
+    const total = times.reduce((a, b) => a + b, 0);
+    const only = params.get("slide");
+    if (only !== null) {
+      slides.forEach((s, idx) => s.classList.toggle("on", String(idx) === only));
+      bar.style.width = ((Number(only) + 1) / slides.length * 100) + "%";
+      document.body.dataset.done = "1";
+    } else {
+    let i = 0;
+    let elapsed = 0;
+    function show(n) {
+      slides.forEach((s, idx) => s.classList.toggle("on", idx === n));
+    }
+    function tick() {
+      show(i);
+      const wait = times[i];
+      const start = elapsed;
+      const end = elapsed + wait;
+      const startedAt = performance.now();
+      function progress() {
+        const p = Math.min(1, (elapsed + (performance.now() - startedAt)) / total);
+        bar.style.width = (p * 100) + "%";
+        if (performance.now() - startedAt < wait) requestAnimationFrame(progress);
+      }
+      progress();
+      setTimeout(() => {
+        elapsed = end;
+        i += 1;
+        if (i < slides.length) tick();
+        else {
+          bar.style.width = "100%";
+          document.body.dataset.done = "1";
+        }
+      }, wait);
+    }
+    tick();
+    }
+  </script>
+</body>
+</html>
