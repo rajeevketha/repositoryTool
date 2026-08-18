@@ -159,6 +159,29 @@ export function retrieveBody(typeNames, apiVersion) {
   );
 }
 
+export function describeMetadataBody(apiVersion) {
+  return `    <urn:describeMetadata xmlns:urn="http://soap.sforce.com/2006/04/metadata">
+      <urn:asOfVersion>${escapeXml(apiVersion)}</urn:asOfVersion>
+    </urn:describeMetadata>`;
+}
+
+export function parseDescribeMetadata(xml) {
+  const types = [];
+  const blocks = String(xml || "").split(/<(?:[\w]+:)?metadataObjects>/i).slice(1);
+  for (const block of blocks) {
+    const chunk = block.split(/<\/(?:[\w]+:)?metadataObjects>/i)[0];
+    const xmlName = xmlText(chunk, "xmlName");
+    if (!xmlName) continue;
+    types.push({
+      xmlName,
+      inFolder: xmlText(chunk, "inFolder") === "true",
+      children: xmlAll(chunk, "childXmlNames"),
+      directoryName: xmlText(chunk, "directoryName")
+    });
+  }
+  return types;
+}
+
 export function listMetadataBody(queries, apiVersion) {
   const qxml = (queries || [])
     .map((q) => {

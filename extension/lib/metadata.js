@@ -8,12 +8,14 @@ import {
   parseRetrieveResult,
   parseDeployResult,
   soapFault,
+  describeMetadataBody,
+  parseDescribeMetadata,
   listMetadataBody,
   parseListMetadata,
   normalizePackageTypes
 } from "./packageXml.js";
 import { API_VERSION } from "./salesforce.js";
-import { FOLDER_TYPES } from "./metadataTypes.js";
+import { FOLDER_TYPES, folderTypeFor } from "./metadataTypes.js";
 
 function metadataUrl(instanceUrl, apiVersion = API_VERSION) {
   return `${instanceUrl.replace(/\/$/, "")}/services/Soap/m/${apiVersion}`;
@@ -106,15 +108,22 @@ async function listMetadataQueries({ instanceUrl, sid, queries, apiVersion }) {
   return parseListMetadata(xml);
 }
 
-export async function listMetadataType({ instanceUrl, sid, typeName, apiVersion = API_VERSION, onProgress }) {
-  const folderType = FOLDER_TYPES[typeName];
-  if (folderType) {
-    onProgress?.(`Listing ${folderType} folders…`);
+export async function describeOrgMetadata({ instanceUrl, sid, apiVersion = API_VERSION }) {
+  const xml = await soapCall(instanceUrl, sid, "describeMetadata", describeMetadataBody(apiVersion), apiVersion);
+  const fault = soapFault(xml);
+  if (fault && !xml.includes("metadataObjects")) throw new Error(fault);
+  return parseDescribeMetadata(xml);
+}
+
+export async function listMetadataType({ instanceUrl, sid, typeName, folderType, inFolder, apiVersion = API_VERSION, onProgress }) {
+  const folder = folderType || folderTypeFor(typeName, inFolder) || FOLDER_TYPES[typeName];
+  if (folder) {
+    onProgress?.(`Listing ${folder} folders…`);
     const folders = await listMetadataQueries({
       instanceUrl,
       sid,
       apiVersion,
-      queries: [{ type: folderType }]
+      queries: [{ type: folder }]
     });
     const names = folders.map((f) => f.fullName).filter(Boolean);
     if (!names.length) return [];
@@ -125,7 +134,7 @@ export async function listMetadataType({ instanceUrl, sid, typeName, apiVersion 
         instanceUrl,
         sid,
         apiVersion,
-        queries: group.map((folder) => ({ type: typeName, folder }))
+        queries: group.map((folderName) => ({ type: typeName, folder: folderName }))
       });
       members.push(...part);
     }

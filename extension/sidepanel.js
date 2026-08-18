@@ -1,5 +1,5 @@
 import { loadSettings, saveSettings, isGithubConfigured, repoLabel } from "./lib/storage.js";
-import { catalogGroups, memberHint } from "./lib/metadataTypes.js";
+import { catalogGroupsFromTypes, memberHint, fallbackTypeRecords, mergeDescribedTypes } from "./lib/metadataTypes.js";
 import {
   parseTicketInput,
   mintChangeId,
@@ -25,7 +25,7 @@ import {
   getRef
 } from "./lib/github.js";
 import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
-import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType } from "./lib/metadata.js";
+import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata } from "./lib/metadata.js";
 import {
   buildPackageXmlFromTypes,
   parsePackageXml,
@@ -51,7 +51,8 @@ const state = {
   packageTypes: [],
   xmlDirty: false,
   activeType: "CustomField",
-  typeAudience: "config",
+  typeFilter: "",
+  availableTypes: [],
   membersCache: {},
   stagedFiles: null,
   activeFilePath: ""
@@ -134,29 +135,56 @@ function renderPackageUi() {
   renderMembers();
 }
 
-function renderTypeSelect() {
-  const audience = $("type-audience")?.value || state.typeAudience || "config";
-  state.typeAudience = audience;
-  const select = $("meta-type");
-  const groups = catalogGroups(audience);
-  select.innerHTML = groups
+function typesForPicker() {
+  return state.availableTypes.length ? state.availableTypes : fallbackTypeRecords();
+}
+
+function renderTypePicker() {
+  const types = typesForPicker();
+  const query = $("type-search")?.value || state.typeFilter || "";
+  state.typeFilter = query;
+  const groups = catalogGroupsFromTypes(types, query);
+  const restCap = query ? 200 : 60;
+  const picker = $("type-picker");
+  picker.innerHTML = groups
     .map((group) => {
-      const options = group.types
-        .map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.label)}</option>`)
+      const items = group.id === "all" ? group.types.slice(0, restCap) : group.types;
+      const extra = group.id === "all" && group.types.length > items.length
+        ? `<div class="muted">Showing ${items.length} of ${group.types.length}. Type in the search box to find the rest.</div>`
+        : "";
+      const chips = items
+        .map((t) => {
+          const active = t.name === state.activeType ? "active" : "";
+          return `<button type="button" class="type-chip ${active}" data-type="${escapeHtml(t.name)}">
+            <span>${escapeHtml(t.label)}</span>
+            <span class="api">${escapeHtml(t.name)}</span>
+          </button>`;
+        })
         .join("");
-      return `<optgroup label="${escapeHtml(group.label)}">${options}</optgroup>`;
+      return `<div class="type-group-label">${escapeHtml(group.label)}</div>${chips}${extra}`;
     })
-    .join("");
-  const available = new Set(groups.flatMap((g) => g.types.map((t) => t.name)));
-  if (state.activeType && available.has(state.activeType)) select.value = state.activeType;
-  state.activeType = select.value;
-  const hint = memberHint(state.activeType);
-  $("manual-member").placeholder = hint;
-  $("member-filter").placeholder = `Filter… e.g. ${hint}`;
+    .join("") || `<div class="empty">No types match that search.</div>`;
+  const fromOrg = types.some((t) => t.fromOrg);
+  $("type-count").textContent = fromOrg
+    ? `${types.length} metadata types from the source org. Search to find any of them.`
+    : `${types.length} metadata types ready. Load from the source org to match that org exactly.`;
+  const active = types.find((t) => t.name === state.activeType) || types[0];
+  if (active) {
+    state.activeType = active.name;
+    $("active-type-title").textContent = `Selected type: ${active.label}`;
+    $("active-type-meta").textContent = active.name;
+    const hint = memberHint(state.activeType);
+    $("manual-member").placeholder = hint;
+    $("member-filter").placeholder = `Filter… e.g. ${hint}`;
+  }
+}
+
+function renderTypeSelect() {
+  renderTypePicker();
 }
 
 function renderMembers() {
-  const typeName = $("meta-type").value || state.activeType;
+  const typeName = state.activeType;
   const cache = state.membersCache[typeName];
   const filter = $("member-filter").value.trim().toLowerCase();
   const selected = selectedMembersFor(typeName);
@@ -353,6 +381,7 @@ async function refreshAll() {
     ? `${state.settings.github.owner}/${state.settings.github.repo}`
     : "";
   $("gh-branch").value = state.settings.github.branch || "main";
+  state.availableTypes = fallbackTypeRecords();
   $("test-level").value = state.settings.testLevel || "NoTestRun";
   $("check-only").checked = Boolean(state.settings.checkOnly);
   $("package-xml").value = currentXml();
@@ -611,17 +640,34 @@ async function deployVersion(explicitId) {
   return updated;
 }
 
+async function loadOrgTypes() {
+  const source = selectedOrg("source-org");
+  if (!source) throw new Error("Select a source org on the Deploy tab first.");
+  log(`Loading every metadata type from ${source.label}…`);
+  const described = await describeOrgMetadata({
+    instanceUrl: source.instanceUrl,
+    sid: source.sid,
+    apiVersion: apiVersion()
+  });
+  state.availableTypes = mergeDescribedTypes(described);
+  renderTypePicker();
+  log(`Loaded ${state.availableTypes.length} metadata types (including child types like fields).`);
+}
+
 async function loadMembers() {
   const source = selectedOrg("source-org");
-  if (!source) throw new Error("Select a source org on the Ship tab first.");
-  const typeName = $("meta-type").value;
-  state.activeType = typeName;
+  if (!source) throw new Error("Select a source org on the Deploy tab first.");
+  const typeName = state.activeType;
+  if (!typeName) throw new Error("Pick a metadata type first.");
+  const meta = typesForPicker().find((t) => t.name === typeName);
   log(`Listing ${typeName} in ${source.label}…`);
   try {
     const items = await listMetadataType({
       instanceUrl: source.instanceUrl,
       sid: source.sid,
       typeName,
+      folderType: meta?.folderType,
+      inFolder: meta?.inFolder,
       apiVersion: apiVersion(),
       onProgress: (m) => log(m)
     });
@@ -672,6 +718,9 @@ function saveFileEdits() {
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
+  if (name === "components" && selectedOrg("source-org") && !typesForPicker().some((t) => t.fromOrg)) {
+    run(loadOrgTypes);
+  }
 }
 
 function switchSubtab(name) {
@@ -716,6 +765,7 @@ $("btn-both").addEventListener("click", () => run(async () => {
   await deployVersion();
 }));
 $("btn-load-members").addEventListener("click", () => run(loadMembers));
+$("btn-load-types").addEventListener("click", () => run(loadOrgTypes));
 $("btn-apply-xml").addEventListener("click", () => run(applyXmlToPicker));
 $("btn-rebuild-xml").addEventListener("click", rebuildXmlFromPicker);
 $("btn-save-file").addEventListener("click", () => run(saveFileEdits));
@@ -726,7 +776,7 @@ $("btn-clear-package").addEventListener("click", () => run(async () => {
   await persistPackage();
 }));
 $("btn-clear-type").addEventListener("click", () => run(async () => {
-  state.packageTypes = setTypeMembers(state.packageTypes, $("meta-type").value, []);
+  state.packageTypes = setTypeMembers(state.packageTypes, state.activeType, []);
   invalidateStaged();
   await persistPackage();
 }));
@@ -734,7 +784,7 @@ $("btn-select-visible").addEventListener("click", () => run(async () => {
   const boxes = [...document.querySelectorAll("#member-list input[data-member]")];
   const names = boxes.map((b) => b.dataset.member);
   if (!names.length) throw new Error("Load or filter members first.");
-  const typeName = $("meta-type").value;
+  const typeName = state.activeType;
   const current = selectedMembersFor(typeName);
   names.forEach((n) => current.add(n));
   state.packageTypes = setTypeMembers(state.packageTypes, typeName, [...current]);
@@ -744,21 +794,20 @@ $("btn-select-visible").addEventListener("click", () => run(async () => {
 $("btn-add-member").addEventListener("click", () => run(async () => {
   const name = $("manual-member").value.trim();
   if (!name) throw new Error("Enter a metadata member name.");
-  const typeName = $("meta-type").value;
+  const typeName = state.activeType;
   state.packageTypes = toggleMember(state.packageTypes, typeName, name, true);
   $("manual-member").value = "";
   invalidateStaged();
   await persistPackage();
 }));
-$("type-audience").addEventListener("change", () => {
-  renderTypeSelect();
-  renderMembers();
+$("type-search").addEventListener("input", () => {
+  renderTypePicker();
 });
-$("meta-type").addEventListener("change", () => {
-  state.activeType = $("meta-type").value;
-  const hint = memberHint(state.activeType);
-  $("manual-member").placeholder = hint;
-  $("member-filter").placeholder = `Filter… e.g. ${hint}`;
+$("type-picker").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-type]");
+  if (!btn) return;
+  state.activeType = btn.dataset.type;
+  renderTypePicker();
   renderMembers();
 });
 $("member-filter").addEventListener("input", renderMembers);
@@ -766,7 +815,7 @@ $("member-list").addEventListener("change", (event) => {
   const box = event.target.closest("input[data-member]");
   if (!box) return;
   run(async () => {
-    const typeName = $("meta-type").value;
+    const typeName = state.activeType;
     const listed = (state.membersCache[typeName]?.items || []).map((i) => i.fullName);
     state.packageTypes = toggleMember(state.packageTypes, typeName, box.dataset.member, box.checked, listed);
     invalidateStaged();

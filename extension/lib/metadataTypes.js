@@ -1,117 +1,80 @@
-export const CATALOG_GROUPS = [
-  {
-    id: "objects",
-    label: "Objects & fields",
-    audience: "config",
-    types: [
-      { name: "CustomField", label: "Fields (Object.Field)" },
-      { name: "CustomObject", label: "Objects (whole object)" },
-      { name: "RecordType", label: "Record types" },
-      { name: "FieldSet", label: "Field sets" },
-      { name: "BusinessProcess", label: "Business processes" },
-      { name: "ValidationRule", label: "Validation rules" },
-      { name: "CompactLayout", label: "Compact layouts" },
-      { name: "ListView", label: "List views" },
-      { name: "WebLink", label: "Buttons and links" },
-      { name: "ActionOverride", label: "Action overrides" },
-      { name: "CustomMetadata", label: "Custom metadata records / types" }
-    ]
-  },
-  {
-    id: "ui",
-    label: "Pages, layouts & apps",
-    audience: "config",
-    types: [
-      { name: "Layout", label: "Page layouts" },
-      { name: "FlexiPage", label: "Lightning pages" },
-      { name: "CustomApplication", label: "Apps" },
-      { name: "CustomTab", label: "Tabs" },
-      { name: "QuickAction", label: "Quick actions" },
-      { name: "PathAssistant", label: "Path assistants" },
-      { name: "HomePageLayout", label: "Home page layouts" },
-      { name: "CustomLabel", label: "Custom labels" }
-    ]
-  },
-  {
-    id: "automation",
-    label: "Automation",
-    audience: "config",
-    types: [
-      { name: "Flow", label: "Flows" },
-      { name: "FlowDefinition", label: "Flow definitions" },
-      { name: "ApprovalProcess", label: "Approval processes" },
-      { name: "Workflow", label: "Workflow rules" },
-      { name: "AssignmentRules", label: "Assignment rules" },
-      { name: "AutoResponseRules", label: "Auto-response rules" },
-      { name: "EscalationRules", label: "Escalation rules" },
-      { name: "DuplicateRule", label: "Duplicate rules" },
-      { name: "MatchingRule", label: "Matching rules" }
-    ]
-  },
-  {
-    id: "security",
-    label: "Access",
-    audience: "config",
-    types: [
-      { name: "PermissionSet", label: "Permission sets" },
-      { name: "PermissionSetGroup", label: "Permission set groups" },
-      { name: "CustomPermission", label: "Custom permissions" },
-      { name: "Profile", label: "Profiles (large — prefer permission sets)" },
-      { name: "SharingRules", label: "Sharing rules" },
-      { name: "Role", label: "Roles" },
-      { name: "Group", label: "Public groups" },
-      { name: "Queue", label: "Queues" }
-    ]
-  },
-  {
-    id: "picklists",
-    label: "Picklists",
-    audience: "config",
-    types: [
-      { name: "GlobalValueSet", label: "Global value sets" },
-      { name: "StandardValueSet", label: "Standard value sets" }
-    ]
-  },
-  {
-    id: "content",
-    label: "Reports, email & files",
-    audience: "config",
-    types: [
-      { name: "Report", label: "Reports" },
-      { name: "ReportType", label: "Report types" },
-      { name: "Dashboard", label: "Dashboards" },
-      { name: "EmailTemplate", label: "Email templates" },
-      { name: "Letterhead", label: "Letterheads" },
-      { name: "Document", label: "Documents" },
-      { name: "StaticResource", label: "Static resources" }
-    ]
-  },
-  {
-    id: "integrations",
-    label: "Integrations",
-    audience: "config",
-    types: [
-      { name: "NamedCredential", label: "Named credentials" },
-      { name: "RemoteSiteSetting", label: "Remote site settings" },
-      { name: "ConnectedApp", label: "Connected apps" },
-      { name: "CustomNotificationType", label: "Custom notification types" }
-    ]
-  },
-  {
-    id: "code",
-    label: "Code (developers)",
-    audience: "code",
-    types: [
-      { name: "ApexClass", label: "Apex classes" },
-      { name: "ApexTrigger", label: "Apex triggers" },
-      { name: "LightningComponentBundle", label: "Lightning web components" },
-      { name: "AuraDefinitionBundle", label: "Aura components" },
-      { name: "ApexPage", label: "Visualforce pages" },
-      { name: "ApexComponent", label: "Visualforce components" },
-      { name: "LightningMessageChannel", label: "Lightning message channels" }
-    ]
-  }
+import { ALL_METADATA_TYPES } from "./allMetadataTypes.js";
+
+export const COMMON_CONFIG_TYPES = [
+  "CustomField",
+  "CustomObject",
+  "RecordType",
+  "ValidationRule",
+  "Layout",
+  "FlexiPage",
+  "Flow",
+  "PermissionSet",
+  "PermissionSetGroup",
+  "CustomApplication",
+  "CustomTab",
+  "QuickAction",
+  "ListView",
+  "CompactLayout",
+  "GlobalValueSet",
+  "StandardValueSet",
+  "CustomLabel",
+  "CustomMetadata",
+  "PathAssistant",
+  "ApprovalProcess",
+  "AssignmentRules",
+  "DuplicateRule",
+  "MatchingRules",
+  "Report",
+  "Dashboard",
+  "EmailTemplate",
+  "Profile",
+  "SharingRules",
+  "Role",
+  "Group",
+  "Queue",
+  "NamedCredential",
+  "RemoteSiteSetting",
+  "ApexClass",
+  "ApexTrigger",
+  "LightningComponentBundle"
 ];
+
+export const FRIENDLY_LABELS = {
+  CustomField: "Fields",
+  CustomObject: "Objects",
+  RecordType: "Record types",
+  ValidationRule: "Validation rules",
+  FieldSet: "Field sets",
+  BusinessProcess: "Business processes",
+  CompactLayout: "Compact layouts",
+  ListView: "List views",
+  WebLink: "Buttons and links",
+  Layout: "Page layouts",
+  FlexiPage: "Lightning pages",
+  CustomApplication: "Apps",
+  CustomTab: "Tabs",
+  QuickAction: "Quick actions",
+  PathAssistant: "Path assistants",
+  CustomLabel: "Custom labels",
+  CustomLabels: "Custom labels (bundle)",
+  Flow: "Flows",
+  FlowDefinition: "Flow definitions",
+  ApprovalProcess: "Approval processes",
+  PermissionSet: "Permission sets",
+  PermissionSetGroup: "Permission set groups",
+  Profile: "Profiles",
+  CustomMetadata: "Custom metadata",
+  GlobalValueSet: "Global value sets",
+  StandardValueSet: "Standard value sets",
+  Report: "Reports",
+  Dashboard: "Dashboards",
+  EmailTemplate: "Email templates",
+  LightningComponentBundle: "Lightning web components",
+  ApexClass: "Apex classes",
+  ApexTrigger: "Apex triggers",
+  SharingRules: "Sharing rules",
+  NamedCredential: "Named credentials"
+};
 
 export const FOLDER_TYPES = {
   EmailTemplate: "EmailFolder",
@@ -141,31 +104,92 @@ export const MEMBER_HINTS = {
   ApexClass: "MyClass"
 };
 
-export const METADATA_CATALOG = CATALOG_GROUPS.flatMap((group) =>
-  group.types.map((t) => ({ ...t, group: group.id, audience: group.audience, groupLabel: group.label }))
-);
+export function humanizeTypeName(name) {
+  if (FRIENDLY_LABELS[name]) return FRIENDLY_LABELS[name];
+  return String(name || "").replace(/([a-z])([A-Z])/g, "$1 $2");
+}
 
-export function uniqueCatalog(audience = "all") {
-  const seen = new Set();
-  return METADATA_CATALOG.filter((item) => {
-    if (audience === "config" && item.audience === "code") return false;
-    if (audience === "code" && item.audience !== "code") return false;
-    if (seen.has(item.name)) return false;
-    seen.add(item.name);
-    return true;
+export function folderTypeFor(typeName, inFolder = false) {
+  if (FOLDER_TYPES[typeName]) return FOLDER_TYPES[typeName];
+  if (!inFolder) return null;
+  if (typeName === "EmailTemplate") return "EmailFolder";
+  return `${typeName}Folder`;
+}
+
+export function typeRecord(name, extras = {}) {
+  return {
+    name,
+    label: humanizeTypeName(name),
+    common: COMMON_CONFIG_TYPES.includes(name),
+    ...extras
+  };
+}
+
+export function fallbackTypeRecords() {
+  return ALL_METADATA_TYPES.map((name) =>
+    typeRecord(name, { inFolder: Boolean(FOLDER_TYPES[name]), folderType: FOLDER_TYPES[name] || null })
+  );
+}
+
+export function mergeDescribedTypes(described = []) {
+  const byName = new Map(fallbackTypeRecords().map((t) => [t.name, t]));
+  for (const item of described) {
+    const name = item.xmlName || item.name;
+    if (!name) continue;
+    const folderType = folderTypeFor(name, item.inFolder);
+    byName.set(name, typeRecord(name, { inFolder: Boolean(item.inFolder), folderType, fromOrg: true }));
+    for (const child of item.children || []) {
+      const current = byName.get(child) || typeRecord(child);
+      byName.set(child, { ...current, childOf: name, fromOrg: true });
+    }
+  }
+  return [...byName.values()].sort((a, b) => {
+    const ac = COMMON_CONFIG_TYPES.indexOf(a.name);
+    const bc = COMMON_CONFIG_TYPES.indexOf(b.name);
+    if (ac !== -1 || bc !== -1) {
+      if (ac === -1) return 1;
+      if (bc === -1) return -1;
+      return ac - bc;
+    }
+    return a.label.localeCompare(b.label);
   });
 }
 
+export function searchTypes(types, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return types;
+  return types.filter((t) => t.name.toLowerCase().includes(q) || t.label.toLowerCase().includes(q));
+}
+
+export function catalogGroupsFromTypes(types, query = "") {
+  const filtered = searchTypes(types, query);
+  const byName = new Map(filtered.map((t) => [t.name, t]));
+  const common = COMMON_CONFIG_TYPES.map((name) => byName.get(name)).filter(Boolean);
+  const commonSet = new Set(COMMON_CONFIG_TYPES);
+  const rest = filtered.filter((t) => !commonSet.has(t.name));
+  const groups = [];
+  if (common.length) groups.push({ id: "common", label: "Common for configurators", types: common });
+  if (rest.length) groups.push({ id: "all", label: query ? "Matching types" : "All metadata types", types: rest });
+  return groups;
+}
+
+/** @deprecated kept for tests / compatibility */
+export function uniqueCatalog(audience = "all") {
+  const types = fallbackTypeRecords();
+  if (audience === "config") return types.filter((t) => COMMON_CONFIG_TYPES.includes(t.name) && !["ApexClass", "ApexTrigger", "LightningComponentBundle"].includes(t.name));
+  if (audience === "code") {
+    const code = ["ApexClass", "ApexTrigger", "LightningComponentBundle", "AuraDefinitionBundle", "ApexPage", "ApexComponent"];
+    return types.filter((t) => code.includes(t.name));
+  }
+  return types;
+}
+
 export function catalogGroups(audience = "all") {
-  return CATALOG_GROUPS.filter((group) => {
-    if (audience === "all") return true;
-    return group.audience === audience;
-  }).map((group) => ({
-    ...group,
-    types: group.types.filter((t, idx, arr) => arr.findIndex((x) => x.name === t.name) === idx)
-  }));
+  return catalogGroupsFromTypes(uniqueCatalog(audience === "all" ? "all" : audience));
 }
 
 export function memberHint(typeName) {
   return MEMBER_HINTS[typeName] || "API_Name";
 }
+
+export { ALL_METADATA_TYPES };

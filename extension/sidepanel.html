@@ -91,21 +91,19 @@
         </nav>
 
         <div id="subview-pick" class="subview active">
-          <p class="hint">This is the change-set style picker: load what exists in the source sandbox, tick the pieces for this Jira, then deploy them to another org.</p>
-          <label>
-            Show
-            <select id="type-audience">
-              <option value="config">Configuration (objects, UI, automation, access)</option>
-              <option value="all">All types (includes Apex / LWC)</option>
-              <option value="code">Code only</option>
-            </select>
-          </label>
-          <label>
-            Metadata type
-            <select id="meta-type"></select>
-          </label>
+          <p class="hint">Search any Salesforce metadata type, tick members from the source org, then deploy. Common configurator types sit at the top; every Metadata API type is available.</p>
+          <input id="type-search" type="search" placeholder="Search types: field, flow, layout, permission, apex…" />
           <div class="row-actions">
-            <button type="button" id="btn-load-members" class="secondary" data-busy>Load from source org</button>
+            <button type="button" id="btn-load-types" class="secondary" data-busy>Load all types from source org</button>
+          </div>
+          <div id="type-count" class="muted"></div>
+          <div id="type-picker" class="type-picker"></div>
+          <div id="active-type-label" class="card">
+            <div class="title" id="active-type-title">Selected type: Fields</div>
+            <div class="meta" id="active-type-meta">CustomField</div>
+          </div>
+          <div class="row-actions">
+            <button type="button" id="btn-load-members" class="secondary" data-busy>Load members from source org</button>
             <button type="button" id="btn-select-visible" class="secondary">Select visible</button>
             <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
           </div>

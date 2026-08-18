@@ -15,7 +15,7 @@ Optional GitHub storage versions each Jira ticket (`PROJ-123-v1`) so later orgs 
 4. **Deploy configuration to target org**. Tick **Validate only** first if you want a dry run.
 5. Optionally **Save version to Git** so the next org gets `PROJ-123-v1` instead of re-picking.
 
-Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Switch **Show** to “All types” when a developer also needs Apex/LWC in the same ticket.
+Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Search the type list for any other Metadata API type (Apex, LWC, Experience Cloud, settings, and so on). **Load all types from source org** refreshes the list from that sandbox.
 
 ## Install (unpacked Chrome extension)
 
@@ -45,7 +45,7 @@ Each configurator connects **their** repo with **their** token. Settings stay in
 
 On the **Components** tab:
 
-1. **Pick** — configuration types first. Load from the source sandbox, tick fields/layouts/flows/permission sets for this Jira, or type a member such as `Account.Customer_Status__c`.
+1. **Pick** — common configurator types first, every Metadata API type searchable. Load members from the source sandbox, tick what belongs to this Jira, or type a member such as `Account.Customer_Status__c`.
 2. **package.xml** — edit the XML by hand, then **Apply XML to picker**. Or **Rebuild from picker**.
 3. **Review / edit** — retrieve the package, then open metadata XML and edit it before deploy.
 
