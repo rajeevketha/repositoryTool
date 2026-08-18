@@ -25,9 +25,21 @@ import {
   getRef
 } from "./lib/github.js";
 import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
-import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles } from "./lib/metadata.js";
+import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType } from "./lib/metadata.js";
+import {
+  buildPackageXmlFromTypes,
+  parsePackageXml,
+  assertPackageXml,
+  memberCount,
+  packageSummary,
+  toggleMember,
+  setTypeMembers,
+  normalizePackageTypes
+} from "./lib/packageXml.js";
+import { isEditablePath, decodeUtf8Base64, withEditedText } from "./lib/files.js";
 
 const $ = (id) => document.getElementById(id);
+const MAX_MEMBERS = 400;
 
 const state = {
   settings: null,
@@ -35,7 +47,13 @@ const state = {
   versions: emptyVersionStore(),
   githubUser: null,
   repos: [],
-  busy: false
+  busy: false,
+  packageTypes: [],
+  xmlDirty: false,
+  activeType: "ApexClass",
+  membersCache: {},
+  stagedFiles: null,
+  activeFilePath: ""
 };
 
 function escapeHtml(value) {
@@ -62,15 +80,137 @@ function setStatus(text, kind = "") {
 
 function setBusy(busy) {
   state.busy = busy;
-  for (const id of ["btn-save", "btn-deploy", "btn-both", "btn-connect-github", "btn-save-repo", "btn-refresh-orgs", "refresh-all"]) {
-    const btn = $(id);
-    if (btn) btn.disabled = busy;
-  }
+  document.querySelectorAll("[data-busy]").forEach((btn) => {
+    btn.disabled = busy;
+  });
 }
 
 function selectedOrg(selectId) {
   const value = $(selectId).value;
   return state.orgs.find((o) => orgKey(o) === value) || null;
+}
+
+function apiVersion() {
+  return state.settings?.apiVersion || "61.0";
+}
+
+function currentXml() {
+  return buildPackageXmlFromTypes(state.packageTypes, apiVersion());
+}
+
+function selectedMembersFor(typeName) {
+  return new Set(state.packageTypes.find((t) => t.name === typeName)?.members || []);
+}
+
+function invalidateStaged() {
+  state.stagedFiles = null;
+  state.activeFilePath = "";
+  $("file-editor-wrap").classList.add("hidden");
+  renderFileList();
+}
+
+async function persistPackage() {
+  state.packageTypes = normalizePackageTypes(state.packageTypes);
+  await saveSettings({ packageTypes: state.packageTypes });
+  state.settings = await loadSettings();
+  if (!state.xmlDirty) $("package-xml").value = currentXml();
+  renderPackageUi();
+}
+
+function renderPackageUi() {
+  const summary = packageSummary(state.packageTypes);
+  const count = memberCount(state.packageTypes);
+  $("package-summary-body").textContent = count
+    ? `${count} selected · ${summary}`
+    : "No components yet — pick them on the Components tab.";
+  $("package-count").textContent = String(count);
+  $("selected-package").textContent = count
+    ? state.packageTypes
+        .map((t) => `${t.name}\n  ${t.members.join("\n  ")}`)
+        .join("\n")
+    : "Nothing selected.";
+  $("xml-status").textContent = state.xmlDirty ? "XML edited — click Apply to use it." : "XML matches the picker.";
+  renderMembers();
+}
+
+function renderTypeSelect() {
+  const select = $("meta-type");
+  select.innerHTML = uniqueCatalog()
+    .map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.label)} (${escapeHtml(t.name)})</option>`)
+    .join("");
+  if (state.activeType) select.value = state.activeType;
+  state.activeType = select.value;
+}
+
+function renderMembers() {
+  const typeName = $("meta-type").value || state.activeType;
+  const cache = state.membersCache[typeName];
+  const filter = $("member-filter").value.trim().toLowerCase();
+  const selected = selectedMembersFor(typeName);
+  const list = $("member-list");
+  const status = $("member-status");
+
+  if (!cache) {
+    status.textContent = "Load this type from the source org, or add a member by name.";
+    const extras = [...selected].filter((name) => name !== "*");
+    list.innerHTML = extras.length
+      ? extras
+          .map(
+            (name) =>
+              `<label><input type="checkbox" data-member="${escapeHtml(name)}" checked /> ${escapeHtml(name)}</label>`
+          )
+          .join("")
+      : `<div class="empty">No members loaded.</div>`;
+    return;
+  }
+  if (cache.error) {
+    status.textContent = cache.error;
+  } else {
+    status.textContent = `${cache.items.length} in org · ${selected.size} selected in this type`;
+  }
+
+  let items = cache.items || [];
+  if (filter) items = items.filter((i) => i.fullName.toLowerCase().includes(filter));
+  const extraSelected = [...selected].filter((name) => name !== "*" && !items.some((i) => i.fullName === name));
+  const combined = [
+    ...extraSelected.map((fullName) => ({ fullName, extra: true })),
+    ...items
+  ];
+  const shown = combined.slice(0, MAX_MEMBERS);
+  if (!shown.length) {
+    list.innerHTML = `<div class="empty">No members match the filter.</div>`;
+    return;
+  }
+  list.innerHTML =
+    shown
+      .map((item) => {
+        const checked = selected.has("*") || selected.has(item.fullName) ? "checked" : "";
+        const mark = item.extra ? " <span class=\"muted\">(manual)</span>" : "";
+        return `<label><input type="checkbox" data-member="${escapeHtml(item.fullName)}" ${checked} /> ${escapeHtml(item.fullName)}${mark}</label>`;
+      })
+      .join("") +
+    (combined.length > MAX_MEMBERS
+      ? `<div class="muted">Showing ${MAX_MEMBERS} of ${combined.length}. Filter to find the rest.</div>`
+      : "");
+}
+
+function renderFileList() {
+  const el = $("file-list");
+  if (!state.stagedFiles?.length) {
+    el.innerHTML = `<div class="empty">Retrieve selected components to review and edit files here.</div>`;
+    return;
+  }
+  el.innerHTML = state.stagedFiles
+    .map((file) => {
+      const editable = isEditablePath(file.path);
+      const active = file.path === state.activeFilePath ? "active" : "";
+      const edited = file.edited ? " · edited" : "";
+      return `<button type="button" class="file-row ${active}" data-file="${escapeHtml(file.path)}" ${editable ? "" : "disabled"}>
+        <span>${escapeHtml(file.path)}</span>
+        <span class="muted">${editable ? `edit${edited}` : "binary"}</span>
+      </button>`;
+    })
+    .join("");
 }
 
 function fillOrgSelects() {
@@ -85,15 +225,6 @@ function fillOrgSelects() {
   target.innerHTML = html;
   if (prevSource) source.value = prevSource;
   if (prevTarget) target.value = prevTarget;
-}
-
-function renderTypes() {
-  const selected = new Set(state.settings.metadataTypes);
-  $("type-list").innerHTML = uniqueCatalog()
-    .map(
-      (t) => `<label><input type="checkbox" data-type="${escapeHtml(t.name)}" ${selected.has(t.name) ? "checked" : ""}/> ${escapeHtml(t.label)} <span class="muted">${escapeHtml(t.name)}</span></label>`
-    )
-    .join("");
 }
 
 function renderRepos() {
@@ -141,10 +272,12 @@ function renderVersions() {
   $("version-list").innerHTML = items
     .map((v) => {
       const deploys = (v.deployments || []).slice(-3).map((d) => `${d.org?.label || d.org?.name || "org"}: ${d.status}`).join(" · ");
+      const comps = v.components?.length ? packageSummary(v.components) : "";
       return `<article class="card" data-id="${escapeHtml(v.id)}">
         <div class="title">${escapeHtml(v.id)}</div>
         <div class="meta">${escapeHtml(v.comment || "No comment")}</div>
         <div class="meta">${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
+        ${comps ? `<div class="meta">${escapeHtml(comps)}</div>` : ""}
         ${deploys ? `<div class="meta">${escapeHtml(deploys)}</div>` : ""}
         <div class="tiny">
           <button class="secondary" data-use="${escapeHtml(v.id)}">Use in Ship</button>
@@ -185,16 +318,15 @@ async function refreshOrgs() {
 }
 
 function updateHeaderStatus() {
-  if (!isGithubConfigured(state.settings)) {
-    setStatus("Connect a GitHub repo in Setup to store versions.");
-    return;
-  }
+  const pack = memberCount(state.packageTypes);
+  const repo = isGithubConfigured(state.settings) ? repoLabel(state.settings) : "Git not connected";
   const n = state.orgs.length;
-  setStatus(`${repoLabel(state.settings)} · ${n} Salesforce org${n === 1 ? "" : "s"} ready`, n ? "ok" : "");
+  setStatus(`${repo} · ${n} org${n === 1 ? "" : "s"} · ${pack} component${pack === 1 ? "" : "s"}`, n ? "ok" : "");
 }
 
 async function refreshAll() {
   state.settings = await loadSettings();
+  state.packageTypes = normalizePackageTypes(state.settings.packageTypes);
   $("gh-token").value = state.settings.github.token || "";
   $("gh-repo-input").value = state.settings.github.owner && state.settings.github.repo
     ? `${state.settings.github.owner}/${state.settings.github.repo}`
@@ -202,8 +334,12 @@ async function refreshAll() {
   $("gh-branch").value = state.settings.github.branch || "main";
   $("test-level").value = state.settings.testLevel || "NoTestRun";
   $("check-only").checked = Boolean(state.settings.checkOnly);
-  renderTypes();
+  $("package-xml").value = currentXml();
+  state.xmlDirty = false;
+  renderTypeSelect();
   renderRepos();
+  renderPackageUi();
+  renderFileList();
   try {
     if (state.settings.github.token) {
       state.githubUser = await getUser(state.settings.github.token);
@@ -262,13 +398,6 @@ async function saveRepo() {
   log(`Using ${repoLabel(state.settings)}`);
 }
 
-async function persistTypeSelection() {
-  const boxes = [...document.querySelectorAll("#type-list input[type=checkbox]")];
-  const metadataTypes = boxes.filter((b) => b.checked).map((b) => b.dataset.type);
-  await saveSettings({ metadataTypes });
-  state.settings = await loadSettings();
-}
-
 async function persistShipOptions() {
   await saveSettings({
     testLevel: $("test-level").value,
@@ -277,6 +406,17 @@ async function persistShipOptions() {
     lastTargetOrgId: $("target-org").value
   });
   state.settings = await loadSettings();
+}
+
+function requirePackage() {
+  const types = normalizePackageTypes(state.packageTypes);
+  if (!types.length) throw new Error("Select components on the Components tab, or paste a package.xml.");
+  return types;
+}
+
+async function ensurePackage() {
+  if (state.xmlDirty) await applyXmlToPicker();
+  return requirePackage();
 }
 
 function requireGithub() {
@@ -295,15 +435,71 @@ function resolveTicket(store) {
   return { ticket: mintChangeId(store.versions), comment };
 }
 
+async function retrieveIntoReview() {
+  const source = selectedOrg("source-org");
+  if (!source) throw new Error("Select a source org. Log into it in Chrome first.");
+  const types = await ensurePackage();
+  await persistShipOptions();
+  log(`Retrieving ${memberCount(types)} component(s) from ${source.label}…`);
+  const zipBase64 = await retrieveMetadata({
+    instanceUrl: source.instanceUrl,
+    sid: source.sid,
+    packageTypes: types,
+    apiVersion: apiVersion(),
+    onProgress: (m) => log(m)
+  });
+  const files = await unzipToFiles(zipBase64);
+  if (!files.length) throw new Error("Retrieve returned no files. Check package.xml members.");
+  state.stagedFiles = files;
+  renderFileList();
+  switchSubtab("review");
+  log(`Retrieved ${files.length} file(s). You can edit XML before deploy.`);
+  setStatus(`Retrieved ${files.length} files — review or deploy`, "ok");
+  return files;
+}
+
+async function filesForDeploy() {
+  if (state.stagedFiles?.length) return state.stagedFiles;
+  return retrieveIntoReview();
+}
+
+function deployOptions() {
+  return {
+    testLevel: $("test-level").value,
+    checkOnly: $("check-only").checked
+  };
+}
+
+async function deploySelected() {
+  const target = selectedOrg("target-org");
+  if (!target) throw new Error("Select a target org. Log into it in Chrome first.");
+  await persistShipOptions();
+  const files = await filesForDeploy();
+  const zipBase64 = await zipFromFiles(files);
+  const options = deployOptions();
+  log(`Deploying ${files.length} file(s) to ${target.label}…`);
+  const result = await deployMetadata({
+    instanceUrl: target.instanceUrl,
+    sid: target.sid,
+    zipBase64,
+    options,
+    apiVersion: apiVersion(),
+    onProgress: (m) => log(m)
+  });
+  log(`Deployed selected package to ${target.label} (${result.status || "Succeeded"}).`);
+  setStatus(`Deployed package → ${target.label}`, "ok");
+  return result;
+}
+
 async function saveVersion() {
   requireGithub();
   const source = selectedOrg("source-org");
   if (!source) throw new Error("Select a source org. Log into it in Chrome first.");
-  await persistTypeSelection();
+  const types = await ensurePackage();
   await persistShipOptions();
-  const types = state.settings.metadataTypes;
-  if (!types.length) throw new Error("Select at least one metadata type on the Components tab.");
+  await persistPackage();
 
+  const files = state.stagedFiles?.length ? state.stagedFiles : await retrieveIntoReview();
   await loadVersionStore();
   const { ticket, comment } = resolveTicket(state.versions);
   const increment = nextIncrement(state.versions.versions, ticket);
@@ -313,20 +509,9 @@ async function saveVersion() {
     comment,
     author: state.githubUser?.login || "",
     sourceOrg: { id: source.id, label: source.label, instanceUrl: source.instanceUrl, username: source.username },
-    fileCount: 0
+    fileCount: files.length,
+    components: types
   });
-
-  log(`Retrieving ${types.length} metadata types from ${source.label} as ${record.id}…`);
-  const zipBase64 = await retrieveMetadata({
-    instanceUrl: source.instanceUrl,
-    sid: source.sid,
-    typeNames: types,
-    apiVersion: state.settings.apiVersion,
-    onProgress: (m) => log(m)
-  });
-  const files = await unzipToFiles(zipBase64);
-  if (!files.length) throw new Error("Retrieve returned no files. Check the selected metadata types.");
-  record.fileCount = files.length;
 
   const prefixed = files.map((f) => ({ path: `${record.path}/${f.path}`, base64: f.base64 }));
   const nextStore = upsertVersion(state.versions, record);
@@ -375,17 +560,14 @@ async function deployVersion(explicitId) {
   const files = await fetchReleaseFiles({ token, owner, repo, commitSha: sha, prefix: version.path });
   if (!files.length) throw new Error(`No files found at ${version.path}.`);
   const zipBase64 = await zipFromFiles(files);
-  const options = {
-    testLevel: $("test-level").value,
-    checkOnly: $("check-only").checked
-  };
+  const options = deployOptions();
   log(`Deploying ${version.id} to ${target.label}…`);
   const result = await deployMetadata({
     instanceUrl: target.instanceUrl,
     sid: target.sid,
     zipBase64,
     options,
-    apiVersion: state.settings.apiVersion,
+    apiVersion: apiVersion(),
     onProgress: (m) => log(m)
   });
   const updated = addDeployment(version, {
@@ -408,9 +590,72 @@ async function deployVersion(explicitId) {
   return updated;
 }
 
+async function loadMembers() {
+  const source = selectedOrg("source-org");
+  if (!source) throw new Error("Select a source org on the Ship tab first.");
+  const typeName = $("meta-type").value;
+  state.activeType = typeName;
+  log(`Listing ${typeName} in ${source.label}…`);
+  try {
+    const items = await listMetadataType({
+      instanceUrl: source.instanceUrl,
+      sid: source.sid,
+      typeName,
+      apiVersion: apiVersion(),
+      onProgress: (m) => log(m)
+    });
+    state.membersCache[typeName] = { items, error: "" };
+    log(`Found ${items.length} ${typeName} member(s).`);
+  } catch (err) {
+    state.membersCache[typeName] = { items: [], error: err.message };
+    throw err;
+  }
+  renderMembers();
+}
+
+function applyXmlToPicker() {
+  const parsed = assertPackageXml($("package-xml").value);
+  state.packageTypes = parsed.types;
+  state.xmlDirty = false;
+  invalidateStaged();
+  $("package-xml").value = buildPackageXmlFromTypes(state.packageTypes, parsed.version || apiVersion());
+  return persistPackage();
+}
+
+function rebuildXmlFromPicker() {
+  state.xmlDirty = false;
+  $("package-xml").value = currentXml();
+  $("xml-status").textContent = "XML rebuilt from the picker.";
+}
+
+function openFile(path) {
+  const file = state.stagedFiles?.find((f) => f.path === path);
+  if (!file || !isEditablePath(file.path)) return;
+  state.activeFilePath = path;
+  $("file-editor-wrap").classList.remove("hidden");
+  $("file-editor-name").textContent = path;
+  $("file-editor").value = decodeUtf8Base64(file.base64);
+  renderFileList();
+}
+
+function saveFileEdits() {
+  const path = state.activeFilePath;
+  if (!path) throw new Error("Open a file first.");
+  const text = $("file-editor").value;
+  state.stagedFiles = state.stagedFiles.map((f) => (f.path === path ? withEditedText(f, text) : f));
+  renderFileList();
+  log(`Updated ${path} in the retrieve package.`);
+  setStatus(`Edited ${path}`, "ok");
+}
+
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
+}
+
+function switchSubtab(name) {
+  document.querySelectorAll(".subtab").forEach((t) => t.classList.toggle("active", t.dataset.subtab === name));
+  document.querySelectorAll(".subview").forEach((v) => v.classList.toggle("active", v.id === `subview-${name}`));
 }
 
 async function run(action) {
@@ -429,19 +674,86 @@ async function run(action) {
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
 });
+document.querySelectorAll(".subtab").forEach((tab) => {
+  tab.addEventListener("click", () => switchSubtab(tab.dataset.subtab));
+});
 
+$("goto-components").addEventListener("click", () => switchTab("components"));
 $("btn-connect-github").addEventListener("click", () => run(connectGithub));
 $("btn-save-repo").addEventListener("click", () => run(saveRepo));
 $("btn-refresh-orgs").addEventListener("click", () => run(refreshOrgs));
 $("refresh-all").addEventListener("click", () => run(refreshAll));
 $("btn-save").addEventListener("click", () => run(saveVersion));
 $("btn-deploy").addEventListener("click", () => run(() => deployVersion()));
+$("btn-deploy-selected").addEventListener("click", () => run(deploySelected));
+$("btn-deploy-from-pick").addEventListener("click", () => run(deploySelected));
+$("btn-deploy-review").addEventListener("click", () => run(deploySelected));
+$("btn-retrieve").addEventListener("click", () => run(retrieveIntoReview));
+$("btn-retrieve-review").addEventListener("click", () => run(retrieveIntoReview));
 $("btn-both").addEventListener("click", () => run(async () => {
   await saveVersion();
   await deployVersion();
 }));
+$("btn-load-members").addEventListener("click", () => run(loadMembers));
+$("btn-apply-xml").addEventListener("click", () => run(applyXmlToPicker));
+$("btn-rebuild-xml").addEventListener("click", rebuildXmlFromPicker);
+$("btn-save-file").addEventListener("click", () => run(saveFileEdits));
+$("btn-clear-package").addEventListener("click", () => run(async () => {
+  state.packageTypes = [];
+  state.xmlDirty = false;
+  invalidateStaged();
+  await persistPackage();
+}));
+$("btn-clear-type").addEventListener("click", () => run(async () => {
+  state.packageTypes = setTypeMembers(state.packageTypes, $("meta-type").value, []);
+  invalidateStaged();
+  await persistPackage();
+}));
+$("btn-select-visible").addEventListener("click", () => run(async () => {
+  const boxes = [...document.querySelectorAll("#member-list input[data-member]")];
+  const names = boxes.map((b) => b.dataset.member);
+  if (!names.length) throw new Error("Load or filter members first.");
+  const typeName = $("meta-type").value;
+  const current = selectedMembersFor(typeName);
+  names.forEach((n) => current.add(n));
+  state.packageTypes = setTypeMembers(state.packageTypes, typeName, [...current]);
+  invalidateStaged();
+  await persistPackage();
+}));
+$("btn-add-member").addEventListener("click", () => run(async () => {
+  const name = $("manual-member").value.trim();
+  if (!name) throw new Error("Enter a metadata member name.");
+  const typeName = $("meta-type").value;
+  state.packageTypes = toggleMember(state.packageTypes, typeName, name, true);
+  $("manual-member").value = "";
+  invalidateStaged();
+  await persistPackage();
+}));
+$("meta-type").addEventListener("change", () => {
+  state.activeType = $("meta-type").value;
+  renderMembers();
+});
+$("member-filter").addEventListener("input", renderMembers);
+$("member-list").addEventListener("change", (event) => {
+  const box = event.target.closest("input[data-member]");
+  if (!box) return;
+  run(async () => {
+    const typeName = $("meta-type").value;
+    const listed = (state.membersCache[typeName]?.items || []).map((i) => i.fullName);
+    state.packageTypes = toggleMember(state.packageTypes, typeName, box.dataset.member, box.checked, listed);
+    invalidateStaged();
+    await persistPackage();
+  });
+});
+$("package-xml").addEventListener("input", () => {
+  state.xmlDirty = true;
+  $("xml-status").textContent = "XML edited — click Apply to use it.";
+});
+$("file-list").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-file]");
+  if (btn) openFile(btn.dataset.file);
+});
 $("version-filter").addEventListener("input", renderVersions);
-$("type-list").addEventListener("change", () => run(persistTypeSelection));
 $("version-list").addEventListener("click", (event) => {
   const useId = event.target.dataset.use;
   const deployId = event.target.dataset.deploy;

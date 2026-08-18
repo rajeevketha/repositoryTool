@@ -28,7 +28,8 @@ const DEFAULTS = {
   lastTargetOrgId: "",
   testLevel: "NoTestRun",
   checkOnly: false,
-  apiVersion: "61.0"
+  apiVersion: "61.0",
+  packageTypes: []
 };
 
 export { DEFAULT_METADATA_TYPES, DEFAULTS };
@@ -53,7 +54,8 @@ export function mergeSettings(input = {}) {
     metadataTypes: Array.isArray(input.metadataTypes) && input.metadataTypes.length
       ? input.metadataTypes
       : DEFAULT_METADATA_TYPES,
-    savedOrgs: Array.isArray(input.savedOrgs) ? input.savedOrgs : []
+    savedOrgs: Array.isArray(input.savedOrgs) ? input.savedOrgs : [],
+    packageTypes: Array.isArray(input.packageTypes) ? input.packageTypes : []
   };
 }
 

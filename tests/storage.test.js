@@ -14,6 +14,11 @@ describe("settings", () => {
     assert.equal(repoLabel(merged), "acme/sf@main");
   });
 
+  it("keeps an empty component package", () => {
+    const merged = mergeSettings({ packageTypes: [] });
+    assert.deepEqual(merged.packageTypes, []);
+  });
+
   it("treats a missing repo as disconnected", () => {
     assert.equal(isGithubConfigured(mergeSettings({})), false);
     assert.equal(repoLabel(mergeSettings({})), "No repo connected");

@@ -15,7 +15,7 @@
           <span>Salesforce → Git → orgs</span>
         </div>
       </div>
-      <button id="refresh-all" class="ghost" title="Refresh orgs and versions">↻</button>
+      <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
     </header>
 
     <div id="status-bar" class="status-bar">Connect a GitHub repo to get started.</div>
@@ -29,11 +29,18 @@
 
     <main>
       <section id="view-ship" class="view active">
+        <article class="card" id="package-summary-card">
+          <div class="title">Deployment package</div>
+          <div id="package-summary-body" class="meta">No components yet — pick them on the Components tab.</div>
+          <div class="tiny">
+            <button type="button" class="secondary" id="goto-components">Select / edit components</button>
+          </div>
+        </article>
         <label>
           Jira ticket
           <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
         </label>
-        <p class="hint">Use the Jira key as the version. If you only have a comment, OrgFlow mints a CHANGE-YYYYMMDD-n id.</p>
+        <p class="hint">Use the Jira key as the version. A comment-only save mints CHANGE-YYYYMMDD-n.</p>
         <label>
           Comment
           <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
@@ -63,9 +70,10 @@
           </label>
         </div>
         <div class="actions">
-          <button id="btn-save" class="primary">Save version to Git</button>
-          <button id="btn-deploy" class="secondary">Deploy version to org</button>
-          <button id="btn-both" class="accent">Save &amp; deploy</button>
+          <button id="btn-save" class="primary" data-busy>Save version to Git</button>
+          <button id="btn-deploy-selected" class="accent" data-busy>Deploy selected to target</button>
+          <button id="btn-deploy" class="secondary" data-busy>Deploy saved version</button>
+          <button id="btn-both" class="secondary" data-busy>Save version &amp; deploy</button>
         </div>
       </section>
 
@@ -75,20 +83,85 @@
       </section>
 
       <section id="view-components" class="view">
-        <p class="hint">Choose metadata types retrieved from the source org and stored under this Jira version.</p>
-        <div id="type-list" class="type-list"></div>
+        <nav class="subtabs" role="tablist">
+          <button type="button" class="subtab active" data-subtab="pick">Pick</button>
+          <button type="button" class="subtab" data-subtab="xml">package.xml</button>
+          <button type="button" class="subtab" data-subtab="review">Review / edit</button>
+        </nav>
+
+        <div id="subview-pick" class="subview active">
+          <p class="hint">Load members from the source org, tick what belongs to this Jira, then deploy or save a version.</p>
+          <label>
+            Metadata type
+            <select id="meta-type"></select>
+          </label>
+          <div class="row-actions">
+            <button type="button" id="btn-load-members" class="secondary" data-busy>Load from source org</button>
+            <button type="button" id="btn-select-visible" class="secondary">Select visible</button>
+            <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
+          </div>
+          <input id="member-filter" type="search" placeholder="Filter members" />
+          <div id="member-status" class="muted"></div>
+          <div id="member-list" class="type-list"></div>
+          <label>
+            Add member by name
+            <div class="inline-add">
+              <input id="manual-member" type="text" placeholder="MyClass or Object.Field" />
+              <button type="button" id="btn-add-member" class="secondary">Add</button>
+            </div>
+          </label>
+          <article class="card">
+            <div class="title">In this package <span id="package-count" class="badge">0</span></div>
+            <div id="selected-package" class="meta"></div>
+            <div class="tiny">
+              <button type="button" id="btn-clear-package" class="secondary">Clear package</button>
+            </div>
+          </article>
+          <div class="actions">
+            <button type="button" id="btn-retrieve" class="secondary" data-busy>Retrieve into Review</button>
+            <button type="button" id="btn-deploy-from-pick" class="accent" data-busy>Deploy selected to target</button>
+          </div>
+        </div>
+
+        <div id="subview-xml" class="subview">
+          <p class="hint">Edit package.xml directly. Apply writes it back to the picker. Invalid XML is not used for retrieve/deploy.</p>
+          <textarea id="package-xml" class="xml-editor" spellcheck="false"></textarea>
+          <div id="xml-status" class="muted"></div>
+          <div class="row-actions">
+            <button type="button" id="btn-apply-xml" class="primary">Apply XML to picker</button>
+            <button type="button" id="btn-rebuild-xml" class="secondary">Rebuild from picker</button>
+          </div>
+        </div>
+
+        <div id="subview-review" class="subview">
+          <p class="hint">Retrieved metadata files. Click an XML (or Apex/LWC) file to edit it before deploy. Closing the panel discards unsaved retrieve results.</p>
+          <div class="row-actions">
+            <button type="button" id="btn-retrieve-review" class="secondary" data-busy>Retrieve selected</button>
+          </div>
+          <div id="file-list" class="file-list"></div>
+          <label id="file-editor-wrap" class="hidden">
+            <span id="file-editor-name">File</span>
+            <textarea id="file-editor" class="xml-editor" spellcheck="false"></textarea>
+            <div class="row-actions">
+              <button type="button" id="btn-save-file" class="primary">Save file edits</button>
+            </div>
+          </label>
+          <div class="actions">
+            <button type="button" id="btn-deploy-review" class="accent" data-busy>Deploy these files to target</button>
+          </div>
+        </div>
       </section>
 
       <section id="view-setup" class="view">
         <h2>GitHub repository</h2>
-        <p class="hint">Each user connects their own repo. Tokens stay in this browser profile only.</p>
+        <p class="hint">Each user connects their own repo. Tokens stay in this browser profile only. Git is for versioning; you can still deploy a selected package without saving a version.</p>
         <label>
           Personal access token
           <input id="gh-token" type="password" placeholder="ghp_…" autocomplete="off" />
         </label>
         <p class="hint">Create a token with <code>repo</code> scope. Fine-grained tokens need Contents: Read and write.</p>
         <div class="actions">
-          <button id="btn-connect-github" class="secondary">Connect GitHub</button>
+          <button id="btn-connect-github" class="secondary" data-busy>Connect GitHub</button>
         </div>
         <div id="github-user" class="muted"></div>
         <label>
@@ -104,13 +177,13 @@
           <input id="gh-branch" type="text" placeholder="main" />
         </label>
         <div class="actions">
-          <button id="btn-save-repo" class="primary">Use this repo</button>
+          <button id="btn-save-repo" class="primary" data-busy>Use this repo</button>
         </div>
 
         <h2>Salesforce orgs</h2>
         <p class="hint">Log into each org in Chrome, then refresh. OrgFlow uses your existing Salesforce session cookies (same idea as Salesforce Inspector).</p>
         <div class="actions">
-          <button id="btn-refresh-orgs" class="secondary">Detect logged-in orgs</button>
+          <button id="btn-refresh-orgs" class="secondary" data-busy>Detect logged-in orgs</button>
         </div>
         <div id="org-list" class="list"></div>
       </section>

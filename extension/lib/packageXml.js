@@ -7,15 +7,33 @@ export function escapeXml(value) {
     .replace(/'/g, "&apos;");
 }
 
-export function buildPackageXml(typeNames, apiVersion = "61.0") {
-  const types = [...new Set((typeNames || []).filter(Boolean))].sort();
-  const blocks = types
-    .map(
-      (name) => `    <types>
-        <members>*</members>
-        <name>${escapeXml(name)}</name>
-    </types>`
-    )
+export function normalizePackageTypes(types) {
+  const byName = new Map();
+  for (const entry of types || []) {
+    const name = String(entry?.name || "").trim();
+    if (!name) continue;
+    const members = [...new Set((entry.members || []).map((m) => String(m).trim()).filter(Boolean))];
+    if (!members.length) continue;
+    const current = byName.get(name) || [];
+    const merged = [...current, ...members];
+    const unique = merged.includes("*") ? ["*"] : [...new Set(merged)].sort((a, b) => a.localeCompare(b));
+    byName.set(name, unique);
+  }
+  return [...byName.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, members]) => ({ name, members }));
+}
+
+export function buildPackageXmlFromTypes(types, apiVersion = "61.0") {
+  const cleaned = normalizePackageTypes(types);
+  const blocks = cleaned
+    .map((t) => {
+      const members = t.members.map((mem) => `        <members>${escapeXml(mem)}</members>`).join("\n");
+      return `    <types>
+${members}
+        <name>${escapeXml(t.name)}</name>
+    </types>`;
+    })
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
@@ -25,14 +43,76 @@ ${blocks}
 `;
 }
 
-export function typesFromPackageXml(xml) {
-  const names = [];
-  const re = /<name>\s*([^<]+)\s*<\/name>/gi;
+export function buildPackageXml(typeNames, apiVersion = "61.0") {
+  return buildPackageXmlFromTypes(
+    (typeNames || []).map((name) => ({ name, members: ["*"] })),
+    apiVersion
+  );
+}
+
+export function parsePackageXml(xml) {
+  const raw = String(xml || "");
+  const version = xmlText(raw, "version") || "61.0";
+  const types = [];
+  const re = /<(?:[\w]+:)?types>([\s\S]*?)<\/(?:[\w]+:)?types>/gi;
   let match;
-  while ((match = re.exec(xml || ""))) {
-    names.push(match[1].trim());
+  while ((match = re.exec(raw))) {
+    const block = `<block>${match[1]}</block>`;
+    const name = xmlText(block, "name");
+    const members = xmlAll(block, "members");
+    if (name && members.length) types.push({ name, members });
   }
-  return names;
+  return { version, types: normalizePackageTypes(types) };
+}
+
+export function typesFromPackageXml(xml) {
+  return parsePackageXml(xml).types.map((t) => t.name);
+}
+
+export function assertPackageXml(xml) {
+  if (!/<Package[\s>]/i.test(String(xml || ""))) {
+    throw new Error("Not a Salesforce package.xml file (missing <Package>).");
+  }
+  const parsed = parsePackageXml(xml);
+  if (!parsed.types.length) throw new Error("package.xml has no <types> / <members> entries.");
+  return parsed;
+}
+
+export function memberCount(types) {
+  return normalizePackageTypes(types).reduce((n, t) => n + t.members.length, 0);
+}
+
+export function packageSummary(types) {
+  const cleaned = normalizePackageTypes(types);
+  if (!cleaned.length) return "No components selected";
+  return cleaned
+    .map((t) => `${t.name} (${t.members.includes("*") ? "*" : t.members.length})`)
+    .join(" · ");
+}
+
+export function toggleMember(types, typeName, member, selected, allMembers = []) {
+  const map = new Map(normalizePackageTypes(types).map((t) => [t.name, [...t.members]]));
+  const current = map.get(typeName) || [];
+  const listed = [...new Set((allMembers || []).map((m) => String(m).trim()).filter(Boolean))];
+  if (selected) {
+    if (current.includes("*")) {
+      map.set(typeName, ["*"]);
+    } else {
+      map.set(typeName, [...new Set([...current, member])]);
+    }
+  } else {
+    const base = current.includes("*") && listed.length ? listed : current.filter((m) => m !== "*");
+    const next = base.filter((m) => m !== member);
+    if (next.length) map.set(typeName, next);
+    else map.delete(typeName);
+  }
+  return normalizePackageTypes([...map.entries()].map(([name, members]) => ({ name, members })));
+}
+
+export function setTypeMembers(types, typeName, members) {
+  const others = normalizePackageTypes(types).filter((t) => t.name !== typeName);
+  if (!members?.length) return others;
+  return normalizePackageTypes([...others, { name: typeName, members }]);
 }
 
 export function soapEnvelope(sessionId, bodyXml) {
@@ -49,15 +129,16 @@ ${bodyXml}
 </env:Envelope>`;
 }
 
-export function retrieveBody(typeNames, apiVersion) {
-  const types = [...new Set((typeNames || []).filter(Boolean))];
-  const typeXml = types
-    .map(
-      (name) => `        <urn:types>
-          <urn:members>*</urn:members>
-          <urn:name>${escapeXml(name)}</urn:name>
-        </urn:types>`
-    )
+export function retrieveBodyFromTypes(types, apiVersion) {
+  const cleaned = normalizePackageTypes(types);
+  const typeXml = cleaned
+    .map((t) => {
+      const members = t.members.map((m) => `          <urn:members>${escapeXml(m)}</urn:members>`).join("\n");
+      return `        <urn:types>
+${members}
+          <urn:name>${escapeXml(t.name)}</urn:name>
+        </urn:types>`;
+    })
     .join("\n");
   return `    <urn:retrieve xmlns:urn="http://soap.sforce.com/2006/04/metadata">
       <urn:retrieveRequest>
@@ -69,6 +150,47 @@ ${typeXml}
         </urn:unpackaged>
       </urn:retrieveRequest>
     </urn:retrieve>`;
+}
+
+export function retrieveBody(typeNames, apiVersion) {
+  return retrieveBodyFromTypes(
+    (typeNames || []).map((name) => ({ name, members: ["*"] })),
+    apiVersion
+  );
+}
+
+export function listMetadataBody(queries, apiVersion) {
+  const qxml = (queries || [])
+    .map((q) => {
+      const folder = q.folder ? `\n        <urn:folder>${escapeXml(q.folder)}</urn:folder>` : "";
+      return `      <urn:queries>
+        <urn:type>${escapeXml(q.type)}</urn:type>${folder}
+      </urn:queries>`;
+    })
+    .join("\n");
+  return `    <urn:listMetadata xmlns:urn="http://soap.sforce.com/2006/04/metadata">
+${qxml}
+      <urn:asOfVersion>${escapeXml(apiVersion)}</urn:asOfVersion>
+    </urn:listMetadata>`;
+}
+
+export function parseListMetadata(xml) {
+  const results = [];
+  const blocks = String(xml || "").split(/<(?:[\w]+:)?result>/i).slice(1);
+  for (const block of blocks) {
+    const chunk = block.split(/<\/(?:[\w]+:)?result>/i)[0];
+    const fullName = xmlText(chunk, "fullName");
+    if (!fullName) continue;
+    results.push({
+      fullName,
+      type: xmlText(chunk, "type"),
+      lastModifiedDate: xmlText(chunk, "lastModifiedDate"),
+      lastModifiedByName: xmlText(chunk, "lastModifiedByName"),
+      manageableState: xmlText(chunk, "manageableState"),
+      fileName: xmlText(chunk, "fileName")
+    });
+  }
+  return results.sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
 export function checkRetrieveBody(asyncId, includeZip) {

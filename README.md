@@ -7,10 +7,10 @@ Each user connects their own repository. Nothing in this project is hard-wired t
 ## What it does
 
 1. You work in a Salesforce org against a Jira ticket (for example `PROJ-123`).
-2. In the OrgFlow side panel you enter that Jira key and a comment.
-3. **Save version to Git** retrieves the metadata types you selected, writes them under `.orgflow/releases/PROJ-123/v1/`, and records the version in `.orgflow/versions.json`.
-4. Later, in another org, enter the same Jira key (or `PROJ-123-v1`) and **Deploy version to org**.
-5. Every deploy is appended to that version’s history (target org, status, comment, test level).
+2. On **Components**, pick the exact metadata (or edit `package.xml`), optionally retrieve and edit the XML files.
+3. Enter the Jira key and a comment, then **Save version to Git** and/or **Deploy selected to target**.
+4. Later, enter the same Jira key (or `PROJ-123-v1`) and **Deploy saved version** so every org gets that snapshot.
+5. Every Git-backed deploy is appended to that version’s history (target org, status, comment, test level).
 
 If you only type a comment, OrgFlow mints an id like `CHANGE-20260818-1`.
 
@@ -44,7 +44,15 @@ Source and target can be any detected org (sandbox → sandbox, sandbox → prod
 
 ### Components
 
-On the **Components** tab, choose which metadata types to retrieve (`ApexClass`, LWC, `CustomObject`, `Flow`, …). Those types are snapshotted into Git for that Jira version.
+On the **Components** tab:
+
+1. **Pick** — choose a metadata type, **Load from source org**, tick the exact classes/LWCs/objects/flows for this Jira. You can also type a member name if it is not in the list.
+2. **package.xml** — edit the XML by hand, then **Apply XML to picker**. Or **Rebuild from picker**.
+3. **Review / edit** — retrieve the package, then open any metadata file (object XML, Apex, LWC, `package.xml`) and edit it before deploy.
+
+**Deploy selected to target** pushes that package to the target org (Git is optional). **Save version to Git** stores the same snapshot under the Jira key so you can redeploy it later.
+
+Wildcard `*` for a type still works if you want everything of that type. For real releases, pick named members so the version is reviewable.
 
 ## Typical flow
 
@@ -56,10 +64,24 @@ On the **Components** tab, choose which metadata types to retrieve (`ApexClass`,
 | Target org | UAT |
 | Tests | `No tests` in sandboxes; `Run local tests` on production |
 
-- **Save version to Git** — retrieve from source, commit snapshot + version record.
-- **Deploy version to org** — read that snapshot from Git, Metadata API deploy to target.
-- **Save & deploy** — both in one step.
+- **Deploy selected to target** — retrieve the picked components (or use files already in Review) and Metadata API deploy to the target org.
+- **Save version to Git** — commit that snapshot + version record under the Jira key.
+- **Deploy saved version** — read a previous Jira version from Git and deploy it.
+- **Save version & deploy** — both in one step.
 - **Validate only** — `checkOnly` deploy (no changes committed on the org).
+
+## Can this be a real deployment / version tool?
+
+Yes, for metadata. OrgFlow talks to the same **Salesforce Metadata API** that Salesforce CLI, change sets, and tools like Gearset use: retrieve a package, optionally edit files, deploy the zip, and keep Jira-keyed snapshots in Git.
+
+Use it that way when:
+
+- You select **named components** (not an entire org wildcard) for a ticket
+- You **validate** (`checkOnly`) on the target, then deploy
+- Production deploys use **Run local tests** (or your required test level)
+- Git is the system of record so QA/UAT/prod get the same `PROJ-123-v2` zip
+
+It is **not** a full Copado/Gearset replacement: no dependency graph, no data (records) deploy, no conflict UI across branches, and Profiles/Experience Cloud/huge static resources are painful. Those limits are the Metadata API’s, not the Chrome shell.
 
 ## How versions are stored
 

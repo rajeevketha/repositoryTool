@@ -271,11 +271,125 @@ button:disabled {
   font-size: 12px;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.row-actions button {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+.subtabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  background: #eef3f8;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.subtab {
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 6px;
+  font-size: 12px;
+}
+
+.subtab.active {
+  background: #fff;
+  color: var(--navy);
+  box-shadow: 0 1px 2px rgba(3, 45, 96, 0.12);
+}
+
+.subview {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.subview.active {
+  display: flex;
+}
+
+.inline-add {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+.xml-editor {
+  min-height: 260px;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  background: var(--blue);
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.file-row:hover,
+.file-row.active {
+  background: #e8f4ff;
+}
+
+.file-row .muted {
+  flex-shrink: 0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#selected-package {
+  white-space: pre-wrap;
+  max-height: 140px;
+  overflow: auto;
+}
+
 .type-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 420px;
+  max-height: 240px;
   overflow: auto;
   background: var(--card);
   border: 1px solid var(--line);

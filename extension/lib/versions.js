@@ -98,7 +98,8 @@ export function createVersionRecord({
   sourceOrg,
   commitSha,
   fileCount,
-  createdAt
+  createdAt,
+  components
 }) {
   const id = versionId(jira, increment);
   return {
@@ -111,6 +112,7 @@ export function createVersionRecord({
     commitSha: commitSha || "",
     path: releasePath(jira, increment),
     fileCount: fileCount || 0,
+    components: components || [],
     createdAt: createdAt || new Date().toISOString(),
     deployments: []
   };

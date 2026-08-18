@@ -3,14 +3,22 @@ import assert from "node:assert/strict";
 import {
   escapeXml,
   buildPackageXml,
+  buildPackageXmlFromTypes,
+  parsePackageXml,
   typesFromPackageXml,
   retrieveBody,
+  retrieveBodyFromTypes,
   deployBody,
   parseRetrieveResult,
   parseDeployResult,
-  parseAsyncId
+  parseAsyncId,
+  parseListMetadata,
+  toggleMember,
+  memberCount,
+  assertPackageXml
 } from "../extension/lib/packageXml.js";
 import { parseRepoInput } from "../extension/lib/github.js";
+import { isEditablePath } from "../extension/lib/files.js";
 
 describe("package.xml", () => {
   it("builds a wildcard package for selected types", () => {
@@ -38,6 +46,36 @@ describe("package.xml", () => {
     assert.match(body, /<urn:testLevel>RunLocalTests<\/urn:testLevel>/);
     assert.match(body, />QUJD</);
   });
+
+  it("round-trips specific members in package.xml", () => {
+    const xml = buildPackageXmlFromTypes(
+      [
+        { name: "ApexClass", members: ["Foo", "Bar"] },
+        { name: "Flow", members: ["My_Flow"] }
+      ],
+      "61.0"
+    );
+    const parsed = parsePackageXml(xml);
+    assert.deepEqual(parsed.types, [
+      { name: "ApexClass", members: ["Bar", "Foo"] },
+      { name: "Flow", members: ["My_Flow"] }
+    ]);
+    assert.equal(memberCount(parsed.types), 3);
+    assert.match(retrieveBodyFromTypes(parsed.types, "61.0"), /<urn:members>Foo<\/urn:members>/);
+  });
+
+  it("rejects invalid package xml", () => {
+    assert.throws(() => assertPackageXml("<not-a-package/>"), /missing <Package>/);
+  });
+
+  it("toggles members and expands a wildcard uncheck", () => {
+    let types = toggleMember([], "ApexClass", "Foo", true);
+    types = toggleMember(types, "ApexClass", "Bar", true);
+    assert.deepEqual(types[0].members, ["Bar", "Foo"]);
+    types = [{ name: "ApexClass", members: ["*"] }];
+    types = toggleMember(types, "ApexClass", "Bar", false, ["Foo", "Bar", "Baz"]);
+    assert.deepEqual(types[0].members, ["Baz", "Foo"]);
+  });
 });
 
 describe("soap result parsing", () => {
@@ -60,6 +98,15 @@ describe("soap result parsing", () => {
     assert.equal(parsed.failures[0].fullName, "Foo");
     assert.match(parsed.failures[0].problem, /Missing/);
   });
+
+  it("parses listMetadata members", () => {
+    const xml = `<listMetadataResponse>
+      <result><fullName>Hello</fullName><type>ApexClass</type></result>
+      <result><fullName>World</fullName><type>ApexClass</type></result>
+    </listMetadataResponse>`;
+    const listed = parseListMetadata(xml);
+    assert.deepEqual(listed.map((i) => i.fullName), ["Hello", "World"]);
+  });
 });
 
 describe("github repo parsing", () => {
@@ -67,5 +114,15 @@ describe("github repo parsing", () => {
     assert.deepEqual(parseRepoInput("https://github.com/acme/sf-meta.git"), { owner: "acme", repo: "sf-meta" });
     assert.deepEqual(parseRepoInput("acme/sf-meta"), { owner: "acme", repo: "sf-meta" });
     assert.equal(parseRepoInput(""), null);
+  });
+});
+
+describe("editable metadata files", () => {
+  it("allows xml and apex, not zip/png", () => {
+    assert.equal(isEditablePath("objects/Account.object"), true);
+    assert.equal(isEditablePath("objects/Account.object-meta.xml"), true);
+    assert.equal(isEditablePath("package.xml"), true);
+    assert.equal(isEditablePath("classes/Foo.cls"), true);
+    assert.equal(isEditablePath("staticresources/logo.png"), false);
   });
 });

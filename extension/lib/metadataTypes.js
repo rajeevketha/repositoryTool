@@ -35,8 +35,19 @@ export const METADATA_CATALOG = [
   { name: "RemoteSiteSetting", label: "Remote site settings" },
   { name: "NamedCredential", label: "Named credentials" },
   { name: "ConnectedApp", label: "Connected apps" },
-  { name: "PathAssistant", label: "Path assistants" }
+  { name: "PathAssistant", label: "Path assistants" },
+  { name: "EmailTemplate", label: "Email templates" },
+  { name: "Document", label: "Documents" },
+  { name: "Report", label: "Reports" },
+  { name: "Dashboard", label: "Dashboards" }
 ];
+
+export const FOLDER_TYPES = {
+  EmailTemplate: "EmailFolder",
+  Document: "DocumentFolder",
+  Report: "ReportFolder",
+  Dashboard: "DashboardFolder"
+};
 
 export function uniqueCatalog() {
   const seen = new Set();
