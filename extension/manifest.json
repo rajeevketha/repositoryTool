@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "OrgFlow",
+  "version": "1.0.0",
+  "description": "Version Salesforce changes by Jira ticket, store them in your GitHub repo, and deploy to other orgs.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "OrgFlow — Salesforce deployments",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "cookies",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://*.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://*.cloudforce.com/*",
+    "https://*.salesforce-setup.com/*",
+    "https://*.sfcrmapps.cn/*",
+    "https://api.github.com/*",
+    "https://github.com/*"
+  ]
+}

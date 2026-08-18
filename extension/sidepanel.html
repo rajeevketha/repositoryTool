@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OrgFlow</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <img src="icons/icon32.png" alt="" width="24" height="24" />
+        <div>
+          <strong>OrgFlow</strong>
+          <span>Salesforce → Git → orgs</span>
+        </div>
+      </div>
+      <button id="refresh-all" class="ghost" title="Refresh orgs and versions">↻</button>
+    </header>
+
+    <div id="status-bar" class="status-bar">Connect a GitHub repo to get started.</div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="ship">Ship</button>
+      <button class="tab" data-tab="versions">Versions</button>
+      <button class="tab" data-tab="components">Components</button>
+      <button class="tab" data-tab="setup">Setup</button>
+    </nav>
+
+    <main>
+      <section id="view-ship" class="view active">
+        <label>
+          Jira ticket
+          <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
+        </label>
+        <p class="hint">Use the Jira key as the version. If you only have a comment, OrgFlow mints a CHANGE-YYYYMMDD-n id.</p>
+        <label>
+          Comment
+          <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
+        </label>
+        <div class="row">
+          <label>
+            Source org
+            <select id="source-org"></select>
+          </label>
+          <label>
+            Target org
+            <select id="target-org"></select>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            Tests
+            <select id="test-level">
+              <option value="NoTestRun">No tests</option>
+              <option value="RunLocalTests">Run local tests</option>
+              <option value="RunAllTestsInOrg">Run all tests</option>
+            </select>
+          </label>
+          <label class="check">
+            <input id="check-only" type="checkbox" />
+            Validate only
+          </label>
+        </div>
+        <div class="actions">
+          <button id="btn-save" class="primary">Save version to Git</button>
+          <button id="btn-deploy" class="secondary">Deploy version to org</button>
+          <button id="btn-both" class="accent">Save &amp; deploy</button>
+        </div>
+      </section>
+
+      <section id="view-versions" class="view">
+        <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
+        <div id="version-list" class="list"></div>
+      </section>
+
+      <section id="view-components" class="view">
+        <p class="hint">Choose metadata types retrieved from the source org and stored under this Jira version.</p>
+        <div id="type-list" class="type-list"></div>
+      </section>
+
+      <section id="view-setup" class="view">
+        <h2>GitHub repository</h2>
+        <p class="hint">Each user connects their own repo. Tokens stay in this browser profile only.</p>
+        <label>
+          Personal access token
+          <input id="gh-token" type="password" placeholder="ghp_…" autocomplete="off" />
+        </label>
+        <p class="hint">Create a token with <code>repo</code> scope. Fine-grained tokens need Contents: Read and write.</p>
+        <div class="actions">
+          <button id="btn-connect-github" class="secondary">Connect GitHub</button>
+        </div>
+        <div id="github-user" class="muted"></div>
+        <label>
+          Select a repo
+          <select id="gh-repo"></select>
+        </label>
+        <label>
+          Or paste owner/repo
+          <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
+        </label>
+        <label>
+          Branch
+          <input id="gh-branch" type="text" placeholder="main" />
+        </label>
+        <div class="actions">
+          <button id="btn-save-repo" class="primary">Use this repo</button>
+        </div>
+
+        <h2>Salesforce orgs</h2>
+        <p class="hint">Log into each org in Chrome, then refresh. OrgFlow uses your existing Salesforce session cookies (same idea as Salesforce Inspector).</p>
+        <div class="actions">
+          <button id="btn-refresh-orgs" class="secondary">Detect logged-in orgs</button>
+        </div>
+        <div id="org-list" class="list"></div>
+      </section>
+    </main>
+
+    <section class="log-panel">
+      <div class="log-head">Activity</div>
+      <pre id="log"></pre>
+    </section>
+
+    <script src="lib/jszip.min.js"></script>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>
