@@ -1,18 +1,18 @@
 const DEFAULT_METADATA_TYPES = [
-  "ApexClass",
-  "ApexTrigger",
-  "LightningComponentBundle",
-  "AuraDefinitionBundle",
-  "CustomObject",
-  "Flow",
-  "FlexiPage",
+  "CustomField",
+  "RecordType",
+  "ValidationRule",
   "Layout",
+  "FlexiPage",
+  "Flow",
   "PermissionSet",
   "CustomLabel",
-  "CustomMetadata",
-  "StaticResource",
   "QuickAction",
-  "LightningMessageChannel"
+  "CustomApplication",
+  "CustomTab",
+  "GlobalValueSet",
+  "CustomMetadata",
+  "ListView"
 ];
 
 const DEFAULTS = {

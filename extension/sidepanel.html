@@ -12,16 +12,16 @@
         <img src="icons/icon32.png" alt="" width="24" height="24" />
         <div>
           <strong>OrgFlow</strong>
-          <span>Salesforce → Git → orgs</span>
+          <span>Config sandbox → other orgs</span>
         </div>
       </div>
       <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
     </header>
 
-    <div id="status-bar" class="status-bar">Connect a GitHub repo to get started.</div>
+    <div id="status-bar" class="status-bar">Log into your Salesforce orgs, then pick configuration to deploy.</div>
 
     <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="ship">Ship</button>
+      <button class="tab active" data-tab="ship">Deploy</button>
       <button class="tab" data-tab="versions">Versions</button>
       <button class="tab" data-tab="components">Components</button>
       <button class="tab" data-tab="setup">Setup</button>
@@ -30,17 +30,18 @@
     <main>
       <section id="view-ship" class="view active">
         <article class="card" id="package-summary-card">
-          <div class="title">Deployment package</div>
-          <div id="package-summary-body" class="meta">No components yet — pick them on the Components tab.</div>
+          <div class="title">What to move</div>
+          <div id="package-summary-body" class="meta">Nothing selected yet — pick fields, layouts, flows, permission sets… on Components.</div>
           <div class="tiny">
-            <button type="button" class="secondary" id="goto-components">Select / edit components</button>
+            <button type="button" class="secondary" id="goto-components">Pick configuration</button>
           </div>
         </article>
+        <p class="hint">Log into the sandbox where you built the change and the org you want to update (QA, UAT, or prod). Git is optional — use it when you want to reuse the same Jira version later.</p>
         <label>
           Jira ticket
           <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
         </label>
-        <p class="hint">Use the Jira key as the version. A comment-only save mints CHANGE-YYYYMMDD-n.</p>
+        <p class="hint">Configurators: put the Jira on the version so the same package can be pushed sandbox → QA → prod.</p>
         <label>
           Comment
           <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
@@ -59,8 +60,8 @@
           <label>
             Tests
             <select id="test-level">
-              <option value="NoTestRun">No tests</option>
-              <option value="RunLocalTests">Run local tests</option>
+              <option value="NoTestRun">No tests (config-only)</option>
+              <option value="RunLocalTests">Run local tests (prod / Apex in package)</option>
               <option value="RunAllTestsInOrg">Run all tests</option>
             </select>
           </label>
@@ -70,9 +71,9 @@
           </label>
         </div>
         <div class="actions">
-          <button id="btn-save" class="primary" data-busy>Save version to Git</button>
-          <button id="btn-deploy-selected" class="accent" data-busy>Deploy selected to target</button>
-          <button id="btn-deploy" class="secondary" data-busy>Deploy saved version</button>
+          <button id="btn-deploy-selected" class="accent" data-busy>Deploy configuration to target org</button>
+          <button id="btn-save" class="secondary" data-busy>Save version to Git (optional)</button>
+          <button id="btn-deploy" class="secondary" data-busy>Deploy a saved Jira version</button>
           <button id="btn-both" class="secondary" data-busy>Save version &amp; deploy</button>
         </div>
       </section>
@@ -90,7 +91,15 @@
         </nav>
 
         <div id="subview-pick" class="subview active">
-          <p class="hint">Load members from the source org, tick what belongs to this Jira, then deploy or save a version.</p>
+          <p class="hint">This is the change-set style picker: load what exists in the source sandbox, tick the pieces for this Jira, then deploy them to another org.</p>
+          <label>
+            Show
+            <select id="type-audience">
+              <option value="config">Configuration (objects, UI, automation, access)</option>
+              <option value="all">All types (includes Apex / LWC)</option>
+              <option value="code">Code only</option>
+            </select>
+          </label>
           <label>
             Metadata type
             <select id="meta-type"></select>
@@ -106,7 +115,7 @@
           <label>
             Add member by name
             <div class="inline-add">
-              <input id="manual-member" type="text" placeholder="MyClass or Object.Field" />
+              <input id="manual-member" type="text" placeholder="Account.Customer_Status__c" />
               <button type="button" id="btn-add-member" class="secondary">Add</button>
             </div>
           </label>
@@ -119,7 +128,7 @@
           </article>
           <div class="actions">
             <button type="button" id="btn-retrieve" class="secondary" data-busy>Retrieve into Review</button>
-            <button type="button" id="btn-deploy-from-pick" class="accent" data-busy>Deploy selected to target</button>
+            <button type="button" id="btn-deploy-from-pick" class="accent" data-busy>Deploy configuration to target org</button>
           </div>
         </div>
 
@@ -134,7 +143,7 @@
         </div>
 
         <div id="subview-review" class="subview">
-          <p class="hint">Retrieved metadata files. Click an XML (or Apex/LWC) file to edit it before deploy. Closing the panel discards unsaved retrieve results.</p>
+          <p class="hint">Retrieved configuration files. Open a file to edit XML before it goes to the next org. Closing the panel discards an unsaved retrieve.</p>
           <div class="row-actions">
             <button type="button" id="btn-retrieve-review" class="secondary" data-busy>Retrieve selected</button>
           </div>
@@ -147,14 +156,21 @@
             </div>
           </label>
           <div class="actions">
-            <button type="button" id="btn-deploy-review" class="accent" data-busy>Deploy these files to target</button>
+            <button type="button" id="btn-deploy-review" class="accent" data-busy>Deploy these files to target org</button>
           </div>
         </div>
       </section>
 
       <section id="view-setup" class="view">
-        <h2>GitHub repository</h2>
-        <p class="hint">Each user connects their own repo. Tokens stay in this browser profile only. Git is for versioning; you can still deploy a selected package without saving a version.</p>
+        <h2>Salesforce orgs</h2>
+        <p class="hint">Log into the sandbox you configure in and every target org (QA, UAT, prod) in this Chrome profile, then detect them. OrgFlow uses your Salesforce session — no Connected App required.</p>
+        <div class="actions">
+          <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
+        </div>
+        <div id="org-list" class="list"></div>
+
+        <h2>GitHub (optional versioning)</h2>
+        <p class="hint">You can deploy configuration without Git. Connect a repo if you want each Jira to be a reusable version for later orgs.</p>
         <label>
           Personal access token
           <input id="gh-token" type="password" placeholder="ghp_…" autocomplete="off" />
@@ -177,15 +193,8 @@
           <input id="gh-branch" type="text" placeholder="main" />
         </label>
         <div class="actions">
-          <button id="btn-save-repo" class="primary" data-busy>Use this repo</button>
+          <button id="btn-save-repo" class="secondary" data-busy>Use this repo</button>
         </div>
-
-        <h2>Salesforce orgs</h2>
-        <p class="hint">Log into each org in Chrome, then refresh. OrgFlow uses your existing Salesforce session cookies (same idea as Salesforce Inspector).</p>
-        <div class="actions">
-          <button id="btn-refresh-orgs" class="secondary" data-busy>Detect logged-in orgs</button>
-        </div>
-        <div id="org-list" class="list"></div>
       </section>
     </main>
 

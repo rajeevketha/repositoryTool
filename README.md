@@ -1,18 +1,21 @@
 # OrgFlow
 
-Chrome extension for **Jira-versioned Salesforce deployments**. Retrieve metadata from one org, store a snapshot in **your GitHub repo**, then deploy that same version to QA, UAT, or production.
+Chrome extension for **Salesforce configurators**: build fields, layouts, flows, permission sets (and other metadata) in a sandbox, then deploy that same package to QA, UAT, or production.
 
-Each user connects their own repository. Nothing in this project is hard-wired to a single Git remote.
+Optional GitHub storage versions each Jira ticket (`PROJ-123-v1`) so later orgs get the identical snapshot. Git is not required for a one-off sandbox → target deploy.
 
-## What it does
+## Configurator workflow
 
-1. You work in a Salesforce org against a Jira ticket (for example `PROJ-123`).
-2. On **Components**, pick the exact metadata (or edit `package.xml`), optionally retrieve and edit the XML files.
-3. Enter the Jira key and a comment, then **Save version to Git** and/or **Deploy selected to target**.
-4. Later, enter the same Jira key (or `PROJ-123-v1`) and **Deploy saved version** so every org gets that snapshot.
-5. Every Git-backed deploy is appended to that version’s history (target org, status, comment, test level).
+1. Log into the **source sandbox** and the **target org** in Chrome. Setup → **Detect logged-in orgs**.
+2. **Components** (defaults to configuration types, not Apex):
+   - Objects & fields, pages/layouts, automation, access, picklists, reports/email
+   - Load members from the sandbox, tick what belongs to the Jira
+   - Or edit `package.xml` / retrieved XML on the other sub-tabs
+3. **Deploy** tab: source org = sandbox, target org = QA/UAT/prod, Jira key + comment.
+4. **Deploy configuration to target org**. Tick **Validate only** first if you want a dry run.
+5. Optionally **Save version to Git** so the next org gets `PROJ-123-v1` instead of re-picking.
 
-If you only type a comment, OrgFlow mints an id like `CHANGE-20260818-1`.
+Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Switch **Show** to “All types” when a developer also needs Apex/LWC in the same ticket.
 
 ## Install (unpacked Chrome extension)
 
@@ -23,32 +26,28 @@ If you only type a comment, OrgFlow mints an id like `CHANGE-20260818-1`.
 
 ## First-time setup
 
-### GitHub repo (required, per user)
+### Salesforce orgs (required)
 
-1. Create a GitHub personal access token:
-   - Classic: `repo` scope
-   - Fine-grained: **Contents: Read and write** on the target repository
-2. Open the **Setup** tab, paste the token, click **Connect GitHub**.
-3. Pick a repo from the list **or** paste `owner/repo` (or a github.com URL).
-4. Set the branch (default `main`) and click **Use this repo**.
-
-Another teammate installs the same extension and points it at **their** repo with **their** token. Settings live in `chrome.storage.local` for that browser profile only.
-
-### Salesforce orgs
-
-Log into each org in Chrome (the same profile), then **Detect logged-in orgs**. OrgFlow reads the `sid` cookie and calls the Salesforce REST API — the same approach as Salesforce Inspector. No Connected App is required for v1.
+Log into each org in Chrome (the same profile), then **Detect logged-in orgs**. OrgFlow reads the `sid` cookie — the same idea as Salesforce Inspector. No Connected App is required.
 
 If an org does not appear, open it (Lightning or Setup) so a `*.my.salesforce.com` session cookie exists, then detect again.
 
-Source and target can be any detected org (sandbox → sandbox, sandbox → prod, and so on).
+### GitHub repo (optional)
+
+Use this when several orgs should receive the **same** Jira version later.
+
+1. Create a GitHub personal access token (`repo` scope, or fine-grained **Contents: Read and write**).
+2. Setup → paste the token → **Connect GitHub** → pick or paste `owner/repo` → **Use this repo**.
+
+Each configurator connects **their** repo with **their** token. Settings stay in that browser profile.
 
 ### Components
 
 On the **Components** tab:
 
-1. **Pick** — choose a metadata type, **Load from source org**, tick the exact classes/LWCs/objects/flows for this Jira. You can also type a member name if it is not in the list.
+1. **Pick** — configuration types first. Load from the source sandbox, tick fields/layouts/flows/permission sets for this Jira, or type a member such as `Account.Customer_Status__c`.
 2. **package.xml** — edit the XML by hand, then **Apply XML to picker**. Or **Rebuild from picker**.
-3. **Review / edit** — retrieve the package, then open any metadata file (object XML, Apex, LWC, `package.xml`) and edit it before deploy.
+3. **Review / edit** — retrieve the package, then open metadata XML and edit it before deploy.
 
 **Deploy selected to target** pushes that package to the target org (Git is optional). **Save version to Git** stores the same snapshot under the Jira key so you can redeploy it later.
 
@@ -59,12 +58,12 @@ Wildcard `*` for a type still works if you want everything of that type. For rea
 | Field | Example |
 | --- | --- |
 | Jira ticket | `PROJ-123` |
-| Comment | `Account validation + LWC fix` |
-| Source org | Dev sandbox |
+| Comment | `Account status field + layout + flow` |
+| Source org | Config sandbox |
 | Target org | UAT |
-| Tests | `No tests` in sandboxes; `Run local tests` on production |
+| Tests | `No tests (config-only)`; `Run local tests` if Apex is included or the target is production |
 
-- **Deploy selected to target** — retrieve the picked components (or use files already in Review) and Metadata API deploy to the target org.
+- **Deploy configuration to target org** — retrieve the picked components (or use files already in Review) and Metadata API deploy to the target org.
 - **Save version to Git** — commit that snapshot + version record under the Jira key.
 - **Deploy saved version** — read a previous Jira version from Git and deploy it.
 - **Save version & deploy** — both in one step.

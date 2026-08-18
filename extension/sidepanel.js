@@ -1,5 +1,5 @@
 import { loadSettings, saveSettings, isGithubConfigured, repoLabel } from "./lib/storage.js";
-import { uniqueCatalog } from "./lib/metadataTypes.js";
+import { catalogGroups, memberHint } from "./lib/metadataTypes.js";
 import {
   parseTicketInput,
   mintChangeId,
@@ -50,7 +50,8 @@ const state = {
   busy: false,
   packageTypes: [],
   xmlDirty: false,
-  activeType: "ApexClass",
+  activeType: "CustomField",
+  typeAudience: "config",
   membersCache: {},
   stagedFiles: null,
   activeFilePath: ""
@@ -122,7 +123,7 @@ function renderPackageUi() {
   const count = memberCount(state.packageTypes);
   $("package-summary-body").textContent = count
     ? `${count} selected · ${summary}`
-    : "No components yet — pick them on the Components tab.";
+    : "Nothing selected yet — pick fields, layouts, flows, permission sets… on Components.";
   $("package-count").textContent = String(count);
   $("selected-package").textContent = count
     ? state.packageTypes
@@ -134,12 +135,24 @@ function renderPackageUi() {
 }
 
 function renderTypeSelect() {
+  const audience = $("type-audience")?.value || state.typeAudience || "config";
+  state.typeAudience = audience;
   const select = $("meta-type");
-  select.innerHTML = uniqueCatalog()
-    .map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.label)} (${escapeHtml(t.name)})</option>`)
+  const groups = catalogGroups(audience);
+  select.innerHTML = groups
+    .map((group) => {
+      const options = group.types
+        .map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.label)}</option>`)
+        .join("");
+      return `<optgroup label="${escapeHtml(group.label)}">${options}</optgroup>`;
+    })
     .join("");
-  if (state.activeType) select.value = state.activeType;
+  const available = new Set(groups.flatMap((g) => g.types.map((t) => t.name)));
+  if (state.activeType && available.has(state.activeType)) select.value = state.activeType;
   state.activeType = select.value;
+  const hint = memberHint(state.activeType);
+  $("manual-member").placeholder = hint;
+  $("member-filter").placeholder = `Filter… e.g. ${hint}`;
 }
 
 function renderMembers() {
@@ -280,7 +293,7 @@ function renderVersions() {
         ${comps ? `<div class="meta">${escapeHtml(comps)}</div>` : ""}
         ${deploys ? `<div class="meta">${escapeHtml(deploys)}</div>` : ""}
         <div class="tiny">
-          <button class="secondary" data-use="${escapeHtml(v.id)}">Use in Ship</button>
+          <button class="secondary" data-use="${escapeHtml(v.id)}">Use on Deploy</button>
           <button class="primary" data-deploy="${escapeHtml(v.id)}">Deploy</button>
         </div>
       </article>`;
@@ -319,9 +332,17 @@ async function refreshOrgs() {
 
 function updateHeaderStatus() {
   const pack = memberCount(state.packageTypes);
-  const repo = isGithubConfigured(state.settings) ? repoLabel(state.settings) : "Git not connected";
   const n = state.orgs.length;
-  setStatus(`${repo} · ${n} org${n === 1 ? "" : "s"} · ${pack} component${pack === 1 ? "" : "s"}`, n ? "ok" : "");
+  if (!n) {
+    setStatus("Log into each Salesforce org in Chrome, then Detect orgs in Setup.");
+    return;
+  }
+  if (!pack) {
+    setStatus(`${n} org${n === 1 ? "" : "s"} ready · pick configuration on Components, then deploy.`);
+    return;
+  }
+  const git = isGithubConfigured(state.settings) ? ` · ${repoLabel(state.settings)}` : "";
+  setStatus(`${n} org${n === 1 ? "" : "s"} · ${pack} component${pack === 1 ? "" : "s"} ready to deploy${git}`, "ok");
 }
 
 async function refreshAll() {
@@ -729,8 +750,15 @@ $("btn-add-member").addEventListener("click", () => run(async () => {
   invalidateStaged();
   await persistPackage();
 }));
+$("type-audience").addEventListener("change", () => {
+  renderTypeSelect();
+  renderMembers();
+});
 $("meta-type").addEventListener("change", () => {
   state.activeType = $("meta-type").value;
+  const hint = memberHint(state.activeType);
+  $("manual-member").placeholder = hint;
+  $("member-filter").placeholder = `Filter… e.g. ${hint}`;
   renderMembers();
 });
 $("member-filter").addEventListener("input", renderMembers);
