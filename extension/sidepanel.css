@@ -1,23 +1,23 @@
 :root {
-  --bg: #1a1815;
-  --bg-2: #211e1a;
-  --card: #24211c;
-  --line: rgba(255, 247, 238, 0.08);
-  --text: #ece6dc;
-  --muted: #9c948a;
-  --orange: #b08968;
-  --orange-2: #cbb8a4;
-  --orange-deep: #8a6b4e;
-  --navy: #b08968;
-  --blue: #b08968;
-  --blue-hover: #c09a78;
-  --teal: #b08968;
-  --teal-hover: #c09a78;
-  --ok: #8aaa8a;
-  --danger: #c98989;
+  --bg: #12151c;
+  --bg-2: #171b24;
+  --card: #1c212c;
+  --line: rgba(226, 228, 234, 0.08);
+  --text: #e6e4de;
+  --muted: #8f96a3;
+  --orange: #c5bba8;
+  --orange-2: #d2cdc4;
+  --orange-deep: #8a8478;
+  --navy: #c5bba8;
+  --blue: #c5bba8;
+  --blue-hover: #d2cdc4;
+  --teal: #c5bba8;
+  --teal-hover: #d2cdc4;
+  --ok: #8a9e94;
+  --danger: #c4a0a0;
   --radius: 12px;
-  --shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
-  --surface: #161410;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  --surface: #151922;
 }
 
 * { box-sizing: border-box; }
@@ -70,8 +70,8 @@ body {
   color: var(--muted);
   border-bottom: 1px solid var(--line);
 }
-.status-bar.error { background: #3a1212; color: #ffb4b4; }
-.status-bar.ok { background: #12301a; color: var(--ok); }
+.status-bar.error { background: var(--surface); color: var(--danger); }
+.status-bar.ok { background: var(--surface); color: var(--ok); }
 
 .stepper {
   display: grid;
@@ -304,28 +304,28 @@ button {
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 button:disabled {
-  background: #2a2723 !important;
-  color: #6a645c !important;
-  border: 1px solid #3a3631 !important;
+  background: #1c212c !important;
+  color: #6a7180 !important;
+  border: 1px solid #2a3140 !important;
   box-shadow: none !important;
   opacity: 1;
   cursor: not-allowed;
   filter: none;
 }
 .primary {
-  background: #2e2a25;
+  background: #2a3140;
   color: var(--text);
-  border: 1px solid #5c5348;
+  border: 1px solid #4a5568;
 }
-.primary:hover:not(:disabled) { background: #38332d; }
+.primary:hover:not(:disabled) { background: #343c4d; }
 .accent {
-  background: #8f6e4e;
-  color: #fbf6f0;
+  background: #3d4a5c;
+  color: #f3f1ec;
   border: 1px solid transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-.accent:hover:not(:disabled) { background: #9c7a58; }
-.secondary { background: #2a2723; color: var(--text); border: 1px solid #3f3a34; }
+.accent:hover:not(:disabled) { background: #4a586c; }
+.secondary { background: #1c212c; color: var(--text); border: 1px solid #2f3644; }
 .ghost, .ghost-text { background: transparent; color: var(--muted); }
 .ghost-text { font-size: 12px; font-weight: 500; padding: 6px 10px; border: 1px solid var(--line); }
 .ghost { font-size: 16px; padding: 4px 8px; }
@@ -370,7 +370,7 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
 }
 .mode-card strong { color: #fff; font-size: 15px; }
 .mode-card span { font-weight: 500; color: var(--muted); font-size: 12px; }
-.mode-card.selected { border-color: #5c5348; background: #2a2621; box-shadow: none; }
+.mode-card.selected { border-color: #4a5568; background: #1e2430; box-shadow: none; }
 
 .help-steps { margin: 8px 0 0; padding-left: 18px; }
 .help-card a { color: var(--orange-2); }
@@ -429,7 +429,7 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
   padding: 6px 10px;
   font-size: 12px;
 }
-.obj-chip.active { background: #3a3228; color: var(--orange-2); border-color: #6f5b43; }
+.obj-chip.active { background: #2a3140; color: var(--orange-2); border-color: #4a5568; }
 
 .member-row {
   flex-direction: row;
@@ -443,8 +443,8 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
   font-weight: 600;
 }
 .member-row:has(input:checked) {
-  background: #2a241c;
-  border-color: #6f5b43;
+  background: #1e2430;
+  border-color: #4a5568;
 }
 .member-name { flex: 1; word-break: break-word; }
 .member-mark {
@@ -459,9 +459,9 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
   flex-shrink: 0;
 }
 .member-row:has(input:checked) .member-mark {
-  background: #7a5a38;
-  border-color: #8d6a45;
-  color: #f6efe6;
+  background: #3d4a5c;
+  border-color: #5a6780;
+  color: #f3f1ec;
 }
 .member-row input { display: none; }
 .member-tag { margin-left: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--orange-2); }

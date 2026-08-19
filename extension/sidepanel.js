@@ -486,6 +486,7 @@ function applyStepUi() {
     syncOutcomePanel();
     renderStepper();
     updateWizardNav();
+    updateHeaderStatus();
     return;
   }
   const step = currentStep();
@@ -511,6 +512,7 @@ function applyStepUi() {
   syncOutcomePanel();
   renderStepper();
   updateWizardNav();
+  updateHeaderStatus();
 }
 
 function goStep(index, { force = false } = {}) {
@@ -539,7 +541,7 @@ function wizardBack() {
   if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
     resetForNewPackage();
     goStep(2, { force: true });
-    setStatus("Start a new package — tick members, then retrieve again.", "ok");
+    updateHeaderStatus();
     return;
   }
   if (state.stepIndex === 0) return;
@@ -609,6 +611,7 @@ function resetForNewPackage() {
   $("outcome-head")?.classList.remove("ok", "err", "wait");
   applyRetrieveLockUi();
   updateActionState();
+  updateHeaderStatus();
 }
 
 function useGitEnabled() {
@@ -1325,18 +1328,28 @@ async function refreshOrgs() {
 function updateHeaderStatus() {
   const pack = memberCount(state.packageTypes);
   const n = state.orgs.length;
+  const step = currentStepId();
   if (!n) {
-    setStatus("Start here: choose where versions live (this browser or GitHub), then detect orgs.");
+    setStatus("Log into your Salesforce orgs in Chrome, then detect them.");
+    return;
+  }
+  if (step === "start") {
+    setStatus(`${n} org${n === 1 ? "" : "s"} detected. Set From and To, then continue.`);
     return;
   }
   if (!pack) {
-    setStatus(`${n} org${n === 1 ? "" : "s"} ready · Next to pick a configuration type.`);
+    setStatus(`${n} org${n === 1 ? "" : "s"} · choose a type, then tick members.`);
     return;
   }
-  const git = useGitEnabled() && isGithubConfigured(state.settings)
-    ? ` · GitHub ${repoLabel(state.settings)}`
-    : " · versions in this browser";
-  setStatus(`${n} org${n === 1 ? "" : "s"} · ${pack} component${pack === 1 ? "" : "s"} ready to deploy${git}`, "ok");
+  if (step === "review" && !state.retrieveOk) {
+    setStatus("Retrieve from the From org before you can deploy.");
+    return;
+  }
+  if (step === "deploy" && alreadyDeployedToCurrentTarget()) {
+    setStatus(`Already sent to ${selectedOrg("target-org")?.label || "the To org"}.`);
+    return;
+  }
+  setStatus(`${n} org${n === 1 ? "" : "s"} · ${pack} in this package.`);
 }
 
 async function refreshAll() {
@@ -1383,6 +1396,7 @@ async function refreshAll() {
   }
   updateHeaderStatus();
   goStep(0, { force: true });
+  updateHeaderStatus();
 }
 
 async function connectGithub() {
