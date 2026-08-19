@@ -18,7 +18,8 @@ import {
   assertPackageXml,
   formatDeployOutcome,
   formatRetrieveOutcome,
-  formatOperationOutcome
+  formatOperationOutcome,
+  formatLocalOutcome
 } from "../extension/lib/packageXml.js";
 import { parseRepoInput } from "../extension/lib/github.js";
 import { isEditablePath } from "../extension/lib/files.js";
@@ -161,6 +162,25 @@ describe("soap result parsing", () => {
     assert.equal(deployed.ok, true);
     assert.equal(deployed.items[0].kind, "success");
     assert.equal(deployed.items[0].name, "Hello");
+  });
+
+  it("formats local OrgFlow blocks separately from Salesforce failures", () => {
+    const blocked = formatOperationOutcome({
+      local: true,
+      operation: "deploy",
+      status: "Blocked",
+      items: [
+        { kind: "error", kicker: "Commit message", text: "Enter a commit message. Jira is optional." },
+        { kind: "error", kicker: "Team repo", text: "Connect a GitHub repo on the Start tab first." }
+      ]
+    });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.title, "Blocked");
+    assert.equal(blocked.items[0].kicker, "Commit message");
+    assert.match(blocked.items[0].text, /Jira is optional/);
+    assert.equal(blocked.items[1].kicker, "Team repo");
+    const fromMessage = formatLocalOutcome({ local: true, errorMessage: "Enter a commit message." });
+    assert.equal(fromMessage.items[0].text, "Enter a commit message.");
   });
 
   it("parses listMetadata members", () => {

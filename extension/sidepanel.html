@@ -372,12 +372,14 @@
 
         <section id="git-ship-panel" class="git-ship git-only hidden">
           <h2>Save to the team repo</h2>
-          <p class="hint" id="git-ship-hint">A commit message is required when sharing in GitHub, GitLab, or Azure — for Save, Salesforce deploy, and deploying a saved version.</p>
-          <label>Jira key (optional)
+          <p class="hint" id="git-ship-hint">A commit message is required when sharing in GitHub, GitLab, or Azure — for Save, Salesforce deploy, and deploying a saved version. Jira is optional.</p>
+          <label>
+            <span class="field-title">Jira key <span class="opt-mark">Optional</span></span>
             <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
           </label>
-          <label>Commit message
-            <textarea id="comment" rows="3" placeholder="Required. Example: Account status field + layout for PROJ-123"></textarea>
+          <label>
+            <span class="field-title">Commit message <span class="req-mark">Required</span></span>
+            <textarea id="comment" rows="3" placeholder="Required. Example: Account status field + layout for PROJ-123" aria-required="true"></textarea>
           </label>
           <div class="row-actions">
             <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to repo</button>

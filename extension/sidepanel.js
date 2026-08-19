@@ -12,7 +12,8 @@ import {
   findVersion,
   sortVersions,
   versionsFilePath,
-  isJiraKey
+  isJiraKey,
+  gitShipValidationItems
 } from "./lib/versions.js";
 import {
   providerMeta,
@@ -120,7 +121,8 @@ const state = {
   versionFilesCache: {},
   compareRows: [],
   compareActivePath: "",
-  lastSaved: null
+  lastSaved: null,
+  gitShipWarned: false
 };
 
 function escapeHtml(value) {
@@ -269,8 +271,8 @@ function deployBlockReason() {
     return `Already deployed this package to ${target.label}. Change To for another org, or start a new package.`;
   }
   if (useGitEnabled()) {
-    if (!isGitConfigured(state.settings)) return "Connect GitHub, GitLab, or Azure on Start before deploying from a team repo.";
-    if (!gitCommitMessage()) return "Enter a commit message before deploying. It is required when a team repo is on.";
+    const gitItems = gitShipItems();
+    if (gitItems.length) return gitItems[0].text;
   }
   return "";
 }
@@ -303,7 +305,9 @@ function updateActionState() {
   if (deployBtn) {
     const deploying = state.deployFinished === "running" || (state.busy && currentStepId() === "deploy" && state.deployFinished !== "failed");
     const doneOk = state.deployFinished === "success" || alreadyDeployedToCurrentTarget();
+    const gitItems = useGitEnabled() ? gitShipItems() : [];
     if (deploying || doneOk) deployBtn.disabled = true;
+    else if (gitItems.length) deployBtn.disabled = true;
     deployBtn.textContent = deploying ? "Deploying…" : doneOk ? "Deployed" : "Deploy";
     const stateEl = $("deploy-btn-hint");
     if (stateEl) {
@@ -314,7 +318,7 @@ function updateActionState() {
         stateEl.textContent = `Already sent to ${selectedOrg("target-org")?.label || "this org"}`;
         stateEl.dataset.state = "done";
       } else if (deployBtn.disabled) {
-        stateEl.textContent = reason || "Not ready yet";
+        stateEl.textContent = gitItems[0]?.text || reason || "Not ready yet";
         stateEl.dataset.state = "off";
       } else {
         stateEl.textContent = `Ready — send to ${selectedOrg("target-org")?.label || "To org"}`;
@@ -323,6 +327,14 @@ function updateActionState() {
     }
     deployBtn.title = stateEl?.textContent || "";
   }
+  const commentEl = $("comment");
+  if (commentEl) {
+    const missingCommit = useGitEnabled() && !gitCommitMessage();
+    const showInvalid = missingCommit && state.gitShipWarned;
+    commentEl.classList.toggle("invalid", showInvalid);
+    commentEl.setAttribute("aria-invalid", showInvalid ? "true" : "false");
+  }
+  $("open-versions")?.classList.toggle("selected", Boolean(state.showingVersions));
   const retrieveFresh = hasFreshRetrieve() && state.retrieveOk;
   for (const id of ["btn-retrieve", "btn-retrieve-review"]) {
     const btn = $(id);
@@ -356,7 +368,7 @@ function updateActionState() {
   const saveBtn = $("btn-save");
   if (saveBtn && useGitEnabled() && !state.busy && !gitCommitMessage()) {
     saveBtn.disabled = true;
-    saveBtn.title = "Enter a commit message first";
+    saveBtn.title = "Enter a commit message first. Jira is optional.";
   }
   const callout = $("deploy-reason");
   if (callout) {
@@ -499,7 +511,7 @@ function renderStepper() {
     const active = i === current ? "active" : "";
     const done = !state.showingVersions && i < state.stepIndex ? "done" : "";
     const allowed = i <= Math.max(max, state.stepIndex);
-    return `<button type="button" class="step ${active} ${done}" data-step="${i}" ${allowed ? "" : "disabled"} aria-current="${i === current ? "step" : "false"}">
+    return `<button type="button" class="step ${active} ${done}" data-step="${i}" ${allowed ? "" : "disabled"} role="tab" aria-selected="${i === current ? "true" : "false"}" aria-current="${i === current ? "step" : "false"}">
       <span>${i + 1}</span>${escapeHtml(step.label)}
     </button>`;
   }).join("");
@@ -551,6 +563,7 @@ function applyStepUi() {
     renderStepper();
     updateWizardNav();
     updateHeaderStatus();
+    $("open-versions")?.classList.toggle("selected", true);
     renderGitUi();
     return;
   }
@@ -579,6 +592,7 @@ function applyStepUi() {
   renderStepper();
   updateWizardNav();
   updateHeaderStatus();
+  $("open-versions")?.classList.toggle("selected", Boolean(state.showingVersions));
 }
 
 function goStep(index, { force = false } = {}) {
@@ -690,13 +704,54 @@ function gitCommitMessage() {
   return $("comment")?.value?.trim() || "";
 }
 
-function requireGitCommitMessage() {
+function gitShipItems() {
+  return gitShipValidationItems({
+    gitEnabled: useGitEnabled(),
+    commitMessage: gitCommitMessage(),
+    gitConfigured: isGitConfigured(state.settings),
+    hostLabel: providerMeta(providerId(state.settings)).label
+  });
+}
+
+function localError(message, extra = {}) {
+  const err = new Error(message);
+  err.local = true;
+  Object.assign(err, extra);
+  return err;
+}
+
+function requireGitShipReady(operation = "deploy") {
   if (!useGitEnabled()) return gitCommitMessage();
-  const message = gitCommitMessage();
-  if (!message) {
-    throw new Error("Commit message is required when a team repo is on. Describe the change before saving or deploying.");
+  const items = gitShipItems();
+  if (!items.length) return gitCommitMessage();
+  state.gitShipWarned = true;
+  throw localError(items.map((item) => item.text).join(" "), {
+    validationItems: items,
+    focus: items.some((item) => item.kicker === "Commit message") ? "comment" : "",
+    operation
+  });
+}
+
+function requireGitCommitMessage() {
+  return requireGitShipReady("deploy");
+}
+
+function showLocalFailure(operation, err) {
+  state.gitShipWarned = true;
+  const items = err.validationItems?.length
+    ? err.validationItems
+    : [{ kind: "error", text: err.message || String(err) }];
+  showOutcome({
+    success: false,
+    status: "Blocked",
+    local: true,
+    operation,
+    items
+  });
+  if (err.focus === "comment" || (useGitEnabled() && !gitCommitMessage())) {
+    $("comment")?.focus();
   }
-  return message;
+  updateActionState();
 }
 
 async function persistPackage() {
@@ -797,7 +852,10 @@ function outcomeItemHtml(item) {
       <strong>${escapeHtml(item.name)}</strong>
     </article>`;
   }
-  return `<article class="outcome-item ${item.kind === "info" ? "info" : "err"}"><p>${escapeHtml(item.text)}</p></article>`;
+  return `<article class="outcome-item ${item.kind === "info" ? "info" : "err"}">
+      ${item.kicker ? `<div class="outcome-kicker">${escapeHtml(item.kicker)}</div>` : ""}
+      <p>${escapeHtml(item.text)}</p>
+    </article>`;
 }
 
 function showOutcome(result) {
@@ -805,8 +863,13 @@ function showOutcome(result) {
   if (!panel) return;
   panel.classList.remove("hidden");
   const formatted = formatOperationOutcome(result);
-  const operation = result?.operation === "retrieve" ? "Retrieve" : "Deploy";
-  if ($("outcome-title")) $("outcome-title").textContent = `${operation} result`;
+  const titles = {
+    retrieve: "Retrieve result",
+    deploy: "Deploy result",
+    save: "Save to repo"
+  };
+  const operation = titles[result?.operation] || (result?.local ? "Couldn't continue" : "Deploy result");
+  if ($("outcome-title")) $("outcome-title").textContent = operation;
   if ($("outcome-badge")) $("outcome-badge").textContent = formatted.title;
   const head = $("outcome-head");
   if (head) {
@@ -816,10 +879,12 @@ function showOutcome(result) {
   }
   if ($("outcome-sub")) {
     $("outcome-sub").textContent = formatted.ok === true
-      ? (result?.operation === "retrieve" ? "Files are ready. Use Next to open Deploy, or Back to add members." : "Salesforce accepted this package.")
+      ? (result?.operation === "retrieve" ? "Files are ready. Use Next to open Deploy, or Back to add members." : result?.operation === "save" ? "Snapshot is in the team repo." : "Salesforce accepted this package.")
       : formatted.ok === null
         ? "Salesforce is still working. The button stays off until this finishes."
-        : "Salesforce rejected this request. Each item below is why it failed.";
+        : result?.local
+          ? "OrgFlow blocked this before Salesforce. Each item below is what to fix."
+          : "Salesforce rejected this request. Each item below is why it failed.";
   }
   const body = $("outcome-body");
   if (body) {
@@ -887,7 +952,7 @@ function renderGitUi() {
   const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   if ($("git-ship-hint")) {
-    $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version.`;
+    $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version. Jira is optional.`;
   }
   fillGitHostUi();
   renderPipelines();
@@ -1849,8 +1914,10 @@ async function persistShipOptions() {
 }
 
 function requireGithub() {
-  if (!useGitEnabled()) throw new Error("Choose GitHub, GitLab, or Azure on Start first.");
-  if (!isGitConfigured(state.settings)) throw new Error(`Connect a ${providerMeta(providerId(state.settings)).label} repo on the Start tab first.`);
+  if (!useGitEnabled()) throw localError("Choose GitHub, GitLab, or Azure on Start first.");
+  if (!isGitConfigured(state.settings)) {
+    throw localError(`Connect a ${providerMeta(providerId(state.settings)).label} repo on the Start tab first.`);
+  }
 }
 
 function requirePackage() {
@@ -1980,14 +2047,18 @@ function resolveTicket(store) {
   const jiraField = $("jira").value.trim();
   const comment = $("comment").value.trim();
   if (useGitEnabled() && !comment) {
-    throw new Error("Commit message is required when a team repo is on.");
+    throw localError("Enter a commit message. Jira is optional — skip it if you do not have a ticket. The commit message is required when a team repo is on.", {
+      focus: "comment",
+      operation: "save",
+      validationItems: gitShipItems()
+    });
   }
   if (jiraField) {
     const parsed = parseTicketInput(jiraField);
     if (parsed.kind === "jira" || isJiraKey(parsed.ticket)) return { ticket: parsed.ticket, comment };
     return { ticket: parsed.ticket.toUpperCase().replace(/\s+/g, "-"), comment };
   }
-  if (!comment) throw new Error("Enter a Jira ticket or a comment.");
+  if (!comment) throw localError("Enter a Jira ticket or a comment.", { focus: "comment", operation: "save" });
   return { ticket: mintChangeId(store.versions), comment };
 }
 
@@ -2077,10 +2148,7 @@ async function deploySelected() {
   if (alreadyDeployedToCurrentTarget()) {
     throw new Error(`Already deployed this package to ${target.label}. Change To, or start a new package.`);
   }
-  if (useGitEnabled()) {
-    requireGithub();
-    requireGitCommitMessage();
-  }
+  if (useGitEnabled()) requireGitShipReady("deploy");
   state.deployFinished = "running";
   showOutcome({ running: true, operation: "deploy" });
   updateActionState();
@@ -2125,7 +2193,8 @@ async function deploySelected() {
     return result;
   } catch (err) {
     state.deployFinished = "failed";
-    showOutcome({ success: false, status: "Failed", errorMessage: err.message || String(err), operation: "deploy" });
+    if (err.local) showLocalFailure(err.operation || "deploy", err);
+    else showOutcome({ success: false, status: "Failed", errorMessage: err.message || String(err), operation: "deploy" });
     updateActionState();
     throw err;
   }
@@ -2164,7 +2233,7 @@ async function recordSuccessfulGitDeploy(target, result, options, existingVersio
 }
 
 async function saveVersion() {
-  if (useGitEnabled()) requireGithub();
+  if (useGitEnabled()) requireGitShipReady("save");
   const source = selectedOrg("source-org");
   if (!source) throw new Error("Select a source org. Log into it in Chrome first.");
   const types = await ensurePackage();
@@ -2238,8 +2307,7 @@ async function deployVersion(explicitId) {
   const version = findVersion(state.versions.versions, wanted);
   if (!version) throw new Error(`No saved version found for "${wanted}". Save it from the source org first.`);
   if (useGitEnabled() && version.storage !== "local") {
-    requireGithub();
-    requireGitCommitMessage();
+    requireGitShipReady("deploy");
   }
 
   let files = [];
@@ -2396,15 +2464,21 @@ async function run(action) {
     console.error(err);
     log(err.message || String(err), "error");
     const step = currentStepId();
-    if (step === "review" && state.retrieveOk) {
+    const local = Boolean(err.local);
+    const operation = err.operation
+      || (local ? (step === "review" ? "save" : "deploy") : (step === "review" ? "retrieve" : "deploy"));
+    if (step === "review" && state.retrieveOk && !local) {
       /* retrieve already succeeded — don't paint the result as failed */
-    } else if (step === "review" || step === "deploy") {
-      showOutcome({
-        success: false,
-        status: "Failed",
-        errorMessage: err.message || String(err),
-        operation: step === "review" ? "retrieve" : "deploy"
-      });
+    } else if (step === "review" || step === "deploy" || local) {
+      if (local) showLocalFailure(operation, err);
+      else {
+        showOutcome({
+          success: false,
+          status: "Failed",
+          errorMessage: err.message || String(err),
+          operation
+        });
+      }
     }
     if (step === "deploy" && state.deployFinished === "running") state.deployFinished = "failed";
   } finally {
@@ -2450,7 +2524,10 @@ $("compare-file-list")?.addEventListener("click", (event) => {
   const btn = event.target.closest("[data-compare-file]");
   if (btn) showCompareDiff(btn.dataset.compareFile);
 });
-$("comment")?.addEventListener("input", updateActionState);
+$("comment")?.addEventListener("input", () => {
+  if (gitCommitMessage()) state.gitShipWarned = false;
+  updateActionState();
+});
 $("btn-show-xml")?.addEventListener("click", () => {
   state.xmlReview = true;
   switchSubtab("xml");

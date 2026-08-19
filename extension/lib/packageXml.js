@@ -439,7 +439,23 @@ export function formatDeployOutcome(result) {
   return { ok: false, title, items };
 }
 
+export function formatLocalOutcome(result) {
+  const items = [];
+  for (const item of result?.items || []) {
+    if (typeof item === "string" && item.trim()) items.push({ kind: "error", text: item });
+    else if (item?.text) items.push({ kind: item.kind || "error", kicker: item.kicker || "", text: item.text });
+  }
+  if (!items.length && result?.errorMessage) {
+    items.push({ kind: "error", text: result.errorMessage });
+  }
+  if (!items.length) {
+    items.push({ kind: "error", text: "This action was blocked before Salesforce. Fix the items below and try again." });
+  }
+  return { ok: false, title: result?.status || "Blocked", items };
+}
+
 export function formatOperationOutcome(result) {
   if (result?.operation === "retrieve") return formatRetrieveOutcome(result);
+  if (result?.local) return formatLocalOutcome(result);
   return formatDeployOutcome(result);
 }

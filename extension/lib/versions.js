@@ -145,3 +145,32 @@ export function upsertVersion(store, record) {
 export function sortVersions(versions) {
   return versions.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
+
+/**
+ * Blocking reasons when a team repo is on. Commit message is always first —
+ * Jira is optional, so an empty ticket is not a failure.
+ */
+export function gitShipValidationItems({
+  gitEnabled,
+  commitMessage,
+  gitConfigured,
+  hostLabel = "Git"
+} = {}) {
+  if (!gitEnabled) return [];
+  const items = [];
+  if (!String(commitMessage || "").trim()) {
+    items.push({
+      kind: "error",
+      kicker: "Commit message",
+      text: "Enter a commit message. Jira is optional — skip it if you do not have a ticket. The commit message is required for Save, Salesforce deploy, and deploying a saved version."
+    });
+  }
+  if (!gitConfigured) {
+    items.push({
+      kind: "error",
+      kicker: "Team repo",
+      text: `Connect a ${hostLabel} repo on the Start tab first.`
+    });
+  }
+  return items;
+}

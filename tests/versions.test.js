@@ -12,7 +12,8 @@ import {
   findVersion,
   createVersionRecord,
   addDeployment,
-  upsertVersion
+  upsertVersion,
+  gitShipValidationItems
 } from "../extension/lib/versions.js";
 
 describe("jira / version ids", () => {
@@ -64,5 +65,37 @@ describe("jira / version ids", () => {
     store = upsertVersion(store, withDeploy);
     assert.equal(store.versions[0].deployments.length, 1);
     assert.equal(store.versions[0].deployments[0].org.label, "UAT");
+  });
+
+  it("explains missing commit before a missing Git repo, and does not require Jira", () => {
+    const both = gitShipValidationItems({
+      gitEnabled: true,
+      commitMessage: "",
+      gitConfigured: false,
+      hostLabel: "GitHub"
+    });
+    assert.equal(both.length, 2);
+    assert.equal(both[0].kicker, "Commit message");
+    assert.match(both[0].text, /Jira is optional/i);
+    assert.match(both[0].text, /commit message is required/i);
+    assert.equal(both[1].kicker, "Team repo");
+    assert.match(both[1].text, /GitHub/);
+
+    const commitOnly = gitShipValidationItems({
+      gitEnabled: true,
+      commitMessage: "   ",
+      gitConfigured: true,
+      hostLabel: "GitLab"
+    });
+    assert.equal(commitOnly.length, 1);
+    assert.equal(commitOnly[0].kicker, "Commit message");
+
+    const none = gitShipValidationItems({
+      gitEnabled: true,
+      commitMessage: "Account status field",
+      gitConfigured: true
+    });
+    assert.deepEqual(none, []);
+    assert.deepEqual(gitShipValidationItems({ gitEnabled: false, commitMessage: "" }), []);
   });
 });
