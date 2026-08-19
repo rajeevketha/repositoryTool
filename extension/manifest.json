@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OrgFlow",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Sequential Salesforce metadata deploys with Git version compare, per-file revert, and a required commit message when GitHub is on.",
   "icons": {
     "16": "icons/icon16.png",
