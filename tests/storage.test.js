@@ -12,7 +12,7 @@ describe("settings", () => {
     assert.deepEqual(merged.metadataTypes, DEFAULT_METADATA_TYPES);
     assert.equal(isGithubConfigured(merged), true);
     assert.equal(repoLabel(merged), "acme/sf@main");
-    assert.equal(merged.useGit, true);
+    assert.equal(merged.useGit, false);
     assert.equal(merged.setupComplete, false);
     assert.deepEqual(merged.specifiedTests, []);
   });

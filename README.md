@@ -2,17 +2,17 @@
 
 Chrome extension for **Salesforce configurators**: build fields, layouts, flows, permission sets (and other metadata) in a sandbox, then deploy that same package to QA, UAT, or production.
 
-GitHub storage versions each Jira ticket (`PROJ-123-v1`) so later orgs get the identical snapshot. **Use Git repo for versioning** is on by default. Turn that toggle off only for a one-off sandbox → target deploy with no version history.
+GitHub is **optional**. OrgFlow always versions by Jira (`PROJ-123-v1`). Without GitHub, snapshots live in this Chrome profile so you can promote the same package sandbox → QA → prod. Turn on **Version in GitHub** when the team needs a shared repo.
 
 ## Configurator workflow
 
 Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Review → Deploy) is sequential: you cannot skip ahead.
 
-1. **Start** — choose **Simple deploy** or **Git version control**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If Git: paste a token, connect the repo, save a **pipeline** to `.orgflow/pipelines.json`.
+1. **Start** — choose **Version in this browser** (default) or **Version in GitHub**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If GitHub: paste a token, connect the repo, save a **pipeline** to `.orgflow/pipelines.json`.
 2. **Type** — search, use the picklist, or tap a common type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
 3. **Members** — tick rows (orange check = in the package). The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list.
 4. **Review** — retrieve files. That **freezes** the From org and selected members to the snapshot. Unlock only if you need to change them, then retrieve again — deploy stays off until you do. Edit XML if needed, then Next.
-5. **Deploy** — Jira + comment, then deploy. Apex: pick tests in the **Test class runner**.
+5. **Deploy** — Jira + comment, **Save Jira version**, then deploy. The same `PROJ-123-v1` can go to the next org. Apex: pick tests in the **Test class runner**.
 
 The UI uses a dark charcoal + orange theme so the current step and selected members stay obvious.
 
@@ -41,15 +41,18 @@ Log into each org in Chrome (the same profile), then **Detect logged-in orgs**. 
 
 If an org does not appear, open it (Lightning or Setup) so a `*.my.salesforce.com` session cookie exists, then detect again.
 
-### GitHub repo (versioning)
+### Versioning (always on)
 
-On **Start**, choose **Git version control** if you want reusable Jira versions and pipelines.
+On **Start**, choose where snapshots are stored:
 
-1. Open [github.com/settings/tokens](https://github.com/settings/tokens) and create a token (`repo` scope, or fine-grained **Contents: Read and write**).
-2. Paste it on Start → **Connect GitHub** → pick or paste `owner/repo` → **Use this repo**.
-3. Name a pipeline (for example `Sandbox → UAT`), pick source and target, **Save pipeline to Git**.
+- **Version in this browser** — no GitHub token. Jira versions (`PROJ-123-v1`) stay on this Chrome profile. Promote that same snapshot to QA, then prod.
+- **Version in GitHub** — same Jira versions, written to a repo so teammates can reuse them. Token stays in this browser.
 
-Each configurator connects **their** repo with **their** token. Pipelines are stored in the repo at `.orgflow/pipelines.json` (no passwords, no session ids). Direct org-to-org deploy still works if you choose **Simple deploy**.
+Git is the shared warehouse, not the versioning itself. Without a place to keep the retrieved files, there is no version — only a one-shot copy, which OrgFlow no longer treats as the main path.
+
+If you choose GitHub: create a token at [github.com/settings/tokens](https://github.com/settings/tokens) (`repo` or fine-grained **Contents: Read and write**), paste it on Start → **Connect GitHub**, pick `owner/repo`, then **Use this repo**. Optional: save a pipeline (`Sandbox → UAT`) to `.orgflow/pipelines.json`.
+
+Each configurator can version **without Git**. Connect GitHub only when the team needs one shared history. Pipelines are stored in the repo at `.orgflow/pipelines.json` (no passwords, no session ids).
 
 ### Pick configuration (Type → Members → Review)
 
@@ -60,7 +63,7 @@ Each configurator connects **their** repo with **their** token. Pipelines are st
    - **package.xml** — the exact manifest Salesforce will retrieve
 4. **Review** — retrieve the package, then open metadata XML and edit it before deploy. **Edit package.xml instead** if you want to paste a manifest.
 
-**Deploy configuration to target org** still works with Git off. With Git on, **Save Git version & deploy** stores the same snapshot under the Jira key so you can redeploy it later.
+**Deploy configuration to target org** pushes the current retrieve. **Save Jira version** stores that snapshot (this browser, or GitHub). **Deploy a saved Jira version** pushes `PROJ-123-v1` to the To org without retrieving again.
 
 Wildcard `*` for a type still works if you want everything of that type. For real releases, pick named members so the version is reviewable.
 
@@ -74,18 +77,18 @@ Wildcard `*` for a type still works if you want everything of that type. For rea
 | Target org | UAT |
 | Tests | `No tests` for config-only; **Test class runner** → `RunSpecifiedTests`; `Run local tests` if you prefer the whole org’s local tests |
 
-- **Use Git repo for versioning** — on by default. Connect a repo and save `PROJ-123-v1`. Off = one-off org-to-org, no Git write.
+- **Version in this browser / GitHub** — versioning is always on. GitHub is optional sharing.
+- **Save Jira version** — keep `PROJ-123-v1` so QA and prod get the same snapshot (this browser, or GitHub).
 - **Workbench** — wide window: picker on the left, live selected package on the right (category columns + package.xml).
 - **Test class runner** — tick `*Test` classes from the package or scan the source org. Deploy SOAP includes `<runTests>`.
 - **Deploy configuration to target org** — retrieve the picked components (or use files already in Review) and Metadata API deploy to the target org.
-- **Save version to Git** — commit that snapshot + version record under the Jira key.
-- **Deploy saved version** — read a previous Jira version from Git and deploy it.
-- **Save Git version & deploy** — both in one step.
+- **Deploy a saved Jira version** — push the frozen snapshot to the To org without retrieving again.
+- **Save version & deploy** — both in one step.
 - **Validate only** — `checkOnly` deploy (no changes committed on the org).
 
 ## Can this be a real deployment / version tool?
 
-Yes, for metadata. OrgFlow talks to the same **Salesforce Metadata API** that Salesforce CLI, change sets, and tools like Gearset use: retrieve a package, optionally edit files, deploy the zip, and keep Jira-keyed snapshots in Git.
+Yes, for metadata. OrgFlow talks to the same **Salesforce Metadata API** that Salesforce CLI, change sets, and tools like Gearset use: retrieve a package, optionally edit files, deploy the zip, and keep Jira-keyed snapshots (this browser, or GitHub).
 
 Use it that way when:
 

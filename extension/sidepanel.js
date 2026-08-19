@@ -52,7 +52,12 @@ import {
   isTestClassName,
   normalizeTestNames
 } from "./lib/packageView.js";
-import { isEditablePath, decodeUtf8Base64, withEditedText } from "./lib/files.js";
+import {
+  loadLocalVersionStore,
+  saveLocalVersionStore,
+  saveLocalRelease,
+  loadLocalRelease
+} from "./lib/localVersions.js";
 
 const $ = (id) => document.getElementById(id);
 const MAX_MEMBERS = 400;
@@ -573,7 +578,9 @@ function renderInspector() {
   $("insp-xml").classList.toggle("hidden", state.inspectorView !== "xml");
   const gitOn = useGitEnabled();
   const repo = isGithubConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
-  $("inspector-git").textContent = gitOn ? `Git versioning on · ${repo}` : "Git versioning off · direct org-to-org deploy";
+  $("inspector-git").textContent = gitOn
+    ? `Jira versions in GitHub · ${repo}`
+    : "Jira versions in this browser · same snapshot for QA then prod";
   const tests = state.specifiedTests;
   $("inspector-tests").textContent = tests.length
     ? `${tests.length} specified test${tests.length === 1 ? "" : "s"}: ${tests.slice(0, 8).join(", ")}${tests.length > 8 ? "…" : ""}`
@@ -585,20 +592,19 @@ function renderInspector() {
 function renderGitUi() {
   const on = useGitEnabled();
   const connected = isGithubConfigured(state.settings);
-  $("git-actions")?.classList.toggle("hidden", !on);
   $("versions-hint").textContent = on
     ? connected
-      ? `Versions are stored in ${repoLabel(state.settings)}.`
-      : "Git is on — connect a repo on Start so versions can be saved."
-    : "Git is off. Direct org-to-org deploy still works. Turn Git on to keep Jira versions.";
+      ? `Shared Jira versions are stored in ${repoLabel(state.settings)}.`
+      : "GitHub is on — connect a repo on Start so the team can reuse versions."
+    : "Jira versions are stored in this Chrome profile. The same PROJ-123-v1 can go sandbox → QA → prod. Connect GitHub only if the team needs a shared repo.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
-      : "Connect a GitHub repo on the Start tab. Deploy without Git still works until then."
-    : "One-off deploy: nothing is written to Git.";
+      : "Connect a GitHub repo on Start. Until then, versions stay in this browser."
+    : "Saving versions in this browser (no GitHub token).";
   $("git-hint").textContent = on
-    ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod can take the same snapshot."
-    : "Git is off. Use this only when you do not need a reusable version.";
+    ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod get the same snapshot."
+    : "Each Jira save creates v1, v2, … on this computer. GitHub is optional sharing, not the versioning itself.";
   $("git-setup-block")?.classList.toggle("hidden", !on);
   document.body.classList.toggle("mode-simple", !on);
   document.body.classList.toggle("mode-git", on);
@@ -606,8 +612,8 @@ function renderGitUi() {
     card.classList.toggle("selected", card.dataset.mode === (on ? "git" : "simple"));
   });
   $("mode-status").textContent = on
-    ? "Git version control is on. Connect a repo and save a pipeline so you can reuse it next time."
-    : "Simple deploy is on. Detect orgs, set From and To, then Next — no Git required.";
+    ? "GitHub sharing is on. Connect a repo so teammates can load the same Jira versions."
+    : "Versioning is on in this browser. Detect orgs, set From and To, then Next. No GitHub token required.";
   renderSimplePlaybook();
   renderPipelines();
 }
@@ -620,7 +626,7 @@ function renderSimplePlaybook() {
     { done: pathReady(), text: "Set From and To (must be different)" },
     { done: state.typeChosen, text: "Pick a configuration type" },
     { done: memberCount(state.packageTypes) > 0, text: "Tick members to include" },
-    { done: hasFreshRetrieve(), text: "Retrieve, then deploy" }
+    { done: hasFreshRetrieve(), text: "Retrieve, save a Jira version, then deploy" }
   ];
   el.innerHTML = items
     .map((item, i) => `<li class="${item.done ? "done" : ""}"><span>${item.done ? "✓" : i + 1}</span>${escapeHtml(item.text)}</li>`)
@@ -1081,7 +1087,7 @@ function renderVersions() {
     return `${v.id} ${v.jira} ${v.comment}`.toLowerCase().includes(q);
   });
   if (!items.length) {
-    $("version-list").innerHTML = `<div class="empty">No versions in the connected repo yet.</div>`;
+    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet." : "No versions in this browser yet. Save a Jira version on Deploy."}</div>`;
     return;
   }
   $("version-list").innerHTML = items
@@ -1091,7 +1097,7 @@ function renderVersions() {
       return `<article class="card" data-id="${escapeHtml(v.id)}">
         <div class="title">${escapeHtml(v.id)}</div>
         <div class="meta">${escapeHtml(v.comment || "No comment")}</div>
-        <div class="meta">${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
+        <div class="meta">${escapeHtml(v.storage === "git" ? "GitHub" : "This browser")} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
         ${comps ? `<div class="meta">${escapeHtml(comps)}</div>` : ""}
         ${deploys ? `<div class="meta">${escapeHtml(deploys)}</div>` : ""}
         <div class="tiny">
@@ -1109,13 +1115,13 @@ function ghCreds() {
 }
 
 async function loadVersionStore() {
-  if (!isGithubConfigured(state.settings)) {
-    state.versions = emptyVersionStore();
+  if (useGitEnabled() && isGithubConfigured(state.settings)) {
+    const { token, owner, repo, branch } = ghCreds();
+    const raw = await getFileContent(token, owner, repo, versionsFilePath(), branch);
+    state.versions = parseVersionStore(raw);
     return;
   }
-  const { token, owner, repo, branch } = ghCreds();
-  const raw = await getFileContent(token, owner, repo, versionsFilePath(), branch);
-  state.versions = parseVersionStore(raw);
+  state.versions = await loadLocalVersionStore();
 }
 
 async function refreshOrgs() {
@@ -1136,14 +1142,16 @@ function updateHeaderStatus() {
   const pack = memberCount(state.packageTypes);
   const n = state.orgs.length;
   if (!n) {
-    setStatus("Start here: choose Simple deploy or Git, then Detect logged-in orgs.");
+    setStatus("Start here: choose where versions live (this browser or GitHub), then detect orgs.");
     return;
   }
   if (!pack) {
     setStatus(`${n} org${n === 1 ? "" : "s"} ready · Next to pick a configuration type.`);
     return;
   }
-  const git = useGitEnabled() && isGithubConfigured(state.settings) ? ` · ${repoLabel(state.settings)}` : useGitEnabled() ? " · Git on (connect a repo)" : "";
+  const git = useGitEnabled() && isGithubConfigured(state.settings)
+    ? ` · GitHub ${repoLabel(state.settings)}`
+    : " · versions in this browser";
   setStatus(`${n} org${n === 1 ? "" : "s"} · ${pack} component${pack === 1 ? "" : "s"} ready to deploy${git}`, "ok");
 }
 
@@ -1158,7 +1166,7 @@ async function refreshAll() {
   state.availableTypes = fallbackTypeRecords();
   $("test-level").value = state.settings.testLevel || "NoTestRun";
   $("check-only").checked = Boolean(state.settings.checkOnly);
-  $("use-git").checked = state.settings.useGit !== false;
+  $("use-git").checked = Boolean(state.settings.useGit);
   state.specifiedTests = normalizeTestNames(state.settings.specifiedTests);
   $("package-xml").value = currentXml();
   state.xmlDirty = false;
@@ -1456,7 +1464,7 @@ async function deploySelected() {
 }
 
 async function saveVersion() {
-  requireGithub();
+  if (useGitEnabled()) requireGithub();
   const source = selectedOrg("source-org");
   if (!source) throw new Error("Select a source org. Log into it in Chrome first.");
   const types = await ensurePackage();
@@ -1477,6 +1485,18 @@ async function saveVersion() {
     fileCount: files.length,
     components: types
   });
+  record.storage = useGitEnabled() ? "git" : "local";
+
+  if (!useGitEnabled()) {
+    const nextStore = upsertVersion(state.versions, record);
+    await saveLocalRelease(record.id, files);
+    state.versions = await saveLocalVersionStore(nextStore);
+    renderVersions();
+    $("jira").value = record.jira;
+    log(`Saved ${record.id} in this browser (${files.length} files).`);
+    setStatus(`Saved ${record.id} on this Chrome profile`, "ok");
+    return record;
+  }
 
   const prefixed = files.map((f) => ({ path: `${record.path}/${f.path}`, base64: f.base64 }));
   const nextStore = upsertVersion(state.versions, record);
@@ -1507,7 +1527,6 @@ async function saveVersion() {
 }
 
 async function deployVersion(explicitId) {
-  requireGithub();
   const target = selectedOrg("target-org");
   if (!target) throw new Error("Select a target org. Log into it in Chrome first.");
   await persistShipOptions();
@@ -1517,13 +1536,22 @@ async function deployVersion(explicitId) {
   const version = findVersion(state.versions.versions, wanted);
   if (!version) throw new Error(`No saved version found for "${wanted}". Save it from the source org first.`);
 
-  const { token, owner, repo, branch } = ghCreds();
-  const ref = await getRef(token, owner, repo, branch);
-  const sha = version.commitSha || ref?.object?.sha;
-  if (!sha) throw new Error("Repo branch has no commits yet.");
-  log(`Loading ${version.id} from Git (${version.path})…`);
-  const files = await fetchReleaseFiles({ token, owner, repo, commitSha: sha, prefix: version.path });
-  if (!files.length) throw new Error(`No files found at ${version.path}.`);
+  let files = [];
+  if (version.storage === "local" || !useGitEnabled()) {
+    files = await loadLocalRelease(version.id);
+    if (!files.length) throw new Error(`No local files found for ${version.id}. Save the version again from Review.`);
+    log(`Loading ${version.id} from this browser…`);
+  } else {
+    requireGithub();
+    const { token, owner, repo, branch } = ghCreds();
+    const ref = await getRef(token, owner, repo, branch);
+    const sha = version.commitSha || ref?.object?.sha;
+    if (!sha) throw new Error("Repo branch has no commits yet.");
+    log(`Loading ${version.id} from Git (${version.path})…`);
+    files = await fetchReleaseFiles({ token, owner, repo, commitSha: sha, prefix: version.path });
+    if (!files.length) throw new Error(`No files found at ${version.path}.`);
+  }
+
   const zipBase64 = await zipFromFiles(files);
   const options = deployOptions();
   if (options.runTests.length) log(`Running specified tests: ${options.runTests.join(", ")}`);
@@ -1544,11 +1572,16 @@ async function deployVersion(explicitId) {
     testLevel: options.testLevel
   });
   const store = upsertVersion(state.versions, updated);
-  await commitFiles({
-    ...ghCreds(),
-    files: [{ path: versionsFilePath(), base64: encodeUtf8Base64(JSON.stringify(store, null, 2) + "\n") }],
-    message: `${version.id}: deployed to ${target.label}${options.checkOnly ? " (validate)" : ""}`
-  });
+  if (useGitEnabled() && version.storage !== "local") {
+    requireGithub();
+    await commitFiles({
+      ...ghCreds(),
+      files: [{ path: versionsFilePath(), base64: encodeUtf8Base64(JSON.stringify(store, null, 2) + "\n") }],
+      message: `${version.id}: deployed to ${target.label}${options.checkOnly ? " (validate)" : ""}`
+    });
+  } else {
+    await saveLocalVersionStore(store);
+  }
   state.versions = store;
   renderVersions();
   log(`Deployed ${version.id} to ${target.label} (${result.status || "Succeeded"}).`);

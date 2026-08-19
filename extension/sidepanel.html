@@ -57,15 +57,15 @@
         <section id="view-start" class="view active">
           <p class="step-kicker">Step 1 of 5</p>
           <h2 class="page-title">Connect From and To</h2>
-          <p class="hint">Choose a work mode, detect both orgs, then set <strong>From</strong> and <strong>To</strong> in the path bar. Next unlocks only when they are different orgs.</p>
+          <p class="hint">Choose where Jira versions are stored. Versioning is always on — GitHub is optional for sharing with the team.</p>
           <div class="mode-grid">
             <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
-              <strong>Simple deploy</strong>
-              <span>Move configuration from one org to another now. No Git repo, no version history.</span>
+              <strong>Version in this browser</strong>
+              <span>Keep Jira snapshots here (PROJ-123-v1). Promote the same package sandbox → QA → prod. No GitHub token. Versions stay on this Chrome profile.</span>
             </button>
             <button type="button" class="mode-card" id="mode-git" data-mode="git">
-              <strong>Git version control</strong>
-              <span>Save Jira versions and a reusable pipeline (source → target) in Git so you pick it up next time.</span>
+              <strong>Version in GitHub</strong>
+              <span>Same Jira snapshots, stored in a repo so the team can reuse them. Token stays in this browser.</span>
             </button>
           </div>
           <div id="mode-status" class="muted">Choose Simple deploy or Git version control to continue.</div>
@@ -170,12 +170,12 @@
             <select id="deploy-pipeline"></select>
           </label>
           <p class="hint">The path bar at the top is the live From → To route. Change it there if this deploy should go to a different org.</p>
-          <label class="git-only">
+          <label>
             Jira ticket
             <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
           </label>
-          <p class="hint git-only">Configurators: put the Jira on the version so the same package can be pushed sandbox → QA → prod.</p>
-          <label class="git-only">
+          <p class="hint">Put the Jira on the version so the same snapshot can be pushed sandbox → QA → prod. Stored in this browser, or in GitHub if that mode is on.</p>
+          <label>
             Comment
             <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
           </label>
@@ -183,9 +183,9 @@
           <article class="card git-card git-only">
             <label class="check switch">
               <input id="use-git" type="checkbox" />
-              Use Git repo for versioning
+              Also copy versions to GitHub
             </label>
-            <p class="hint" id="git-hint">When this is on, OrgFlow saves a Jira version in Git so later orgs get the same snapshot. Turn it off only for a one-off deploy with no version history.</p>
+            <p class="hint" id="git-hint">GitHub is the shared warehouse. This browser still versions when GitHub is off.</p>
             <div id="git-status" class="muted"></div>
           </article>
 
@@ -228,12 +228,12 @@
           <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
           <div class="actions">
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy configuration to target org</button>
-            <div id="git-actions" class="actions git-only">
-              <button id="btn-both" class="primary" data-busy data-needs="source,target,package,distinct,retrieve,git">Save Git version &amp; deploy</button>
-              <button id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve,git">Save version to Git</button>
-              <button id="btn-deploy" class="secondary" data-busy data-needs="target,git">Deploy a saved Jira version</button>
+            <div id="git-actions" class="actions">
+              <button id="btn-both" class="primary" data-busy data-needs="source,target,package,distinct,retrieve">Save version &amp; deploy</button>
+              <button id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save Jira version</button>
+              <button id="btn-deploy" class="secondary" data-busy data-needs="target">Deploy a saved Jira version</button>
             </div>
-            <button type="button" id="btn-goto-versions" class="ghost-text git-only">Open saved versions</button>
+            <button type="button" id="btn-goto-versions" class="ghost-text">Open saved versions</button>
           </div>
         </section>
 
