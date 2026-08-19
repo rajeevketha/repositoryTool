@@ -432,6 +432,7 @@ function currentStepId() {
 
 function farthestStep() {
   if (!pathReady()) return 0;
+  if (useGitEnabled() && !isGitConfigured(state.settings)) return 0;
   if (!state.typeChosen) return 1;
   if (!memberCount(state.packageTypes)) return 2;
   if (!hasFreshRetrieve() || !state.retrieveOk) return 3;
@@ -450,6 +451,9 @@ function leaveReason(index) {
     const target = selectedOrg("target-org");
     if (!source || !target) return "Set From and To in the path bar, then Next.";
     return "From and To must be different orgs before you pick configuration.";
+  }
+  if (index === 0 && useGitEnabled() && !isGitConfigured(state.settings)) {
+    return "Sharing is on. Choose a repo and click Use this repo. Selecting it in the list, or saving a pipeline, does not connect Git yet.";
   }
   if (index === 1 && !state.typeChosen) return "Tap a configuration type — for example Custom Field or Custom Object.";
   if (index === 2 && !memberCount(state.packageTypes)) return "Tick at least one member (orange check) before retrieve.";
@@ -933,7 +937,9 @@ function renderGitUi() {
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
-      : `Connect a ${host} repo on Start. Until then, versions stay in this browser.`
+      : (($("gh-repo")?.value || $("gh-repo-input")?.value.trim())
+        ? "A repo is selected in the list, but it is not connected yet. Click Use this repo."
+        : `Connect a ${host} repo on Start. Until then, versions stay in this browser.`)
     : "Saving versions in this browser (no token).";
   $("git-hint").textContent = on
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod get the same snapshot."
@@ -947,7 +953,7 @@ function renderGitUi() {
   $("mode-status").textContent = on
     ? connected
       ? `Sharing in ${repoLabel(state.settings)}.`
-      : `Sharing is on — ${host}. Open “How to connect ${host}” if you need a token, then connect a repo below.`
+      : `Sharing is on — ${host}. After Connect, pick a repo and click Use this repo. A pipeline does not do that.`
     : "Snapshots stay on this Chrome profile. Detect orgs, set From and To, then Next.";
   const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
@@ -956,6 +962,7 @@ function renderGitUi() {
   }
   fillGitHostUi();
   renderPipelines();
+  if ($("repo-pick-hint")) $("repo-pick-hint").classList.toggle("hidden", connected);
 }
 
 function selectedProvider() {
@@ -1379,6 +1386,9 @@ async function useSelectedPipeline() {
 }
 
 async function saveCurrentPipeline() {
+  if (!isGitConfigured(state.settings) && ($("gh-repo")?.value || $("gh-repo-input")?.value.trim())) {
+    await saveRepo();
+  }
   requireGithub();
   const source = selectedOrg("pipeline-source") || selectedOrg("source-org");
   const target = selectedOrg("pipeline-target") || selectedOrg("target-org");
@@ -1899,6 +1909,8 @@ async function saveRepo() {
   renderPipelines();
   updateHeaderStatus();
   log(`Using ${repoLabel(state.settings)}`);
+  setStatus(`Team repo: ${repoLabel(state.settings)}`, "ok");
+  renderGitUi();
 }
 
 async function persistShipOptions() {
@@ -2552,6 +2564,14 @@ $("git-provider")?.addEventListener("change", () => {
 $("git-org")?.addEventListener("input", fillGitHostUi);
 $("git-base-url")?.addEventListener("input", fillGitHostUi);
 $("btn-save-repo").addEventListener("click", () => run(saveRepo));
+$("gh-repo")?.addEventListener("change", () => {
+  if ($("gh-token")?.value.trim() || hostCreds(state.settings).token) run(saveRepo);
+});
+$("gh-repo-input")?.addEventListener("change", () => {
+  if (($("gh-repo-input")?.value.trim()) && ($("gh-token")?.value.trim() || hostCreds(state.settings).token)) {
+    run(saveRepo);
+  }
+});
 $("btn-refresh-orgs").addEventListener("click", () => run(refreshOrgs));
 $("refresh-all").addEventListener("click", () => run(refreshAll));
 $("btn-save").addEventListener("click", () => run(saveVersion));

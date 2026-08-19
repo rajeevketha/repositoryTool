@@ -108,6 +108,7 @@
               Select a repo
               <select id="gh-repo"></select>
             </label>
+            <p class="hint" id="repo-pick-hint">Pick a repo, then click <strong>Use this repo</strong>. Choosing it in the list does not connect it yet. A pipeline only remembers From, To, and tests — not the Git repo.</p>
             <label id="git-repo-paste-label">Or paste owner/repo
               <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
             </label>
@@ -120,7 +121,7 @@
             </div>
 
             <h2>Pipeline</h2>
-            <p class="hint">Optional. Remembers From, To, and test level in <code>.orgflow/pipelines.json</code>.</p>
+            <p class="hint">Optional. Remembers From, To, and test level in <code>.orgflow/pipelines.json</code>. It does not replace <strong>Use this repo</strong>.</p>
             <div id="pipeline-welcome" class="card hidden">
               <div class="title">Welcome back</div>
               <div class="meta" id="pipeline-welcome-body"></div>
