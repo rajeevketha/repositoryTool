@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "pipelines": [
+    {
+      "id": "dev-dev-mt0q9t1t",
+      "name": "Dev-Dev",
+      "source": {
+        "id": "00Dfj00000bI1Q9EAK",
+        "label": "Forsys Inc (prod)",
+        "username": "rajeev.ketha.a788ab15c1c7@agentforce.com",
+        "instanceUrl": "https://orgfarm-cb40671618-dev-ed.develop.my.salesforce.com"
+      },
+      "target": {
+        "id": "00DgL00000b2pvZUAQ",
+        "label": "Forsys Inc (prod)",
+        "username": "bhargava.ketha.173d40541199@agentforce.com",
+        "instanceUrl": "https://orgfarm-e04cf428f9-dev-ed.develop.my.salesforce.com"
+      },
+      "testLevel": "NoTestRun",
+      "useGit": true,
+      "updatedAt": "2026-08-19T23:33:45.425Z"
+    }
+  ]
+}
