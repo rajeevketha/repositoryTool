@@ -11,7 +11,7 @@ Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → 
 1. **Start** — choose **Simple deploy** or **Git version control**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If Git: paste a token, connect the repo, save a **pipeline** to `.orgflow/pipelines.json`.
 2. **Type** — tap one configuration type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
 3. **Members** — tick rows (orange check = in the package). For fields, use **object chips** (Account, Case, …) to shrink a long list.
-4. **Review** — retrieve files, edit XML if needed, then Next.
+4. **Review** — retrieve files. That **freezes** the From org and selected members to the snapshot. Unlock only if you need to change them, then retrieve again — deploy stays off until you do. Edit XML if needed, then Next.
 5. **Deploy** — Jira + comment, then deploy. Apex: pick tests in the **Test class runner**.
 
 The UI uses a dark charcoal + orange theme so the current step and selected members stay obvious.

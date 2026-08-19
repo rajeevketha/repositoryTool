@@ -9,7 +9,7 @@
   <body data-layout="sidepanel" data-step="start">
     <header class="app-header">
       <div class="brand">
-        <img src="icons/icon32.png" alt="" width="24" height="24" />
+        <img src="icons/icon32.png" alt="" width="28" height="28" />
         <div>
           <strong>OrgFlow</strong>
           <span id="header-sub">Config sandbox → other orgs</span>
@@ -45,6 +45,10 @@
           <select id="target-org"></select>
           <span id="target-org-meta" class="path-meta">Target org</span>
         </label>
+      </div>
+      <div id="retrieve-lock" class="retrieve-lock hidden">
+        <p id="retrieve-lock-copy">Retrieved files are frozen to this From org and package.</p>
+        <button type="button" id="btn-unlock-retrieve" class="ghost-text">Unlock to change From org or members</button>
       </div>
     </section>
 
@@ -222,10 +226,10 @@
 
           <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
           <div class="actions">
-            <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct">Deploy configuration to target org</button>
+            <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy configuration to target org</button>
             <div id="git-actions" class="actions">
-              <button id="btn-both" class="primary" data-busy data-needs="source,target,package,distinct,git">Save Git version &amp; deploy</button>
-              <button id="btn-save" class="secondary" data-busy data-needs="source,package,git">Save version to Git</button>
+              <button id="btn-both" class="primary" data-busy data-needs="source,target,package,distinct,retrieve,git">Save Git version &amp; deploy</button>
+              <button id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve,git">Save version to Git</button>
               <button id="btn-deploy" class="secondary" data-busy data-needs="target,git">Deploy a saved Jira version</button>
             </div>
             <button type="button" id="btn-goto-versions" class="ghost-text">Open saved versions</button>
@@ -255,7 +259,7 @@
               The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> so you can pick from thousands of fields and still see exactly what is in the package.
             </div>
             <div id="type-browse">
-              <input id="type-search" type="search" placeholder="Search types: field, object, flow, layout, permission…" />
+              <input id="type-search" type="search" placeholder="Search types: field, object, flow, layout, permission…" autocomplete="off" />
               <div class="row-actions">
                 <button type="button" id="btn-load-types" class="secondary" data-busy data-needs="source">Load all types from source org</button>
               </div>
@@ -310,7 +314,7 @@
             </article>
             <div class="actions hidden">
               <button type="button" id="btn-retrieve" class="secondary" data-busy data-needs="source,package">Retrieve into Review</button>
-              <button type="button" id="btn-deploy-from-pick" class="accent" data-busy data-needs="source,target,package,distinct">Deploy configuration to target org</button>
+              <button type="button" id="btn-deploy-from-pick" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy configuration to target org</button>
             </div>
           </div>
 
@@ -326,7 +330,7 @@
           </div>
 
           <div id="subview-review" class="subview">
-            <p class="hint">Retrieved configuration files. Open a file to edit XML before it goes to the next org. Closing the panel discards an unsaved retrieve.</p>
+            <p class="hint">Retrieve locks the From org and the selected members to this snapshot. Changing either one turns deploy off until you retrieve again. Edit XML here, then Next to deploy.</p>
             <div class="row-actions">
               <button type="button" id="btn-retrieve-review" class="secondary" data-busy data-needs="source,package">Retrieve selected</button>
             </div>
@@ -340,7 +344,7 @@
             </label>
             <div class="actions">
               <button type="button" id="btn-show-xml" class="ghost-text">Edit package.xml instead</button>
-              <button type="button" id="btn-deploy-review" class="accent hidden" data-busy data-needs="source,target,package,distinct">Deploy these files to target org</button>
+              <button type="button" id="btn-deploy-review" class="accent hidden" data-busy data-needs="source,target,package,distinct,retrieve">Deploy these files to target org</button>
             </div>
           </div>
         </section>

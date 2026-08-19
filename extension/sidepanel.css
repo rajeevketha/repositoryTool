@@ -5,14 +5,14 @@
   --line: #3a3a3a;
   --text: #f4f1ec;
   --muted: #b9aea3;
-  --orange: #ff6a00;
-  --orange-2: #ff8a33;
-  --orange-deep: #c45100;
-  --navy: #ff6a00;
-  --blue: #ff6a00;
-  --blue-hover: #ff8a33;
-  --teal: #ff6a00;
-  --teal-hover: #ff8a33;
+  --orange: #e5a872;
+  --orange-2: #f0c49a;
+  --orange-deep: #c4894a;
+  --navy: #e5a872;
+  --blue: #e5a872;
+  --blue-hover: #f0c49a;
+  --teal: #e5a872;
+  --teal-hover: #f0c49a;
   --ok: #7dcc7d;
   --danger: #ff6b6b;
   --radius: 12px;
@@ -26,7 +26,7 @@ body {
   margin: 0;
   padding: 0;
   min-width: 360px;
-  background: radial-gradient(900px 400px at 100% -10%, rgba(255, 106, 0, 0.16), transparent 50%), var(--bg);
+  background: radial-gradient(900px 400px at 100% -10%, rgba(229, 168, 114, 0.1), transparent 55%), var(--bg);
   color: var(--text);
   font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
 }
@@ -50,7 +50,13 @@ body {
 
 .brand,
 .header-actions { display: flex; align-items: center; gap: 10px; }
-.brand img { border-radius: 6px; }
+.brand img {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #111;
+  border: 1px solid #3a2a1c;
+}
 .brand strong { display: block; font-size: 15px; }
 .brand span { display: block; font-size: 11px; color: var(--orange-2); }
 
@@ -164,6 +170,35 @@ body {
   border-left: 12px solid #666;
 }
 .org-path.ready .path-arrow span { border-left-color: var(--orange); }
+.path-node.source select:disabled {
+  opacity: 0.85;
+  cursor: not-allowed;
+  border-color: var(--orange-deep);
+}
+.retrieve-lock {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #241c14;
+  border: 1px solid #5a4630;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.retrieve-lock p { margin: 0; font-size: 12px; color: var(--orange-2); font-weight: 650; }
+.retrieve-lock.stale {
+  background: #3a220f;
+  border-color: #7a4314;
+}
+body.retrieve-frozen .member-list,
+body.retrieve-frozen #type-picker,
+body.retrieve-frozen #object-chips,
+body.retrieve-frozen #manual-member {
+  pointer-events: none;
+  opacity: 0.7;
+}
 
 .app-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 main { padding: 14px; flex: 1; }
@@ -205,8 +240,25 @@ input, select, textarea {
 }
 textarea { resize: vertical; }
 input:focus, select:focus, textarea:focus {
-  outline: 2px solid rgba(255, 106, 0, 0.45);
+  outline: 2px solid rgba(229, 168, 114, 0.35);
   border-color: var(--orange);
+}
+#type-browse {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#type-search {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  font-size: 14px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+#type-browse .row-actions,
+#type-browse .row-actions button {
+  width: 100%;
 }
 
 .hint { margin: 0; color: var(--muted); font-weight: 400; font-size: 12px; }

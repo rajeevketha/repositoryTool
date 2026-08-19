@@ -97,7 +97,9 @@ const state = {
   stepIndex: 0,
   reviewSeen: false,
   showingVersions: false,
-  xmlReview: false
+  xmlReview: false,
+  selectionFrozen: false,
+  retrieveSnapshot: null
 };
 
 function escapeHtml(value) {
@@ -142,6 +144,73 @@ function orgKind(org) {
   return "Production";
 }
 
+function packageFingerprint() {
+  return JSON.stringify(
+    normalizePackageTypes(state.packageTypes).map((t) => [t.name, [...(t.members || [])].sort()])
+  );
+}
+
+function hasFreshRetrieve() {
+  const source = selectedOrg("source-org");
+  const snap = state.retrieveSnapshot;
+  return Boolean(
+    state.stagedFiles?.length
+      && snap
+      && source
+      && snap.sourceKey === orgKey(source)
+      && snap.fingerprint === packageFingerprint()
+  );
+}
+
+function retrieveBlockReason() {
+  if (hasFreshRetrieve()) return "";
+  if (state.retrieveSnapshot && state.stagedFiles?.length) {
+    return "From org or members no longer match the last retrieve. Retrieve again before deploy.";
+  }
+  if (state.retrieveSnapshot) {
+    return "You changed the From org or the selected members. Retrieve again before deploy.";
+  }
+  return "Retrieve the package from the From org before deploy.";
+}
+
+function applyRetrieveLockUi() {
+  const frozen = Boolean(state.selectionFrozen && hasFreshRetrieve());
+  const stale = Boolean(state.retrieveSnapshot && !hasFreshRetrieve());
+  document.body.classList.toggle("retrieve-frozen", frozen);
+  document.body.classList.toggle("retrieve-stale", stale);
+  const sourceEl = $("source-org");
+  if (sourceEl) sourceEl.disabled = frozen;
+  const lock = $("retrieve-lock");
+  const copy = $("retrieve-lock-copy");
+  const unlock = $("btn-unlock-retrieve");
+  if (lock) {
+    lock.classList.toggle("hidden", !frozen && !stale);
+    lock.classList.toggle("stale", stale && !frozen);
+  }
+  if (copy) {
+    const source = selectedOrg("source-org");
+    if (frozen) {
+      copy.textContent = `Retrieved ${state.stagedFiles.length} files from ${source?.label || "From org"}. From org and members are frozen to that snapshot.`;
+    } else if (stale) {
+      copy.textContent = "From org or members changed after retrieve. Retrieve again — deploy stays off until then.";
+    }
+  }
+  if (unlock) {
+    unlock.classList.toggle("hidden", !frozen);
+    unlock.disabled = !frozen;
+  }
+  for (const id of ["btn-change-type", "btn-clear-type", "btn-select-visible", "btn-add-member", "btn-clear-package", "btn-clear-package-inspector", "btn-apply-xml"]) {
+    const el = $(id);
+    if (el) el.disabled = frozen || state.busy;
+  }
+}
+
+function unlockSelection() {
+  state.selectionFrozen = false;
+  applyRetrieveLockUi();
+  setStatus("From org and members are unlocked. If you change them, retrieve again before deploy.", "ok");
+}
+
 function deployBlockReason() {
   const source = selectedOrg("source-org");
   const target = selectedOrg("target-org");
@@ -151,6 +220,8 @@ function deployBlockReason() {
   if (!target) return "Select a target org in the path bar (To). Deploy stays disabled until then.";
   if (orgKey(source) === orgKey(target)) return "From and To are the same org. Pick a different target (for example Dev → QA).";
   if (!pack) return `Path is ${source.label} → ${target.label}. Pick configuration before deploy.`;
+  const retrieve = retrieveBlockReason();
+  if (retrieve && !hasFreshRetrieve()) return retrieve;
   return "";
 }
 
@@ -171,6 +242,7 @@ function updateActionState() {
     if (needs.includes("target") && !target) disabled = true;
     if (needs.includes("package") && !pack) disabled = true;
     if (needs.includes("distinct") && same) disabled = true;
+    if (needs.includes("retrieve") && !hasFreshRetrieve()) disabled = true;
     if (needs.includes("git") && (!useGitEnabled() || !isGithubConfigured(state.settings))) disabled = true;
     btn.disabled = disabled;
   });
@@ -182,6 +254,7 @@ function updateActionState() {
     callout.classList.toggle("hidden", !reason && !selectedOrg("target-org"));
   }
   renderOrgPath();
+  applyRetrieveLockUi();
   updateWizardNav();
   renderStepper();
 }
@@ -237,7 +310,7 @@ function farthestStep() {
   if (!pathReady()) return 0;
   if (!state.typeChosen) return 1;
   if (!memberCount(state.packageTypes)) return 2;
-  if (!state.reviewSeen && state.stepIndex < 3) return 3;
+  if (!hasFreshRetrieve()) return 3;
   return 4;
 }
 
@@ -256,6 +329,7 @@ function leaveReason(index) {
   }
   if (index === 1 && !state.typeChosen) return "Tap a configuration type — for example Custom Field or Custom Object.";
   if (index === 2 && !memberCount(state.packageTypes)) return "Tick at least one member (orange check) before review.";
+  if (index === 3 && !hasFreshRetrieve()) return retrieveBlockReason();
   return "";
 }
 
@@ -264,7 +338,7 @@ function stepBlockReason(index) {
   if (index > 0 && !pathReady()) return leaveReason(0);
   if (index > 1 && !state.typeChosen) return leaveReason(1);
   if (index > 2 && !memberCount(state.packageTypes)) return leaveReason(2);
-  if (index > 3) return "Open Review first, then you can deploy.";
+  if (index > 3) return retrieveBlockReason() || "Open Review and retrieve first, then you can deploy.";
   return "Finish the current step before skipping ahead.";
 }
 
@@ -285,7 +359,7 @@ function updatePickCopy() {
   } else if (stepId === "review") {
     if ($("pick-heading")) $("pick-heading").textContent = "Review files";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Retrieve from the From org, open a file to edit XML, then Next to deploy.";
+      $("pick-lead").textContent = "Retrieve from the From org. That freezes From and members. Unlock only if you need to change them, then retrieve again before deploy.";
     }
   }
   if ($("header-sub")) {
@@ -424,10 +498,16 @@ function selectedMembersFor(typeName) {
 }
 
 function invalidateStaged() {
+  const hadFiles = Boolean(state.stagedFiles?.length);
   state.stagedFiles = null;
   state.activeFilePath = "";
-  $("file-editor-wrap").classList.add("hidden");
+  state.selectionFrozen = false;
+  $("file-editor-wrap")?.classList.add("hidden");
   renderFileList();
+  if (hadFiles) {
+    setStatus("From org or members changed. Retrieve again before deploy.", "error");
+    if (state.stepIndex === 4) goStep(3, { force: true });
+  }
 }
 
 function useGitEnabled() {
@@ -1227,16 +1307,23 @@ async function retrieveIntoReview() {
   const files = await unzipToFiles(zipBase64);
   if (!files.length) throw new Error("Retrieve returned no files. Check package.xml members.");
   state.stagedFiles = files;
+  state.selectionFrozen = true;
+  state.retrieveSnapshot = {
+    sourceKey: orgKey(source),
+    fingerprint: packageFingerprint(),
+    fileCount: files.length
+  };
   renderFileList();
+  applyRetrieveLockUi();
   goStep(3, { force: true });
-  log(`Retrieved ${files.length} file(s). You can edit XML before deploy.`);
+  log(`Retrieved ${files.length} file(s). From org and members are frozen until you unlock.`);
   setStatus(`Retrieved ${files.length} files — review or deploy`, "ok");
   return files;
 }
 
 async function filesForDeploy() {
-  if (state.stagedFiles?.length) return state.stagedFiles;
-  return retrieveIntoReview();
+  if (!hasFreshRetrieve()) throw new Error(retrieveBlockReason());
+  return state.stagedFiles;
 }
 
 function deployOptions() {
@@ -1282,7 +1369,8 @@ async function saveVersion() {
   await persistShipOptions();
   await persistPackage();
 
-  const files = state.stagedFiles?.length ? state.stagedFiles : await retrieveIntoReview();
+  const files = hasFreshRetrieve() ? state.stagedFiles : null;
+  if (!files?.length) throw new Error(retrieveBlockReason());
   await loadVersionStore();
   const { ticket, comment } = resolveTicket(state.versions);
   const increment = nextIncrement(state.versions.versions, ticket);
@@ -1589,6 +1677,10 @@ $("type-search").addEventListener("input", () => {
 $("type-picker").addEventListener("click", (event) => {
   const btn = event.target.closest("[data-type]");
   if (!btn) return;
+  if (state.selectionFrozen && hasFreshRetrieve()) {
+    setStatus("Unlock the retrieved snapshot first if you need a different type.", "error");
+    return;
+  }
   state.activeType = btn.dataset.type;
   state.typeChosen = true;
   state.objectFilter = "";
@@ -1600,6 +1692,10 @@ $("type-picker").addEventListener("click", (event) => {
   if (selectedOrg("source-org")) run(loadMembers);
 });
 $("btn-change-type")?.addEventListener("click", () => {
+  if (state.selectionFrozen && hasFreshRetrieve()) {
+    setStatus("Unlock the retrieved snapshot first to change type.", "error");
+    return;
+  }
   state.typeChosen = false;
   goStep(1, { force: true });
   renderTypePicker();
@@ -1665,13 +1761,20 @@ $("version-list").addEventListener("click", (event) => {
   }
 });
 $("use-git")?.addEventListener("change", () => run(() => persistGitToggle($("use-git").checked)));
+$("btn-unlock-retrieve")?.addEventListener("click", unlockSelection);
 $("source-org")?.addEventListener("change", () => run(async () => {
+  const previous = state.retrieveSnapshot?.sourceKey;
   await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
   state.settings = await loadSettings();
   if ($("pipeline-source") && $("source-org").value) $("pipeline-source").value = $("source-org").value;
   if ($("source-org").value && !$("target-org").value && state.orgs.length === 2) {
     const other = state.orgs.find((o) => orgKey(o) !== $("source-org").value);
     if (other) $("target-org").value = orgKey(other);
+  }
+  if (previous && previous !== $("source-org").value) {
+    state.membersCache = {};
+    state.availableTypes = fallbackTypeRecords();
+    invalidateStaged();
   }
   updateActionState();
 }));
