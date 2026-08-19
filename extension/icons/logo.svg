@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="9" fill="#161B24"/>
+  <!-- Open O (the org), gap on the right so flow can leave -->
+  <path
+    d="M18.92 21.05A7.25 7.25 0 1 1 18.92 10.95"
+    stroke="#C5BBA8"
+    stroke-width="2.7"
+    stroke-linecap="round"
+  />
+  <!-- Flow arrow -->
+  <path
+    d="M15.2 16H26.4"
+    stroke="#E6E4DE"
+    stroke-width="2.25"
+    stroke-linecap="round"
+  />
+  <path
+    d="M22.55 11.7 27.35 16l-4.8 4.3"
+    stroke="#E6E4DE"
+    stroke-width="2.25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

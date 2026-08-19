@@ -52,12 +52,12 @@ body {
 
 .brand,
 .header-actions { display: flex; align-items: center; gap: 10px; }
-.brand img {
+.brand-mark {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: #111;
-  border: 1px solid #3a2a1c;
+  display: block;
+  flex-shrink: 0;
 }
 .brand strong { display: block; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
 .brand span { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
