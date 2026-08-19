@@ -14,7 +14,7 @@ Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → 
 4. **Retrieve** — pulls files from the From org. This screen does not change members. Failures (and a successful file count) show in the result panel. Unlock only if you need to change From or members, then retrieve again.
 5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel.
 
-The UI uses a dark charcoal + orange theme so the current step and selected members stay obvious.
+The UI uses a dark charcoal + copper orange theme so the current step and selected members stay obvious without neon highlights.
 
 Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Search the type list for any other Metadata API type (Apex, LWC, Experience Cloud, settings, and so on). **Load all types from source org** refreshes the list from that sandbox.
 
@@ -26,9 +26,15 @@ The **From → To path bar** at the top of every screen is the live route (for e
 
 ## Install (unpacked Chrome extension)
 
-**Download the test zip:** [files/orgflow-extension.zip](files/orgflow-extension.zip) (unzip, then load the `orgflow` folder).
+**Download (this is a zip file, not Cursor artifacts):**  
+https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip
 
-1. Clone this repository, or unzip `files/orgflow-extension.zip`.
+If that asks you to save a file named `orgflow-extension.zip`, that is the right one. Unzip it, then load the `orgflow` folder.
+
+GitHub page for the same file (use **Download raw file**):  
+https://github.com/rajeevketha/repositoryTool/blob/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip
+
+1. Unzip `orgflow-extension.zip`.
 2. Chrome → `chrome://extensions` → enable **Developer mode**.
 3. **Load unpacked** → select the unzipped `orgflow` folder (or the repo `extension/` folder).
 4. Pin OrgFlow and open it. Chrome opens a side panel. Use **Workbench** when you need a wide picker plus the live selected-package pane.

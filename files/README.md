@@ -1,6 +1,10 @@
 # Download OrgFlow (Chrome extension zip)
 
-**Direct download:** [orgflow-extension.zip](./orgflow-extension.zip)
+**Direct download (zip file):**  
+https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip
+
+GitHub file page (click **Download raw file**):  
+https://github.com/rajeevketha/repositoryTool/blob/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip
 
 Unzip it. You should get an `orgflow/` folder that contains `manifest.json`.
 

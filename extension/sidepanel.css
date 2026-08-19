@@ -5,14 +5,14 @@
   --line: #3a3a3a;
   --text: #f4f1ec;
   --muted: #b9aea3;
-  --orange: #ff8c1a;
-  --orange-2: #ffb347;
-  --orange-deep: #e06a00;
-  --navy: #ff8c1a;
-  --blue: #ff8c1a;
-  --blue-hover: #ffb347;
-  --teal: #ff8c1a;
-  --teal-hover: #ffb347;
+  --orange: #c56a1c;
+  --orange-2: #d4a06a;
+  --orange-deep: #9a5214;
+  --navy: #c56a1c;
+  --blue: #c56a1c;
+  --blue-hover: #d47a2e;
+  --teal: #c56a1c;
+  --teal-hover: #d47a2e;
   --ok: #7dcc7d;
   --danger: #ff6b6b;
   --radius: 12px;
@@ -26,7 +26,7 @@ body {
   margin: 0;
   padding: 0;
   min-width: 360px;
-  background: radial-gradient(900px 400px at 100% -10%, rgba(255, 140, 26, 0.14), transparent 55%), var(--bg);
+  background: radial-gradient(900px 400px at 100% -10%, rgba(197, 106, 28, 0.10), transparent 55%), var(--bg);
   color: var(--text);
   font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
 }
@@ -110,7 +110,7 @@ body {
 }
 .step.active span {
   background: var(--orange);
-  color: #000;
+  color: #f6efe6;
 }
 .step:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -240,7 +240,7 @@ input, select, textarea {
 }
 textarea { resize: vertical; }
 input:focus, select:focus, textarea:focus {
-  outline: 2px solid rgba(255, 140, 26, 0.4);
+  outline: 2px solid rgba(197, 106, 28, 0.35);
   border-color: var(--orange);
 }
 #type-browse {
@@ -293,8 +293,8 @@ button {
   cursor: pointer;
 }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
-.primary, .accent { background: var(--orange); color: #111; }
-.primary:hover:not(:disabled), .accent:hover:not(:disabled) { background: var(--orange-2); }
+.primary, .accent { background: var(--orange); color: #f6efe6; }
+.primary:hover:not(:disabled), .accent:hover:not(:disabled) { background: var(--blue-hover); color: #fff; }
 .secondary { background: #2b2b2b; color: #fff; border: 1px solid #444; }
 .ghost, .ghost-text { background: transparent; color: #fff; }
 .ghost-text { font-size: 12px; padding: 6px 10px; border: 1px solid #444; }
@@ -389,7 +389,7 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
   padding: 6px 10px;
   font-size: 12px;
 }
-.obj-chip.active { background: var(--orange); color: #111; border-color: var(--orange); }
+.obj-chip.active { background: var(--orange); color: #f6efe6; border-color: var(--orange); }
 
 .member-row {
   flex-direction: row;
@@ -421,7 +421,7 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
 .member-row:has(input:checked) .member-mark {
   background: var(--orange);
   border-color: var(--orange);
-  color: #111;
+  color: #f6efe6;
 }
 .member-row input { display: none; }
 .member-tag { margin-left: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--orange-2); }
@@ -440,7 +440,7 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
   display: inline-block;
   margin-left: 6px;
   background: var(--orange);
-  color: #111;
+  color: #f6efe6;
   border-radius: 999px;
   padding: 1px 7px;
   font-size: 11px;
@@ -534,7 +534,7 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #111;
+  color: #f6efe6;
   background: linear-gradient(transparent, var(--orange) 55%);
   border-bottom-left-radius: var(--radius);
   border-bottom-right-radius: var(--radius);
@@ -574,7 +574,7 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
 }
 .playbook li.done span {
   background: var(--orange);
-  color: #111;
+  color: #f6efe6;
 }
 body.mode-simple .git-only { display: none !important; }
 body.mode-git #simple-playbook { display: none; }
@@ -628,7 +628,7 @@ body[data-layout="workbench"][data-step="versions"] .app-body {
   margin-top: 8px;
 }
 .insp-tab { background: transparent; color: #aaa; padding: 7px 6px; font-size: 12px; }
-.insp-tab.active { background: var(--orange); color: #111; }
+.insp-tab.active { background: var(--orange); color: #f6efe6; }
 .inspector-pane, .inspector-foot, .inspector > input { margin: 0 12px; }
 .category-columns { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .cat-col { background: #222; border: 1px solid #333; border-radius: 10px; padding: 8px; }
