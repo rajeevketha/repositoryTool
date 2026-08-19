@@ -6,13 +6,13 @@ GitHub is **optional**. OrgFlow always versions by Jira (`PROJ-123-v1`). Without
 
 ## Configurator workflow
 
-Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Review → Deploy) is sequential: you cannot skip ahead.
+Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Retrieve → Deploy) is sequential: you cannot skip ahead.
 
 1. **Start** — choose **Version in this browser** (default) or **Version in GitHub**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If GitHub: paste a token, connect the repo, save a **pipeline** to `.orgflow/pipelines.json`.
 2. **Type** — search, use the picklist, or tap a common type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
-3. **Members** — tick rows (orange check = in the package). The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list.
-4. **Review** — retrieve files. That **freezes** the From org and selected members to the snapshot. Unlock only if you need to change them, then retrieve again — deploy stays off until you do. Edit XML if needed, then Next.
-5. **Deploy** — Jira + comment, **Save Jira version**, then deploy. The same `PROJ-123-v1` can go to the next org. Apex: pick tests in the **Test class runner**.
+3. **Members** — tick rows (orange check = in the package). The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list. Next goes to Retrieve (not another picker). Use **Back** later if you need more members.
+4. **Retrieve** — pulls files from the From org. This screen does not change members. Failures (and a successful file count) show in the result panel. Unlock only if you need to change From or members, then retrieve again.
+5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel.
 
 The UI uses a dark charcoal + orange theme so the current step and selected members stay obvious.
 
@@ -54,16 +54,15 @@ If you choose GitHub: create a token at [github.com/settings/tokens](https://git
 
 Each configurator can version **without Git**. Connect GitHub only when the team needs one shared history. Pipelines are stored in the repo at `.orgflow/pipelines.json` (no passwords, no session ids).
 
-### Pick configuration (Type → Members → Review)
+### Pick configuration (Type → Members → Retrieve)
 
 1. **Type** — common configurator types first, every Metadata API type searchable. Tap a type to open its members (the type grid goes away on purpose).
 2. **Members** — load from the source sandbox, tick what belongs to this Jira, or type a member such as `Account.Customer_Status__c`. Object chips and **Selected only** help when an object has thousands of fields.
 3. **Selected package** (side of the workbench, or below the picker in the side panel) updates on every tick:
    - **By category** — columns/groups by metadata type, and by object for fields/layouts
    - **package.xml** — the exact manifest Salesforce will retrieve
-4. **Review** — retrieve the package, then open metadata XML and edit it before deploy. **Edit package.xml instead** if you want to paste a manifest.
-
-**Deploy configuration to target org** pushes the current retrieve. **Save Jira version** stores that snapshot (this browser, or GitHub). **Deploy a saved Jira version** pushes `PROJ-123-v1` to the To org without retrieving again.
+4. **Retrieve** — retrieve the package. To add members, use **Back**. Errors from Salesforce show in the result panel (component name + problem).
+5. **Deploy** — the component list and one Deploy button. After you click it, it stays disabled until Salesforce answers. Success and failure details stay in the result panel.
 
 Wildcard `*` for a type still works if you want everything of that type. For real releases, pick named members so the version is reviewable.
 
@@ -78,13 +77,8 @@ Wildcard `*` for a type still works if you want everything of that type. For rea
 | Tests | `No tests` for config-only; **Test class runner** → `RunSpecifiedTests`; `Run local tests` if you prefer the whole org’s local tests |
 
 - **Version in this browser / GitHub** — versioning is always on. GitHub is optional sharing.
-- **Save Jira version** — keep `PROJ-123-v1` so QA and prod get the same snapshot (this browser, or GitHub).
-- **Workbench** — wide window: picker on the left, live selected package on the right (category columns + package.xml).
-- **Test class runner** — tick `*Test` classes from the package or scan the source org. Deploy SOAP includes `<runTests>`.
-- **Deploy configuration to target org** — retrieve the picked components (or use files already in Review) and Metadata API deploy to the target org.
-- **Deploy a saved Jira version** — push the frozen snapshot to the To org without retrieving again.
-- **Save version & deploy** — both in one step.
-- **Validate only** — `checkOnly` deploy (no changes committed on the org).
+- **Workbench** — wide window: picker on the left, live selected package on the right (category columns + package.xml). On Retrieve/Deploy the right pane is the Salesforce result panel.
+- **Deploy** — one button on the last step. It stays off until Salesforce returns success or failure. Component and test errors (name + problem) show in the result panel.
 
 ## Can this be a real deployment / version tool?
 

@@ -15,7 +15,10 @@ import {
   parseListMetadata,
   toggleMember,
   memberCount,
-  assertPackageXml
+  assertPackageXml,
+  formatDeployOutcome,
+  formatRetrieveOutcome,
+  formatOperationOutcome
 } from "../extension/lib/packageXml.js";
 import { parseRepoInput } from "../extension/lib/github.js";
 import { isEditablePath } from "../extension/lib/files.js";
@@ -104,6 +107,60 @@ describe("soap result parsing", () => {
     assert.equal(parsed.success, false);
     assert.equal(parsed.failures[0].fullName, "Foo");
     assert.match(parsed.failures[0].problem, /Missing/);
+  });
+
+  it("reads line numbers, successes, and Apex test failures", () => {
+    const xml = `<result>
+      <done>true</done><success>false</success><status>Failed</status>
+      <numberComponentErrors>1</numberComponentErrors>
+      <componentFailures>
+        <fullName>Account.Status__c</fullName>
+        <componentType>CustomField</componentType>
+        <problem>Invalid type</problem>
+        <fileName>objects/Account.object</fileName>
+        <lineNumber>12</lineNumber>
+        <columnNumber>4</columnNumber>
+      </componentFailures>
+      <componentSuccesses>
+        <fullName>Account.Layout</fullName>
+        <componentType>Layout</componentType>
+      </componentSuccesses>
+      <runTestResult>
+        <failures>
+          <name>AccountServiceTest</name>
+          <methodName>createsAccount</methodName>
+          <message>System.AssertException: Assertion Failed</message>
+        </failures>
+      </runTestResult>
+    </result>`;
+    const parsed = parseDeployResult(xml);
+    assert.equal(parsed.failures[0].lineNumber, "12");
+    assert.equal(parsed.failures[0].fileName, "objects/Account.object");
+    assert.equal(parsed.successes[0].fullName, "Account.Layout");
+    assert.equal(parsed.testFailures[0].methodName, "createsAccount");
+    const formatted = formatDeployOutcome(parsed);
+    assert.equal(formatted.ok, false);
+    assert.match(formatted.title, /Failed/);
+    assert.equal(formatted.items.some((i) => i.kind === "component" && /Invalid type/.test(i.problem)), true);
+    assert.equal(formatted.items.some((i) => i.kind === "test" && /Assertion/.test(i.problem)), true);
+    assert.match(formatted.items.find((i) => i.kind === "component").where, /line 12/);
+  });
+
+  it("formats retrieve and deploy waiting/success states", () => {
+    const running = formatOperationOutcome({ running: true, operation: "retrieve" });
+    assert.equal(running.ok, null);
+    assert.match(running.title, /Retriev/);
+    const retrieved = formatRetrieveOutcome({ success: true, status: "Succeeded", fileCount: 4 });
+    assert.equal(retrieved.ok, true);
+    assert.match(retrieved.items[0].text, /4 file/);
+    const deployed = formatDeployOutcome({
+      success: true,
+      status: "Succeeded",
+      successes: [{ fullName: "Hello", componentType: "ApexClass" }]
+    });
+    assert.equal(deployed.ok, true);
+    assert.equal(deployed.items[0].kind, "success");
+    assert.equal(deployed.items[0].name, "Hello");
   });
 
   it("parses listMetadata members", () => {

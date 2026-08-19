@@ -156,84 +156,49 @@
 
         <section id="view-ship" class="view">
           <p class="step-kicker">Step 5 of 5</p>
-          <h2 class="page-title">Deploy to the To org</h2>
+          <h2 class="page-title">Deploy</h2>
+          <p class="hint" id="deploy-path-line">Components below. Result appears in the panel.</p>
           <article class="card" id="package-summary-card">
-            <div class="title">What to move</div>
-            <div id="package-summary-body" class="meta">Nothing selected yet — pick fields, layouts, flows, permission sets… on earlier steps.</div>
-            <div class="tiny">
-              <button type="button" class="secondary" id="goto-components">Back to members</button>
-              <button type="button" class="secondary" id="goto-workbench">Open wide workbench</button>
-            </div>
+            <div class="title">Components in this deploy <span id="package-count-deploy" class="badge">0</span></div>
+            <div id="deploy-manifest" class="deploy-manifest"></div>
+            <div id="package-summary-body" class="hidden"></div>
           </article>
-          <label id="deploy-pipeline-wrap" class="git-only">
-            Saved Git pipeline
-            <select id="deploy-pipeline"></select>
-          </label>
-          <p class="hint">The path bar at the top is the live From → To route. Change it there if this deploy should go to a different org.</p>
-          <label>
-            Jira ticket
-            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
-          </label>
-          <p class="hint">Put the Jira on the version so the same snapshot can be pushed sandbox → QA → prod. Stored in this browser, or in GitHub if that mode is on.</p>
-          <label>
-            Comment
-            <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
-          </label>
-
-          <article class="card git-card git-only">
-            <label class="check switch">
-              <input id="use-git" type="checkbox" />
-              Also copy versions to GitHub
-            </label>
-            <p class="hint" id="git-hint">GitHub is the shared warehouse. This browser still versions when GitHub is off.</p>
-            <div id="git-status" class="muted"></div>
-          </article>
-
-          <div class="row">
-            <label>
-              Tests
-              <select id="test-level">
-                <option value="NoTestRun">No tests (config-only)</option>
-                <option value="RunSpecifiedTests">Run specified tests (from runner)</option>
-                <option value="RunLocalTests">Run local tests (prod / Apex in package)</option>
-                <option value="RunAllTestsInOrg">Run all tests</option>
-              </select>
-            </label>
-            <label class="check">
-              <input id="check-only" type="checkbox" />
-              Validate only
-            </label>
-          </div>
-
-          <article class="card" id="test-runner-card">
-            <div class="title">Test class runner <span id="test-count" class="badge">0</span></div>
-            <p class="hint">If this package includes Apex, pick the test classes that cover it. Selected tests deploy with <code>RunSpecifiedTests</code>.</p>
-            <div id="suggested-tests"></div>
-            <div class="row-actions">
-              <button type="button" id="btn-scan-tests" class="secondary" data-busy data-needs="source">Find *Test classes in source org</button>
-              <button type="button" id="btn-clear-tests" class="secondary">Clear tests</button>
-            </div>
-            <input id="test-filter" type="search" placeholder="Filter test classes" />
-            <div id="test-runner-status" class="muted"></div>
-            <div id="test-class-list" class="type-list"></div>
-            <label>
-              Add test class by name
-              <div class="inline-add">
-                <input id="manual-test" type="text" placeholder="AccountStatusTriggerTest" />
-                <button type="button" id="btn-add-test" class="secondary">Add</button>
-              </div>
-            </label>
-          </article>
-
           <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
           <div class="actions">
-            <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy configuration to target org</button>
-            <div id="git-actions" class="actions">
-              <button id="btn-both" class="primary" data-busy data-needs="source,target,package,distinct,retrieve">Save version &amp; deploy</button>
-              <button id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save Jira version</button>
-              <button id="btn-deploy" class="secondary" data-busy data-needs="target">Deploy a saved Jira version</button>
-            </div>
-            <button type="button" id="btn-goto-versions" class="ghost-text">Open saved versions</button>
+            <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
+          </div>
+
+          <div id="hidden-ship-fields" class="hidden" hidden>
+            <button type="button" id="goto-components"></button>
+            <button type="button" id="goto-workbench"></button>
+            <button type="button" id="btn-save"></button>
+            <button type="button" id="btn-deploy"></button>
+            <button type="button" id="btn-both"></button>
+            <button type="button" id="btn-goto-versions"></button>
+            <select id="deploy-pipeline"></select>
+            <div id="deploy-pipeline-wrap"></div>
+            <input id="jira" type="text" />
+            <textarea id="comment"></textarea>
+            <input id="use-git" type="checkbox" />
+            <p id="git-hint"></p>
+            <div id="git-status"></div>
+            <div id="git-actions"></div>
+            <select id="test-level">
+              <option value="NoTestRun" selected>No tests (config-only)</option>
+              <option value="RunSpecifiedTests">Run specified tests</option>
+              <option value="RunLocalTests">Run local tests</option>
+              <option value="RunAllTestsInOrg">Run all tests</option>
+            </select>
+            <input id="check-only" type="checkbox" />
+            <span id="test-count">0</span>
+            <div id="suggested-tests"></div>
+            <input id="test-filter" />
+            <div id="test-runner-status"></div>
+            <div id="test-class-list"></div>
+            <input id="manual-test" />
+            <button type="button" id="btn-scan-tests"></button>
+            <button type="button" id="btn-clear-tests"></button>
+            <button type="button" id="btn-add-test"></button>
           </div>
         </section>
 
@@ -328,8 +293,8 @@
               </div>
             </article>
             <div class="actions hidden">
-              <button type="button" id="btn-retrieve" class="secondary" data-busy data-needs="source,package">Retrieve into Review</button>
-              <button type="button" id="btn-deploy-from-pick" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy configuration to target org</button>
+              <button type="button" id="btn-retrieve" class="secondary" data-busy data-needs="source,package">Retrieve</button>
+              <button type="button" id="btn-deploy-from-pick" class="hidden"></button>
             </div>
           </div>
 
@@ -345,9 +310,9 @@
           </div>
 
           <div id="subview-review" class="subview">
-            <p class="hint">Retrieve locks the From org and the selected members to this snapshot. Changing either one turns deploy off until you retrieve again. Edit XML here, then Next to deploy.</p>
+            <p class="hint">Retrieve only — this screen does not change members. Use Back to tick more, then retrieve again.</p>
             <div class="row-actions">
-              <button type="button" id="btn-retrieve-review" class="secondary" data-busy data-needs="source,package">Retrieve selected</button>
+              <button type="button" id="btn-retrieve-review" class="primary" data-busy data-needs="source,package">Retrieve from From org</button>
             </div>
             <div id="file-list" class="file-list"></div>
             <label id="file-editor-wrap" class="hidden">
@@ -359,7 +324,7 @@
             </label>
             <div class="actions">
               <button type="button" id="btn-show-xml" class="ghost-text">Edit package.xml instead</button>
-              <button type="button" id="btn-deploy-review" class="accent hidden" data-busy data-needs="source,target,package,distinct,retrieve">Deploy these files to target org</button>
+              <button type="button" id="btn-deploy-review" class="hidden"></button>
             </div>
           </div>
         </section>
@@ -388,6 +353,19 @@
           <div id="inspector-git" class="muted"></div>
           <div id="inspector-tests" class="muted"></div>
           <button type="button" id="btn-clear-package-inspector" class="secondary">Clear package</button>
+        </div>
+      </aside>
+
+      <aside id="outcome-panel" class="outcome-panel hidden" aria-label="Retrieve and deploy results">
+        <header class="outcome-head" id="outcome-head">
+          <div>
+            <strong id="outcome-title">Result</strong>
+            <span id="outcome-badge" class="badge">—</span>
+          </div>
+          <p class="hint" id="outcome-sub">Each item below is a Salesforce message (component name + problem). Success lists deployed members.</p>
+        </header>
+        <div id="outcome-body" class="outcome-body">
+          <p class="muted">No result yet.</p>
         </div>
       </aside>
     </div>

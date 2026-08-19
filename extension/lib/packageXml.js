@@ -305,26 +305,141 @@ export function parseDeployResult(xml) {
     failures.push({
       fullName: xmlText(chunk, "fullName"),
       problem: xmlText(chunk, "problem"),
-      componentType: xmlText(chunk, "componentType")
+      componentType: xmlText(chunk, "componentType"),
+      fileName: xmlText(chunk, "fileName"),
+      lineNumber: xmlText(chunk, "lineNumber"),
+      columnNumber: xmlText(chunk, "columnNumber")
     });
   }
   const testFailures = [];
-  const testBlocks = xml.split(/<(?:[\w]+:)?runTestResult>/i);
-  if (testBlocks.length > 1) {
-    const names = xmlAll(xml, "name");
-    const messages = xmlAll(xml, "message");
-    // Keep a compact summary; detailed parsing is best-effort.
-    if (messages.length) {
-      testFailures.push({ message: messages.slice(0, 5).join("; ") });
+  const testBlocks = xml.split(/<(?:[\w]+:)?failures>/i).slice(1);
+  for (const block of testBlocks) {
+    const chunk = block.split(/<\/(?:[\w]+:)?failures>/i)[0];
+    if (!chunk) continue;
+    const message = xmlText(chunk, "message");
+    const name = xmlText(chunk, "name");
+    const methodName = xmlText(chunk, "methodName");
+    const stackTrace = xmlText(chunk, "stackTrace");
+    if (message || methodName || (name && chunk.includes("message"))) {
+      testFailures.push({ name, methodName, message, stackTrace });
     }
-    void names;
+  }
+  const successes = [];
+  const successBlocks = xml.split(/<(?:[\w]+:)?componentSuccesses>/i).slice(1);
+  for (const block of successBlocks) {
+    const chunk = block.split(/<\/(?:[\w]+:)?componentSuccesses>/i)[0];
+    const fullName = xmlText(chunk, "fullName");
+    const componentType = xmlText(chunk, "componentType");
+    if (fullName || componentType) {
+      successes.push({
+        fullName,
+        componentType,
+        fileName: xmlText(chunk, "fileName")
+      });
+    }
   }
   return {
     done,
     success,
     status,
     errorMessage,
+    numberComponentsDeployed: xmlText(xml, "numberComponentsDeployed"),
+    numberComponentErrors: xmlText(xml, "numberComponentErrors"),
+    numberTestsCompleted: xmlText(xml, "numberTestsCompleted"),
+    numberTestErrors: xmlText(xml, "numberTestErrors"),
     failures: failures.filter((f) => f.problem || f.fullName),
+    successes,
     testFailures
   };
+}
+
+function successItems(result) {
+  return (result.successes || [])
+    .filter((s) => s.fullName || s.componentType)
+    .map((s) => ({
+      kind: "success",
+      type: s.componentType || "",
+      name: s.fullName || s.fileName || "(component)"
+    }));
+}
+
+export function formatRetrieveOutcome(result) {
+  if (!result) {
+    return { ok: false, title: "No retrieve result yet", items: [] };
+  }
+  if (result.running) {
+    return {
+      ok: null,
+      title: "Retrieving…",
+      items: [{ kind: "info", text: "Waiting for Salesforce to return the selected files." }]
+    };
+  }
+  if (result.success) {
+    const n = result.fileCount;
+    return {
+      ok: true,
+      title: result.status || "Succeeded",
+      items: [{ kind: "info", text: n ? `Retrieved ${n} file(s) from the From org.` : "Retrieve succeeded." }]
+    };
+  }
+  const items = [];
+  if (result.errorMessage) items.push({ kind: "error", text: result.errorMessage });
+  for (const message of result.messages || []) {
+    if (message) items.push({ kind: "error", text: message });
+  }
+  if (!items.length) items.push({ kind: "error", text: "Retrieve failed. Salesforce did not return a problem message." });
+  return { ok: false, title: result.status || "Failed", items };
+}
+
+export function formatDeployOutcome(result) {
+  if (!result) {
+    return { ok: false, title: "No deploy result yet", items: [] };
+  }
+  if (result.running) {
+    return {
+      ok: null,
+      title: "Deploying…",
+      items: [{ kind: "info", text: "Waiting for Salesforce. Deploy stays off until this finishes with success or failure." }]
+    };
+  }
+  if (result.success) {
+    const items = successItems(result);
+    if (!items.length) {
+      const n = result.numberComponentsDeployed;
+      items.push({ kind: "info", text: n ? `${n} component(s) deployed.` : "Deploy succeeded. Salesforce reported no component errors." });
+    }
+    return { ok: true, title: result.status || "Succeeded", items };
+  }
+  const items = [];
+  if (result.errorMessage) items.push({ kind: "error", text: result.errorMessage });
+  for (const f of result.failures || []) {
+    const where = [f.fileName, f.lineNumber ? `line ${f.lineNumber}` : "", f.columnNumber ? `col ${f.columnNumber}` : ""]
+      .filter(Boolean)
+      .join(" · ");
+    items.push({
+      kind: "component",
+      type: f.componentType || "",
+      name: f.fullName || "",
+      problem: f.problem || "Unknown component error",
+      where
+    });
+  }
+  for (const t of result.testFailures || []) {
+    items.push({
+      kind: "test",
+      name: [t.name, t.methodName].filter(Boolean).join("."),
+      problem: t.message || "Test failed"
+    });
+  }
+  if (!items.length) items.push({ kind: "error", text: "Deploy failed. Salesforce did not return a component message." });
+  const errN = (result.failures || []).length + (result.testFailures || []).length;
+  const title = result.status
+    ? (errN ? `${result.status} · ${errN} error(s)` : result.status)
+    : `Failed · ${result.numberComponentErrors || errN || items.length} error(s)`;
+  return { ok: false, title, items };
+}
+
+export function formatOperationOutcome(result) {
+  if (result?.operation === "retrieve") return formatRetrieveOutcome(result);
+  return formatDeployOutcome(result);
 }

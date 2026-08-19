@@ -89,13 +89,6 @@ export async function deployMetadata({ instanceUrl, sid, zipBase64, options = {}
     const result = parseDeployResult(xml);
     onProgress?.(`Deploy ${result.status || "running"}…`);
     if (!result.done) continue;
-    if (!result.success) {
-      const parts = [
-        result.errorMessage,
-        ...result.failures.slice(0, 8).map((f) => [f.componentType, f.fullName, f.problem].filter(Boolean).join(" "))
-      ].filter(Boolean);
-      throw new Error(parts.join("\n") || "Deploy failed");
-    }
     return result;
   }
   throw new Error("Deploy timed out");

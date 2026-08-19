@@ -42,7 +42,8 @@ import {
   packageSummary,
   toggleMember,
   setTypeMembers,
-  normalizePackageTypes
+  normalizePackageTypes,
+  formatOperationOutcome
 } from "./lib/packageXml.js";
 import {
   categoryColumns,
@@ -74,7 +75,7 @@ const STEPS = [
   { id: "start", label: "Start", view: "start" },
   { id: "type", label: "Type", view: "components" },
   { id: "members", label: "Members", view: "components" },
-  { id: "review", label: "Review", view: "components" },
+  { id: "review", label: "Retrieve", view: "components" },
   { id: "deploy", label: "Deploy", view: "ship" }
 ];
 
@@ -104,7 +105,9 @@ const state = {
   showingVersions: false,
   xmlReview: false,
   selectionFrozen: false,
-  retrieveSnapshot: null
+  retrieveSnapshot: null,
+  deployFinished: "",
+  autoRetrieveAttempted: false
 };
 
 function escapeHtml(value) {
@@ -251,12 +254,19 @@ function updateActionState() {
     if (needs.includes("git") && (!useGitEnabled() || !isGithubConfigured(state.settings))) disabled = true;
     btn.disabled = disabled;
   });
+  const deployBtn = $("btn-deploy-selected");
+  if (deployBtn) {
+    const deploying = state.deployFinished === "running" || (state.busy && currentStepId() === "deploy" && state.deployFinished !== "failed");
+    const doneOk = state.deployFinished === "success";
+    if (deploying || doneOk) deployBtn.disabled = true;
+    deployBtn.textContent = deploying ? "Deploying…" : doneOk ? "Deployed" : "Deploy";
+  }
   const callout = $("deploy-reason");
   if (callout) {
     const blocking = reason && (reason.includes("target") || reason.includes("same org") || reason.includes("Detect"));
     callout.textContent = reason || `Ready to deploy ${selectedOrg("source-org")?.label} → ${selectedOrg("target-org")?.label}.`;
     callout.className = `callout ${reason ? "warn" : "ok"}`;
-    callout.classList.toggle("hidden", !reason && !selectedOrg("target-org"));
+    callout.classList.toggle("hidden", !reason);
   }
   renderOrgPath();
   applyRetrieveLockUi();
@@ -334,7 +344,7 @@ function leaveReason(index) {
     return "From and To must be different orgs before you pick configuration.";
   }
   if (index === 1 && !state.typeChosen) return "Tap a configuration type — for example Custom Field or Custom Object.";
-  if (index === 2 && !memberCount(state.packageTypes)) return "Tick at least one member (orange check) before review.";
+  if (index === 2 && !memberCount(state.packageTypes)) return "Tick at least one member (orange check) before retrieve.";
   if (index === 3 && !hasFreshRetrieve()) return retrieveBlockReason();
   return "";
 }
@@ -344,7 +354,7 @@ function stepBlockReason(index) {
   if (index > 0 && !pathReady()) return leaveReason(0);
   if (index > 1 && !state.typeChosen) return leaveReason(1);
   if (index > 2 && !memberCount(state.packageTypes)) return leaveReason(2);
-  if (index > 3) return retrieveBlockReason() || "Open Review and retrieve first, then you can deploy.";
+  if (index > 3) return retrieveBlockReason() || "Retrieve the package first, then you can deploy.";
   return "Finish the current step before skipping ahead.";
 }
 
@@ -360,12 +370,12 @@ function updatePickCopy() {
   } else if (stepId === "members") {
     if ($("pick-heading")) $("pick-heading").textContent = type ? `Tick ${type.label} members` : "Tick members";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Orange tick = in the package. Use the object chips to shrink a long list, then Next to review files.";
+      $("pick-lead").textContent = "Orange tick = in the package. Use the object chips to shrink a long list, then Next to retrieve. Back later if you need more members.";
     }
   } else if (stepId === "review") {
-    if ($("pick-heading")) $("pick-heading").textContent = "Review files";
+    if ($("pick-heading")) $("pick-heading").textContent = "Retrieve from the From org";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Retrieve from the From org. That freezes From and members. Unlock only if you need to change them, then retrieve again before deploy.";
+      $("pick-lead").textContent = "This step only retrieves files. To add members, use Back. After retrieve succeeds, Next opens Deploy.";
     }
   }
   if ($("header-sub")) {
@@ -373,7 +383,7 @@ function updatePickCopy() {
       start: "Step 1 · Connect orgs",
       type: "Step 2 · Choose a type",
       members: "Step 3 · Tick members",
-      review: "Step 4 · Review files",
+      review: "Step 4 · Retrieve",
       deploy: "Step 5 · Deploy",
       versions: "Saved versions"
     };
@@ -405,6 +415,7 @@ function updateWizardNav() {
     back.disabled = false;
     next.disabled = true;
     back.textContent = "Back to deploy";
+    next.classList.remove("hidden");
     next.textContent = "Next";
     hint.textContent = "Versions are snapshots. Back returns to Deploy.";
     return;
@@ -414,10 +425,11 @@ function updateWizardNav() {
   const last = state.stepIndex >= STEPS.length - 1;
   const reason = leaveReason(state.stepIndex);
   next.disabled = last || Boolean(reason) || state.busy;
-  const labels = ["Next: pick type", "Next: members", "Next: review", "Next: deploy", "Deploy above"];
+  const labels = ["Next: pick type", "Next: members", "Next: retrieve", "Next: deploy", "Deploy"];
   next.textContent = labels[state.stepIndex] || "Next";
+  next.classList.toggle("hidden", last);
   hint.textContent = reason
-    || (last ? "Last step — use Deploy to target org above." : `Step ${state.stepIndex + 1} of 5 · ${currentStep().label}`);
+    || (last ? "One Deploy button. It stays off until Salesforce returns success or failure." : `Step ${state.stepIndex + 1} of 5 · ${currentStep().label}`);
 }
 
 function applyStepUi() {
@@ -427,6 +439,7 @@ function applyStepUi() {
     $("view-versions")?.classList.add("active");
     document.body.dataset.step = "versions";
     updatePickCopy();
+    syncOutcomePanel();
     renderStepper();
     updateWizardNav();
     return;
@@ -444,8 +457,14 @@ function applyStepUi() {
   if (step.id === "type" && selectedOrg("source-org") && !typesForPicker().some((t) => t.fromOrg)) {
     setTimeout(() => run(loadOrgTypes), 0);
   }
+  if (step.id === "review" && memberCount(state.packageTypes) && !hasFreshRetrieve() && !state.autoRetrieveAttempted && !state.busy) {
+    state.autoRetrieveAttempted = true;
+    setTimeout(() => run(retrieveIntoReview), 0);
+  }
+  if (step.id === "deploy") renderDeployManifest();
   updatePickCopy();
   syncTypeChosenUi();
+  syncOutcomePanel();
   renderStepper();
   updateWizardNav();
 }
@@ -458,7 +477,10 @@ function goStep(index, { force = false } = {}) {
     updateWizardNav();
     return;
   }
-  if (index === 3) state.reviewSeen = true;
+  if (index === 3) {
+    state.reviewSeen = true;
+    if (!hasFreshRetrieve()) state.autoRetrieveAttempted = false;
+  }
   state.stepIndex = Math.max(0, Math.min(STEPS.length - 1, index));
   applyStepUi();
 }
@@ -508,6 +530,8 @@ function invalidateStaged() {
   state.stagedFiles = null;
   state.activeFilePath = "";
   state.selectionFrozen = false;
+  state.deployFinished = "";
+  state.autoRetrieveAttempted = false;
   $("file-editor-wrap")?.classList.add("hidden");
   renderFileList();
   if (hadFiles) {
@@ -541,6 +565,7 @@ function renderPackageUi() {
   $("xml-status").textContent = state.xmlDirty ? "XML edited — click Apply to use it." : "XML matches the picker.";
   renderMembers();
   renderInspector();
+  renderDeployManifest();
   renderTestRunner();
   renderGitUi();
   updateActionState();
@@ -585,8 +610,95 @@ function renderInspector() {
   $("inspector-tests").textContent = tests.length
     ? `${tests.length} specified test${tests.length === 1 ? "" : "s"}: ${tests.slice(0, 8).join(", ")}${tests.length > 8 ? "…" : ""}`
     : packageHasApex(state.packageTypes)
-      ? "Apex is in this package — pick test classes on Deploy."
+      ? "Apex is in this package. Salesforce will report test errors in the result panel."
       : "No specified tests (config-only is fine).";
+}
+
+function syncOutcomePanel() {
+  const step = currentStepId();
+  const show = step === "review" || step === "deploy";
+  $("outcome-panel")?.classList.toggle("hidden", !show);
+}
+
+function outcomeItemHtml(item) {
+  if (item.kind === "component") {
+    return `<article class="outcome-item err">
+      <div class="outcome-kicker">${escapeHtml(item.type || "Component")}</div>
+      <strong>${escapeHtml(item.name || "(unnamed)")}</strong>
+      <p>${escapeHtml(item.problem)}</p>
+      ${item.where ? `<p class="muted">${escapeHtml(item.where)}</p>` : ""}
+    </article>`;
+  }
+  if (item.kind === "test") {
+    return `<article class="outcome-item err">
+      <div class="outcome-kicker">Apex test</div>
+      <strong>${escapeHtml(item.name || "Test")}</strong>
+      <p>${escapeHtml(item.problem)}</p>
+    </article>`;
+  }
+  if (item.kind === "success") {
+    return `<article class="outcome-item ok">
+      <div class="outcome-kicker">${escapeHtml(item.type || "Component")}</div>
+      <strong>${escapeHtml(item.name)}</strong>
+    </article>`;
+  }
+  return `<article class="outcome-item ${item.kind === "info" ? "info" : "err"}"><p>${escapeHtml(item.text)}</p></article>`;
+}
+
+function showOutcome(result) {
+  const panel = $("outcome-panel");
+  if (!panel) return;
+  panel.classList.remove("hidden");
+  const formatted = formatOperationOutcome(result);
+  const operation = result?.operation === "retrieve" ? "Retrieve" : "Deploy";
+  if ($("outcome-title")) $("outcome-title").textContent = `${operation} result`;
+  if ($("outcome-badge")) $("outcome-badge").textContent = formatted.title;
+  const head = $("outcome-head");
+  if (head) {
+    head.classList.toggle("ok", formatted.ok === true);
+    head.classList.toggle("err", formatted.ok === false);
+    head.classList.toggle("wait", formatted.ok === null);
+  }
+  if ($("outcome-sub")) {
+    $("outcome-sub").textContent = formatted.ok === true
+      ? (result?.operation === "retrieve" ? "Files are ready. Use Next to open Deploy, or Back to add members." : "Salesforce accepted this package.")
+      : formatted.ok === null
+        ? "Salesforce is still working. The button stays off until this finishes."
+        : "Salesforce rejected this request. Each item below is why it failed.";
+  }
+  const body = $("outcome-body");
+  if (body) {
+    body.innerHTML = formatted.items.length
+      ? formatted.items.map(outcomeItemHtml).join("")
+      : `<p class="muted">No messages from Salesforce.</p>`;
+  }
+}
+
+function renderDeployManifest() {
+  const el = $("deploy-manifest");
+  const countEl = $("package-count-deploy");
+  const pathLine = $("deploy-path-line");
+  const count = memberCount(state.packageTypes);
+  if (countEl) countEl.textContent = String(count);
+  if (pathLine) {
+    const source = selectedOrg("source-org");
+    const target = selectedOrg("target-org");
+    pathLine.textContent = source && target
+      ? `${source.label} → ${target.label}. One Deploy button. It stays off until Salesforce returns success or failure.`
+      : "Set From and To in the path bar.";
+  }
+  if (!el) return;
+  const columns = categoryColumns(state.packageTypes);
+  if (!count) {
+    el.innerHTML = `<p class="muted">No components. Use Back to tick members, then retrieve.</p>`;
+    return;
+  }
+  el.innerHTML = columns
+    .map((col) => {
+      const members = col.members.map((m) => `<li>${escapeHtml(m)}</li>`).join("");
+      return `<section class="cat-col"><h3><span>${escapeHtml(col.type)}</span><span class="badge">${col.count}</span></h3><ul>${members}</ul></section>`;
+    })
+    .join("");
 }
 
 function renderGitUi() {
@@ -626,7 +738,7 @@ function renderSimplePlaybook() {
     { done: pathReady(), text: "Set From and To (must be different)" },
     { done: state.typeChosen, text: "Pick a configuration type" },
     { done: memberCount(state.packageTypes) > 0, text: "Tick members to include" },
-    { done: hasFreshRetrieve(), text: "Retrieve, save a Jira version, then deploy" }
+    { done: hasFreshRetrieve(), text: "Retrieve, then deploy" }
   ];
   el.innerHTML = items
     .map((item, i) => `<li class="${item.done ? "done" : ""}"><span>${item.done ? "✓" : i + 1}</span>${escapeHtml(item.text)}</li>`)
@@ -1396,31 +1508,44 @@ function resolveTicket(store) {
 async function retrieveIntoReview() {
   const source = selectedOrg("source-org");
   if (!source) throw new Error("Select a source org. Log into it in Chrome first.");
-  const types = await ensurePackage();
-  await persistShipOptions();
-  log(`Retrieving ${memberCount(types)} component(s) from ${source.label}…`);
-  const zipBase64 = await retrieveMetadata({
-    instanceUrl: source.instanceUrl,
-    sid: source.sid,
-    packageTypes: types,
-    apiVersion: apiVersion(),
-    onProgress: (m) => log(m)
-  });
-  const files = await unzipToFiles(zipBase64);
-  if (!files.length) throw new Error("Retrieve returned no files. Check package.xml members.");
-  state.stagedFiles = files;
-  state.selectionFrozen = true;
-  state.retrieveSnapshot = {
-    sourceKey: orgKey(source),
-    fingerprint: packageFingerprint(),
-    fileCount: files.length
-  };
-  renderFileList();
-  applyRetrieveLockUi();
-  goStep(3, { force: true });
-  log(`Retrieved ${files.length} file(s). From org and members are frozen until you unlock.`);
-  setStatus(`Retrieved ${files.length} files — review or deploy`, "ok");
-  return files;
+  showOutcome({ running: true, operation: "retrieve" });
+  try {
+    const types = await ensurePackage();
+    await persistShipOptions();
+    log(`Retrieving ${memberCount(types)} component(s) from ${source.label}…`);
+    const zipBase64 = await retrieveMetadata({
+      instanceUrl: source.instanceUrl,
+      sid: source.sid,
+      packageTypes: types,
+      apiVersion: apiVersion(),
+      onProgress: (m) => log(m)
+    });
+    const files = await unzipToFiles(zipBase64);
+    if (!files.length) throw new Error("Retrieve returned no files. Check package.xml members.");
+    state.stagedFiles = files;
+    state.selectionFrozen = true;
+    state.retrieveSnapshot = {
+      sourceKey: orgKey(source),
+      fingerprint: packageFingerprint(),
+      fileCount: files.length
+    };
+    state.deployFinished = "";
+    renderFileList();
+    applyRetrieveLockUi();
+    showOutcome({ success: true, status: "Succeeded", fileCount: files.length, operation: "retrieve" });
+    if (state.stepIndex !== 3) goStep(3, { force: true });
+    log(`Retrieved ${files.length} file(s). From org and members are frozen. Next to deploy, or Back to add members.`);
+    setStatus(`Retrieved ${files.length} files — Next to deploy`, "ok");
+    return files;
+  } catch (err) {
+    showOutcome({
+      success: false,
+      status: "Failed",
+      errorMessage: err.message || String(err),
+      operation: "retrieve"
+    });
+    throw err;
+  }
 }
 
 async function filesForDeploy() {
@@ -1444,23 +1569,44 @@ function deployOptions() {
 async function deploySelected() {
   const target = selectedOrg("target-org");
   if (!target) throw new Error("Select a target org. Log into it in Chrome first.");
-  await persistShipOptions();
-  const files = await filesForDeploy();
-  const zipBase64 = await zipFromFiles(files);
-  const options = deployOptions();
-  if (options.runTests.length) log(`Running specified tests: ${options.runTests.join(", ")}`);
-  log(`Deploying ${files.length} file(s) to ${target.label} (${options.testLevel})…`);
-  const result = await deployMetadata({
-    instanceUrl: target.instanceUrl,
-    sid: target.sid,
-    zipBase64,
-    options,
-    apiVersion: apiVersion(),
-    onProgress: (m) => log(m)
-  });
-  log(`Deployed selected package to ${target.label} (${result.status || "Succeeded"}).`);
-  setStatus(`Deployed package → ${target.label}`, "ok");
-  return result;
+  state.deployFinished = "running";
+  showOutcome({ running: true, operation: "deploy" });
+  updateActionState();
+  try {
+    await persistShipOptions();
+    const files = await filesForDeploy();
+    const zipBase64 = await zipFromFiles(files);
+    const options = deployOptions();
+    if (options.runTests.length) log(`Running specified tests: ${options.runTests.join(", ")}`);
+    log(`Deploying ${files.length} file(s) to ${target.label} (${options.testLevel})…`);
+    const result = await deployMetadata({
+      instanceUrl: target.instanceUrl,
+      sid: target.sid,
+      zipBase64,
+      options,
+      apiVersion: apiVersion(),
+      onProgress: (m) => log(m)
+    });
+    state.deployFinished = result.success ? "success" : "failed";
+    showOutcome({ ...result, operation: "deploy" });
+    updateActionState();
+    if (!result.success) {
+      const formatted = formatOperationOutcome({ ...result, operation: "deploy" });
+      const first = formatted.items[0];
+      const summary = first?.problem || first?.text || result.status || "Failed";
+      log(`Deploy failed: ${summary}`, "error");
+      setStatus(`Deploy failed — see the result panel`, "error");
+      return result;
+    }
+    log(`Deployed selected package to ${target.label} (${result.status || "Succeeded"}).`);
+    setStatus(`Deployed package → ${target.label}`, "ok");
+    return result;
+  } catch (err) {
+    state.deployFinished = "failed";
+    showOutcome({ success: false, status: "Failed", errorMessage: err.message || String(err), operation: "deploy" });
+    updateActionState();
+    throw err;
+  }
 }
 
 async function saveVersion() {
@@ -1564,6 +1710,12 @@ async function deployVersion(explicitId) {
     apiVersion: apiVersion(),
     onProgress: (m) => log(m)
   });
+  showOutcome({ ...result, operation: "deploy" });
+  if (!result.success) {
+    log(`Deploy of ${version.id} failed: ${result.errorMessage || result.status || "Failed"}`, "error");
+    setStatus(`Deploy failed — see the result panel`, "error");
+    return version;
+  }
   const updated = addDeployment(version, {
     org: { id: target.id, label: target.label, instanceUrl: target.instanceUrl },
     status: result.status || "Succeeded",
@@ -1702,6 +1854,16 @@ async function run(action) {
   } catch (err) {
     console.error(err);
     log(err.message || String(err), "error");
+    const step = currentStepId();
+    if (step === "review" || step === "deploy") {
+      showOutcome({
+        success: false,
+        status: "Failed",
+        errorMessage: err.message || String(err),
+        operation: step === "review" ? "retrieve" : "deploy"
+      });
+    }
+    if (step === "deploy" && state.deployFinished === "running") state.deployFinished = "failed";
   } finally {
     setBusy(false);
   }
@@ -1903,6 +2065,7 @@ $("target-org")?.addEventListener("change", () => run(async () => {
   await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
   state.settings = await loadSettings();
   if ($("pipeline-target") && $("target-org").value) $("pipeline-target").value = $("target-org").value;
+  if (state.deployFinished === "success") state.deployFinished = "";
   updateActionState();
 }));
 $("inspector-filter")?.addEventListener("input", renderInspector);
