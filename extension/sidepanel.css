@@ -645,6 +645,9 @@ body.mode-simple .git-only { display: none !important; }
   border-radius: var(--radius);
 }
 .git-ship.hidden { display: none !important; }
+
+#compare-before-hint { margin: 10px 0 0; }
+#btn-compare-before-deploy { width: 100%; }
 .compare-picks {
   display: grid;
   grid-template-columns: 1fr;

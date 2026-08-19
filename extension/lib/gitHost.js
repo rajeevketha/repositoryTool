@@ -180,18 +180,45 @@ export async function getRef(creds) {
   return adapter(creds.provider).getRef(creds);
 }
 
-export async function commitFiles(creds) {
-  if (creds.provider === "github") {
-    return github.commitFiles({
-      token: creds.token,
-      owner: creds.owner,
-      repo: creds.repo,
-      branch: creds.branch,
-      files: creds.files,
-      message: creds.message
-    });
+export function wrapGitWriteError(err) {
+  const message = String(err?.message || err?.data?.message || err || "");
+  if (err?.status === 422 || /fast forward/i.test(message)) {
+    return new Error("The Git branch moved before OrgFlow finished writing (not a fast-forward). OrgFlow retries automatically; if this still appears, click Save to repo once more. Salesforce may already have succeeded.");
   }
-  return adapter(creds.provider).commitFiles(creds);
+  return err instanceof Error ? err : new Error(message);
+}
+
+export function isRetryableGitWrite(err) {
+  const message = String(err?.message || err?.data?.message || "");
+  return err?.status === 422 || Boolean(err?.retry) || /fast forward/i.test(message);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function commitFiles(creds) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (creds.provider === "github") {
+        return await github.commitFiles({
+          token: creds.token,
+          owner: creds.owner,
+          repo: creds.repo,
+          branch: creds.branch,
+          files: creds.files,
+          message: creds.message
+        });
+      }
+      return await adapter(creds.provider).commitFiles(creds);
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableGitWrite(err) || attempt === 2) throw wrapGitWriteError(err);
+      await wait(300 * (attempt + 1) * (attempt + 1));
+    }
+  }
+  throw wrapGitWriteError(lastErr);
 }
 
 export async function fetchReleaseFiles(creds) {

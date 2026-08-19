@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseRepoInput, providerMeta, providerId, tokenUrl, browseFolderUrl } from "../extension/lib/gitHost.js";
+import { parseRepoInput, providerMeta, providerId, tokenUrl, browseFolderUrl, isRetryableGitWrite, wrapGitWriteError } from "../extension/lib/gitHost.js";
 import { mergeSettings, isGitConfigured, repoLabel } from "../extension/lib/storage.js";
 
 describe("git hosts", () => {
@@ -99,5 +99,13 @@ describe("git hosts", () => {
       browseFolderUrl(gitlab, ".orgflow/releases/CHANGE-1/v1"),
       "https://gitlab.com/acme/team/sf/-/tree/develop/.orgflow/releases/CHANGE-1/v1"
     );
+  });
+
+  it("retries Git writes that fail as not a fast-forward", () => {
+    const err = new Error("Update is not a fast forward");
+    err.status = 422;
+    assert.equal(isRetryableGitWrite(err), true);
+    assert.match(wrapGitWriteError(err).message, /Save to repo once more/);
+    assert.equal(isRetryableGitWrite(new Error("permission denied")), false);
   });
 });

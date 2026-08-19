@@ -145,10 +145,20 @@ export async function commitFiles({ token, owner, repo, branch, files, message }
   });
 
   if (parentSha) {
-    await gh(token, `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(branch)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ sha: commit.sha })
-    });
+    try {
+      await gh(token, `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(branch)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ sha: commit.sha })
+      });
+    } catch (err) {
+      if (err.status === 422 || /fast forward/i.test(err.message || "")) {
+        const latest = await getRef(token, owner, repo, branch);
+        if (latest?.object?.sha && latest.object.sha !== parentSha) {
+          err.retry = true;
+        }
+      }
+      throw err;
+    }
   } else {
     await gh(token, `/repos/${owner}/${repo}/git/refs`, {
       method: "POST",

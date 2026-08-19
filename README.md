@@ -8,11 +8,11 @@ GitHub, GitLab, or Azure DevOps is **optional**. OrgFlow always versions by Jira
 
 Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Retrieve → Deploy) is sequential: you cannot skip ahead.
 
-1. **Start** — choose **This browser** (default) or **GitHub, GitLab, or Azure**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If a team repo: pick the host, follow **How to connect**, then **Use this repo**. Optionally save a **pipeline** to `.orgflow/pipelines.json`.
+1. **Start** — choose **This browser** (default) or **GitHub, GitLab, or Azure**. Detect logged-in orgs. Set **From** and **To** once in the path bar (they must be different). Pipelines reuse those same From/To values — there is no second org picker. If a team repo: pick the host, follow **How to connect**, then **Use this repo**. Optionally save a **pipeline** to `.orgflow/pipelines.json`.
 2. **Type** — search, use the picklist, or tap a common type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
 3. **Members** — tick rows (orange check = in the package). The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list. Next goes to Retrieve (not another picker). Use **Back** later if you need more members.
-4. **Retrieve** — pulls files from the From org. This screen does not change members. Failures (and a successful file count) show in the result panel. Unlock only if you need to change From or members, then retrieve again.
-5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel. If a **team repo** is on, a **commit message is required** before Deploy or Save to repo (**Jira is optional**). Use **Versions** to compare a retrieve with a previous snapshot (latest first) and revert selected metadata or Apex files.
+4. **Retrieve** — pulls files from the From org. This screen does not change members. **Compare with a saved version** (or **Compare / revert** in the header) is here, before Deploy. Failures (and a successful file count) show in the result panel. Unlock only if you need to change From or members, then retrieve again.
+5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel. If a **team repo** is on, a **commit message is required** before Deploy or Save to repo (**Jira is optional**). After a successful deploy, **New package** starts over from Start.
 
 The UI uses a warm charcoal + bronze theme. Accent color is used on the current step and the main action, not on every heading.
 
@@ -27,7 +27,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Submission kit (listing copy, privacy URL, permission justifications, screenshots): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** `files/orgflow-extension.zip` (unzip to an `orgflow/` folder)
-- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.3**)
+- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.4**)
 - **Privacy policy:** [docs/privacy.html](docs/privacy.html)
 
 ## Install (unpacked Chrome extension)

@@ -16,7 +16,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <button id="open-versions" class="ghost-text" type="button" title="Compare snapshots and revert selected files">Compare / revert</button>
+        <button id="open-versions" class="ghost-text hidden" type="button" title="Compare this retrieve with a saved snapshot before you deploy">Compare / revert</button>
         <button id="open-workbench" class="ghost-text" type="button" title="Open a wide tab and close this side panel">Workbench</button>
         <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
       </div>
@@ -58,7 +58,7 @@
         <section id="view-start" class="view active">
           <p class="step-kicker">Step 1 of 5</p>
           <h2 class="page-title">Connect From and To</h2>
-          <p class="hint">Set From and To in the path bar. Choose where snapshots live — this browser, or a shared GitHub / GitLab / Azure repo.</p>
+          <p class="hint">Choose where snapshots live — this browser, or a shared GitHub / GitLab / Azure repo. Set From and To once in the deployment path above.</p>
           <div class="mode-grid">
             <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
               <strong>This browser</strong>
@@ -139,16 +139,7 @@
               New pipeline name
               <input id="pipeline-name" type="text" placeholder="Config sandbox → UAT" />
             </label>
-            <div class="row">
-              <label>
-                Source org
-                <select id="pipeline-source"></select>
-              </label>
-              <label>
-                Target org
-                <select id="pipeline-target"></select>
-              </label>
-            </div>
+            <p class="hint" id="pipeline-path-copy">Uses From and To in the deployment path above. There is no second org picker on this page.</p>
             <div class="actions">
               <button type="button" id="btn-save-pipeline" class="secondary" data-busy>Save pipeline to repo</button>
             </div>
@@ -173,14 +164,13 @@
           <div class="actions">
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
             <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
-            <button type="button" id="btn-open-versions-deploy" class="secondary">Compare versions / revert files</button>
           </div>
         </section>
 
         <section id="view-versions" class="view">
           <p class="step-kicker">Saved snapshots</p>
           <h2 class="page-title">Versions</h2>
-          <p class="hint" id="versions-hint">This is where you compare a retrieve with a saved snapshot and revert selected files. Open it from <strong>Compare / revert</strong> in the header, or from Deploy after a success.</p>
+          <p class="hint" id="versions-hint">Compare the current retrieve with a saved snapshot, then revert files if needed, <strong>before</strong> you deploy.</p>
           <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
 
           <article class="card" id="version-compare-card">
@@ -365,7 +355,9 @@
                 <button type="button" id="btn-save-file" class="primary">Save file edits</button>
               </div>
             </label>
+            <p class="hint" id="compare-before-hint">Optional: compare this retrieve with a saved version and revert files <strong>before</strong> Deploy.</p>
             <div class="actions">
+              <button type="button" id="btn-compare-before-deploy" class="secondary">Compare with a saved version</button>
               <button type="button" id="btn-show-xml" class="ghost-text">Edit package.xml instead</button>
               <button type="button" id="btn-deploy-review" class="hidden"></button>
             </div>

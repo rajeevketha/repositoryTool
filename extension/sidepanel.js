@@ -123,7 +123,8 @@ const state = {
   compareRows: [],
   compareActivePath: "",
   lastSaved: null,
-  gitShipWarned: false
+  gitShipWarned: false,
+  versionsReturnStep: 3
 };
 
 function escapeHtml(value) {
@@ -335,7 +336,7 @@ function updateActionState() {
     commentEl.classList.toggle("invalid", showInvalid);
     commentEl.setAttribute("aria-invalid", showInvalid ? "true" : "false");
   }
-  $("open-versions")?.classList.toggle("selected", Boolean(state.showingVersions));
+  syncCompareEntry();
   const retrieveFresh = hasFreshRetrieve() && state.retrieveOk;
   for (const id of ["btn-retrieve", "btn-retrieve-review"]) {
     const btn = $(id);
@@ -356,7 +357,7 @@ function updateActionState() {
   const retrieveHint = $("retrieve-btn-hint");
   if (retrieveHint) {
     if (retrieveFresh) {
-      retrieveHint.textContent = "Snapshot matches this package and From org. Unlock and change members or From org to retrieve again.";
+      retrieveHint.textContent = "Snapshot matches this package and From org. Compare with a saved version before Deploy if you need to.";
       retrieveHint.dataset.state = "done";
     } else if (state.retrieveSnapshot) {
       retrieveHint.textContent = "Members, type, or From org changed — retrieve again before deploy.";
@@ -415,6 +416,7 @@ function renderOrgPath() {
       ? `Simple path: configuration moves ${orgKind(source)} → ${orgKind(target)}.`
       : "Next stays off until From and To are different Salesforce orgs.";
   }
+  updatePipelinePathCopy();
 }
 
 function pathReady() {
@@ -530,20 +532,23 @@ function updateWizardNav() {
   if (state.showingVersions) {
     back.disabled = false;
     next.disabled = true;
-    back.textContent = "Back to deploy";
-    next.classList.remove("hidden");
+    const toDeploy = state.versionsReturnStep === 4;
+    back.textContent = toDeploy ? "Back to deploy" : "Back to retrieve";
+    next.classList.add("hidden");
     next.textContent = "Next";
-    hint.textContent = "Compare versions, restore selected files, then Back to Deploy.";
+    hint.textContent = toDeploy
+      ? "Compare and restore files, then go back. Prefer doing this on Retrieve before the next deploy."
+      : "Compare and restore files here, then Back to retrieve and Deploy if the package looks right.";
     return;
   }
   const last = state.stepIndex >= STEPS.length - 1;
   if (last && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
     back.disabled = false;
     back.textContent = "New package";
-    next.classList.remove("hidden");
-    next.disabled = false;
-    next.textContent = "Compare versions";
-    hint.textContent = "New package starts over from Start. Compare versions diffs snapshots or reverts files.";
+    next.classList.add("hidden");
+    next.disabled = true;
+    next.textContent = "Next";
+    hint.textContent = "New package starts over from Start. Compare retrieved files on Retrieve before the next deploy.";
     return;
   }
   back.disabled = state.stepIndex === 0;
@@ -570,7 +575,7 @@ function applyStepUi() {
     renderStepper();
     updateWizardNav();
     updateHeaderStatus();
-    $("open-versions")?.classList.toggle("selected", true);
+    syncCompareEntry();
     renderGitUi();
     return;
   }
@@ -599,7 +604,7 @@ function applyStepUi() {
   renderStepper();
   updateWizardNav();
   updateHeaderStatus();
-  $("open-versions")?.classList.toggle("selected", Boolean(state.showingVersions));
+  syncCompareEntry();
 }
 
 function goStep(index, { force = false } = {}) {
@@ -620,9 +625,9 @@ function goStep(index, { force = false } = {}) {
 
 function wizardBack() {
   if (state.showingVersions) {
+    const returnTo = Number.isInteger(state.versionsReturnStep) ? state.versionsReturnStep : 3;
     state.showingVersions = false;
-    state.stepIndex = 4;
-    applyStepUi();
+    goStep(Math.min(Math.max(returnTo, 0), STEPS.length - 1), { force: true });
     return;
   }
   if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
@@ -650,7 +655,35 @@ function showVersions() {
   applyStepUi();
 }
 
+function syncCompareEntry() {
+  const btn = $("open-versions");
+  if (!btn) return;
+  const step = currentStepId();
+  const onRetrieve = state.showingVersions || step === "review" || step === "versions";
+  btn.classList.toggle("hidden", !onRetrieve);
+  btn.classList.toggle("selected", Boolean(state.showingVersions));
+  const compareBtn = $("btn-compare-before-deploy");
+  if (compareBtn) {
+    const ready = hasFreshRetrieve();
+    compareBtn.disabled = state.busy;
+    compareBtn.title = ready
+      ? "Open saved versions to diff this retrieve before Deploy."
+      : "Retrieve first, then compare with a saved version before you deploy.";
+  }
+}
+
+function updatePipelinePathCopy() {
+  const el = $("pipeline-path-copy");
+  if (!el) return;
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  el.textContent = source && target
+    ? `Uses From and To in the deployment path above: ${source.label} → ${target.label}.`
+    : "Uses From and To in the deployment path above. There is no second org picker on this page.";
+}
+
 async function openVersionsPanel() {
+  state.versionsReturnStep = state.stepIndex === 4 ? 4 : 3;
   await loadVersionStore();
   renderVersions();
   showVersions();
@@ -704,6 +737,8 @@ async function resetForNewPackage() {
   state.lastSaved = null;
   state.gitShipWarned = false;
   state.reviewSeen = false;
+  state.showingVersions = false;
+  state.versionsReturnStep = 3;
   $("file-editor-wrap")?.classList.add("hidden");
   if ($("comment")) $("comment").value = "";
   if ($("jira")) $("jira").value = "";
@@ -916,7 +951,7 @@ function showOutcome(result) {
   if ($("outcome-sub")) {
     $("outcome-sub").textContent = formatted.ok === true
       ? (result?.operation === "retrieve"
-        ? "Files are ready. Use Next to open Deploy, or Back to add members."
+        ? "Files are ready. Compare with a saved version if you need to, then Next to Deploy."
         : result?.gitRecord?.ok === false
           ? "Salesforce accepted the package. The snapshot was not written to Git — see Team repo below."
           : result?.gitRecord?.ok
@@ -971,9 +1006,9 @@ function renderGitUi() {
   const host = providerMeta(providerId(state.settings)).label;
   $("versions-hint").textContent = on
     ? connected
-      ? `Shared Jira versions are stored in ${repoLabel(state.settings)}.`
-      : `${host} is on — connect a repo on Start so the team can reuse versions.`
-    : "Jira versions are stored in this Chrome profile. Connect GitHub, GitLab, or Azure only if the team needs a shared warehouse.";
+      ? `Compare this retrieve with a saved snapshot before Deploy. Shared Jira versions are in ${repoLabel(state.settings)}.`
+      : `${host} is on — connect a repo on Start so the team can reuse versions. Compare before you deploy.`
+    : "Compare this retrieve with a saved snapshot before Deploy. Jira versions stay on this Chrome profile unless you connect a team repo.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
@@ -1341,14 +1376,6 @@ function fillOrgSelects() {
     const other = state.orgs.find((o) => orgKey(o) !== sourceEl.value);
     if (other) targetEl.value = orgKey(other);
   }
-  for (const id of ["pipeline-source", "pipeline-target"]) {
-    const el = $(id);
-    if (!el) continue;
-    const blank = id.includes("target") ? targetBlank : sourceBlank;
-    el.innerHTML = blank + options;
-    if (id.includes("source") && sourceEl?.value) el.value = sourceEl.value;
-    if (id.includes("target") && targetEl?.value) el.value = targetEl.value;
-  }
   updateActionState();
 }
 
@@ -1378,7 +1405,7 @@ function renderPipelines() {
   $("pipeline-status").textContent = items.length
     ? `${items.length} pipeline${items.length === 1 ? "" : "s"} in the repo (${pipelinesFilePath()}).`
     : useGitEnabled()
-      ? "No pipeline saved yet. Name it, pick source and target, then save to the repo."
+      ? "No pipeline saved yet. Name it, then save — From and To come from the path bar."
       : "";
 }
 
@@ -1413,8 +1440,6 @@ function applyPipeline(record) {
   const target = matchOrg(state.orgs, record.target);
   if (source && $("source-org")) $("source-org").value = orgKey(source);
   if (target && $("target-org")) $("target-org").value = orgKey(target);
-  if (source && $("pipeline-source")) $("pipeline-source").value = orgKey(source);
-  if (target && $("pipeline-target")) $("pipeline-target").value = orgKey(target);
   if (record.testLevel && $("test-level")) $("test-level").value = record.testLevel;
   if ($("pipeline-name")) $("pipeline-name").value = record.name;
   if ($("pipeline-select")) $("pipeline-select").value = record.id;
@@ -1445,9 +1470,9 @@ async function saveCurrentPipeline() {
     await saveRepo();
   }
   requireGithub();
-  const source = selectedOrg("pipeline-source") || selectedOrg("source-org");
-  const target = selectedOrg("pipeline-target") || selectedOrg("target-org");
-  if (!source || !target) throw new Error("Detect orgs and pick source and target first.");
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  if (!source || !target) throw new Error("Detect orgs and pick From and To in the path bar first.");
   const record = createPipeline({
     id: $("pipeline-select")?.value || undefined,
     name: $("pipeline-name").value.trim() || `${source.label} → ${target.label}`,
@@ -2299,15 +2324,16 @@ async function recordSuccessfulGitDeploy(target, result, options, existingVersio
   if (!version && state.lastSaved?.id && state.lastSaved.fingerprint === stagedFilesFingerprint()) {
     version = findVersion(state.versions.versions, state.lastSaved.id);
   }
-  if (!version) version = await saveVersion();
   const message = requireGitCommitMessage();
-  const updated = addDeployment(version, {
+  const deployment = {
     org: { id: target.id, label: target.label, instanceUrl: target.instanceUrl },
     status: result.status || "Succeeded",
     comment: message,
     checkOnly: options.checkOnly,
     testLevel: options.testLevel
-  });
+  };
+  if (!version) return saveVersion({ deployment });
+  const updated = addDeployment(version, deployment);
   const store = upsertVersion(state.versions, updated);
   if (useGitEnabled() && version.storage !== "local") {
     requireGithub();
@@ -2325,7 +2351,7 @@ async function recordSuccessfulGitDeploy(target, result, options, existingVersio
   return updated;
 }
 
-async function saveVersion() {
+async function saveVersion(options = {}) {
   if (useGitEnabled()) requireGitShipReady("save");
   const source = selectedOrg("source-org");
   if (!source) throw new Error("Select a source org. Log into it in Chrome first.");
@@ -2338,7 +2364,7 @@ async function saveVersion() {
   await loadVersionStore();
   const { ticket, comment } = resolveTicket(state.versions);
   const increment = nextIncrement(state.versions.versions, ticket);
-  const record = createVersionRecord({
+  let record = createVersionRecord({
     jira: ticket,
     increment,
     comment,
@@ -2348,6 +2374,7 @@ async function saveVersion() {
     components: types
   });
   record.storage = useGitEnabled() ? "git" : "local";
+  if (options.deployment) record = addDeployment(record, options.deployment);
 
   if (!useGitEnabled()) {
     const nextStore = upsertVersion(state.versions, record);
@@ -2376,11 +2403,6 @@ async function saveVersion() {
   });
   record.commitSha = commit.sha;
   const withSha = upsertVersion(nextStore, record);
-  await commitFiles({
-    ...gitCreds(),
-    files: [{ path: versionsFilePath(), base64: encodeUtf8Base64(JSON.stringify(withSha, null, 2) + "\n") }],
-    message: `chore: record ${record.id} at ${commit.sha.slice(0, 7)}`
-  });
   state.versions = withSha;
   state.lastSaved = { id: record.id, fingerprint: stagedFilesFingerprint() };
   renderVersions();
@@ -2613,10 +2635,6 @@ $("stepper")?.addEventListener("click", (event) => {
 $("btn-back")?.addEventListener("click", wizardBack);
 $("btn-next")?.addEventListener("click", async () => {
   if (state.busy) return;
-  if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
-    run(openVersionsPanel);
-    return;
-  }
   if (state.stepIndex === 0) {
     await run(async () => {
       await saveSettings({ setupComplete: true, useGit: useGitEnabled() });
@@ -2627,6 +2645,7 @@ $("btn-next")?.addEventListener("click", async () => {
 });
 $("btn-goto-versions")?.addEventListener("click", () => run(openVersionsPanel));
 $("open-versions")?.addEventListener("click", () => run(openVersionsPanel));
+$("btn-compare-before-deploy")?.addEventListener("click", () => run(openVersionsPanel));
 $("btn-open-versions-deploy")?.addEventListener("click", () => run(openVersionsPanel));
 $("btn-compare-versions")?.addEventListener("click", () => run(runCompareVersions));
 $("btn-load-revert-files")?.addEventListener("click", () => run(loadRevertFileList));
@@ -2835,7 +2854,6 @@ $("source-org")?.addEventListener("change", () => run(async () => {
   const previous = state.retrieveSnapshot?.sourceKey;
   await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
   state.settings = await loadSettings();
-  if ($("pipeline-source") && $("source-org").value) $("pipeline-source").value = $("source-org").value;
   if ($("source-org").value && !$("target-org").value && state.orgs.length === 2) {
     const other = state.orgs.find((o) => orgKey(o) !== $("source-org").value);
     if (other) $("target-org").value = orgKey(other);
@@ -2850,7 +2868,6 @@ $("source-org")?.addEventListener("change", () => run(async () => {
 $("target-org")?.addEventListener("change", () => run(async () => {
   await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
   state.settings = await loadSettings();
-  if ($("pipeline-target") && $("target-org").value) $("pipeline-target").value = $("target-org").value;
   if (alreadyDeployedToCurrentTarget()) state.deployFinished = "success";
   else if (state.deployFinished === "success") state.deployFinished = "";
   updateActionState();
