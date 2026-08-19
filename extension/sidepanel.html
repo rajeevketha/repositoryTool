@@ -16,6 +16,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="open-versions" class="ghost-text" type="button" title="Compare and restore saved versions">Versions</button>
         <button id="open-workbench" class="ghost-text" type="button" title="Open a wide tab and close this side panel">Workbench</button>
         <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
       </div>
@@ -168,18 +169,63 @@
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
             <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
           </div>
+        </section>
+
+        <section id="view-versions" class="view">
+          <p class="step-kicker">Saved snapshots</p>
+          <h2 class="page-title">Versions</h2>
+          <p class="hint" id="versions-hint">Compare a retrieve or a saved version with an older one (latest first). Revert restores selected files into the current retrieve so you can deploy them.</p>
+          <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
+
+          <article class="card" id="version-compare-card">
+            <div class="title">Compare with a previous version</div>
+            <p class="hint">Left is usually the current retrieve. Right is a saved snapshot, newest first. Open a metadata or Apex file to see the diff.</p>
+            <div class="compare-picks">
+              <label>Left
+                <select id="compare-left">
+                  <option value="current">Current retrieve</option>
+                </select>
+              </label>
+              <label>Right (latest first)
+                <select id="compare-right"></select>
+              </label>
+            </div>
+            <div class="row-actions">
+              <button type="button" id="btn-compare-versions" class="primary">Show diff</button>
+            </div>
+            <div id="compare-summary" class="muted"></div>
+            <div id="compare-file-list" class="file-list compare-files"></div>
+            <pre id="compare-diff" class="diff-pane" hidden></pre>
+          </article>
+
+          <article class="card" id="version-revert-card">
+            <div class="title">Revert specific files</div>
+            <p class="hint">Restore selected files from that version into the current retrieve. Other files stay as they are. Then review on Retrieve and deploy.</p>
+            <label>Restore from (latest first)
+              <select id="revert-from"></select>
+            </label>
+            <div class="row-actions">
+              <button type="button" id="btn-load-revert-files" class="secondary">List files</button>
+              <button type="button" id="btn-revert-select-changed" class="ghost-text">Select changed</button>
+            </div>
+            <div id="revert-file-list" class="file-list compare-files"></div>
+            <div class="row-actions">
+              <button type="button" id="btn-revert-files" class="primary">Revert selected files into retrieve</button>
+            </div>
+          </article>
+
+          <h2>All versions</h2>
+          <div id="version-list" class="list"></div>
+        </section>
 
           <div id="hidden-ship-fields" class="hidden" hidden>
             <button type="button" id="goto-components"></button>
             <button type="button" id="goto-workbench"></button>
-            <button type="button" id="btn-save"></button>
             <button type="button" id="btn-deploy"></button>
             <button type="button" id="btn-both"></button>
             <button type="button" id="btn-goto-versions"></button>
             <select id="deploy-pipeline"></select>
             <div id="deploy-pipeline-wrap"></div>
-            <input id="jira" type="text" />
-            <textarea id="comment"></textarea>
             <input id="use-git" type="checkbox" />
             <p id="git-hint"></p>
             <div id="git-status"></div>
@@ -201,15 +247,6 @@
             <button type="button" id="btn-clear-tests"></button>
             <button type="button" id="btn-add-test"></button>
           </div>
-        </section>
-
-        <section id="view-versions" class="view">
-          <p class="step-kicker">Saved snapshots</p>
-          <h2 class="page-title">Versions</h2>
-          <p class="hint" id="versions-hint">Versions live in the connected Git repo. Use Back to return to Deploy.</p>
-          <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
-          <div id="version-list" class="list"></div>
-        </section>
 
         <section id="view-components" class="view">
           <p class="step-kicker" id="pick-kicker">Pick configuration</p>
@@ -327,6 +364,20 @@
               <button type="button" id="btn-show-xml" class="ghost-text">Edit package.xml instead</button>
               <button type="button" id="btn-deploy-review" class="hidden"></button>
             </div>
+          </div>
+        </section>
+
+        <section id="git-ship-panel" class="git-ship git-only hidden">
+          <h2>GitHub commit</h2>
+          <p class="hint">A commit message is required when GitHub is on — for Save, Salesforce deploy, and deploying a saved version.</p>
+          <label>Jira key (optional)
+            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
+          </label>
+          <label>Commit message
+            <textarea id="comment" rows="3" placeholder="Required. Example: Account status field + layout for PROJ-123"></textarea>
+          </label>
+          <div class="row-actions">
+            <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to GitHub</button>
           </div>
         </section>
       </main>

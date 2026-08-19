@@ -12,7 +12,7 @@ Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → 
 2. **Type** — search, use the picklist, or tap a common type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
 3. **Members** — tick rows (orange check = in the package). The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list. Next goes to Retrieve (not another picker). Use **Back** later if you need more members.
 4. **Retrieve** — pulls files from the From org. This screen does not change members. Failures (and a successful file count) show in the result panel. Unlock only if you need to change From or members, then retrieve again.
-5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel.
+5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel. If **Version in GitHub** is on, a **commit message is required** before Deploy or Save to GitHub. Use **Versions** to compare a retrieve with a previous snapshot (latest first) and revert selected metadata or Apex files.
 
 The UI uses a warm charcoal + bronze theme. Accent color is used on the current step and the main action, not on every heading.
 
@@ -109,6 +109,12 @@ It is **not** a full Copado/Gearset replacement: no dependency graph, no data (r
 ```
 
 `versions.json` keeps increment history, comments, source org, Git commit SHA, and deployment audit entries. A second save of the same Jira key creates `v2` so `v1` stays deployable.
+
+When GitHub is on:
+
+- **Compare** — picklist of versions, newest first. Diff metadata XML and Apex against the current retrieve or another version.
+- **Revert selected files** — restore specific files from any version into the current retrieve, then deploy.
+- **Commit message** — required for Save to GitHub, Salesforce deploy, and deploying a saved Git version.
 
 ## Security
 

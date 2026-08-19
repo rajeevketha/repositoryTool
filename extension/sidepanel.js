@@ -60,6 +60,7 @@ import {
   saveLocalRelease,
   loadLocalRelease
 } from "./lib/localVersions.js";
+import { compareFileSets, revertSelectedInto, unifiedDiff, fileText } from "./lib/diff.js";
 
 const $ = (id) => document.getElementById(id);
 const MAX_MEMBERS = 400;
@@ -110,7 +111,11 @@ const state = {
   deployFinished: "",
   retrieveOk: false,
   lastDeploy: null,
-  autoRetrieveAttempted: false
+  autoRetrieveAttempted: false,
+  versionFilesCache: {},
+  compareRows: [],
+  compareActivePath: "",
+  lastSaved: null
 };
 
 function escapeHtml(value) {
@@ -159,6 +164,13 @@ function packageFingerprint() {
   return JSON.stringify(
     normalizePackageTypes(state.packageTypes).map((t) => [t.name, [...(t.members || [])].sort()])
   );
+}
+
+function stagedFilesFingerprint() {
+  return (state.stagedFiles || [])
+    .map((f) => `${f.path}:${f.edited ? "e" : ""}:${String(f.base64 || "").length}:${String(f.base64 || "").slice(0, 32)}`)
+    .sort()
+    .join("|");
 }
 
 function hasFreshRetrieve() {
@@ -245,6 +257,10 @@ function deployBlockReason() {
   if (alreadyDeployedToCurrentTarget()) {
     return `Already deployed this package to ${target.label}. Change To for another org, or start a new package.`;
   }
+  if (useGitEnabled()) {
+    if (!isGithubConfigured(state.settings)) return "Connect a GitHub repo on Start before deploying with Git.";
+    if (!gitCommitMessage()) return "Enter a Git commit message before deploying. It is required when GitHub is on.";
+  }
   return "";
 }
 
@@ -292,6 +308,11 @@ function updateActionState() {
       }
     }
     deployBtn.title = stateEl?.textContent || "";
+  }
+  const saveBtn = $("btn-save");
+  if (saveBtn && useGitEnabled() && !state.busy && !gitCommitMessage()) {
+    saveBtn.disabled = true;
+    saveBtn.title = "Enter a Git commit message first";
   }
   const callout = $("deploy-reason");
   if (callout) {
@@ -452,7 +473,7 @@ function updateWizardNav() {
     back.textContent = "Back to deploy";
     next.classList.remove("hidden");
     next.textContent = "Next";
-    hint.textContent = "Versions are snapshots. Back returns to Deploy.";
+    hint.textContent = "Compare versions, restore selected files, then Back to Deploy.";
     return;
   }
   const last = state.stepIndex >= STEPS.length - 1;
@@ -487,6 +508,7 @@ function applyStepUi() {
     renderStepper();
     updateWizardNav();
     updateHeaderStatus();
+    renderGitUi();
     return;
   }
   const step = currentStep();
@@ -507,6 +529,7 @@ function applyStepUi() {
     setTimeout(() => run(retrieveIntoReview), 0);
   }
   if (step.id === "deploy") renderDeployManifest();
+  renderGitUi();
   updatePickCopy();
   syncTypeChosenUi();
   syncOutcomePanel();
@@ -586,6 +609,7 @@ function invalidateStaged() {
   state.retrieveOk = false;
   state.lastDeploy = null;
   state.autoRetrieveAttempted = false;
+  state.lastSaved = null;
   $("file-editor-wrap")?.classList.add("hidden");
   renderFileList();
   if (hadFiles) {
@@ -603,6 +627,7 @@ function resetForNewPackage() {
   state.deployFinished = "";
   state.lastDeploy = null;
   state.autoRetrieveAttempted = false;
+  state.lastSaved = null;
   $("file-editor-wrap")?.classList.add("hidden");
   renderFileList();
   if ($("outcome-badge")) $("outcome-badge").textContent = "—";
@@ -616,6 +641,19 @@ function resetForNewPackage() {
 
 function useGitEnabled() {
   return Boolean($("use-git")?.checked);
+}
+
+function gitCommitMessage() {
+  return $("comment")?.value?.trim() || "";
+}
+
+function requireGitCommitMessage() {
+  if (!useGitEnabled()) return gitCommitMessage();
+  const message = gitCommitMessage();
+  if (!message) {
+    throw new Error("Commit message is required when GitHub is on. Describe the change before saving or deploying.");
+  }
+  return message;
 }
 
 async function persistPackage() {
@@ -800,6 +838,8 @@ function renderGitUi() {
   $("mode-status").textContent = on
     ? "GitHub sharing is on. Connect a repo so teammates can load the same Jira versions."
     : "Versioning is on in this browser. Detect orgs, set From and To, then Next. No GitHub token required.";
+  const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
+  $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   renderSimplePlaybook();
   renderPipelines();
 }
@@ -1267,14 +1307,249 @@ function renderOrgCards() {
     .join("");
 }
 
+function versionOptionLabel(v) {
+  const when = v.createdAt ? new Date(v.createdAt).toLocaleString() : "";
+  const comment = v.comment ? ` — ${v.comment}` : "";
+  return `${v.id}${comment}${when ? ` (${when})` : ""}`;
+}
+
+function fillVersionSelects() {
+  const items = sortVersions(state.versions.versions);
+  const options = items
+    .map((v) => `<option value="${escapeHtml(v.id)}">${escapeHtml(versionOptionLabel(v))}</option>`)
+    .join("");
+  const left = $("compare-left");
+  const right = $("compare-right");
+  const revertFrom = $("revert-from");
+  const currentOpt = `<option value="current">Current retrieve${state.stagedFiles?.length ? ` (${state.stagedFiles.length} files)` : " (none yet)"}</option>`;
+  const versionOpts = items
+    .map((v) => `<option value="${escapeHtml(v.id)}">${escapeHtml(versionOptionLabel(v))}</option>`)
+    .join("");
+  if (left) {
+    const prev = left.value;
+    left.innerHTML = `${currentOpt}${versionOpts}`;
+    if ([...left.options].some((o) => o.value === prev)) left.value = prev;
+    else left.value = state.stagedFiles?.length ? "current" : (items[0]?.id || "current");
+  }
+  if (right) {
+    const prev = right.value;
+    right.innerHTML = options || `<option value="">No saved versions yet</option>`;
+    if (prev && [...right.options].some((o) => o.value === prev)) right.value = prev;
+    else {
+      const leftId = left?.value;
+      const fallback = items.find((v) => v.id !== leftId) || items[0];
+      if (fallback) right.value = fallback.id;
+    }
+  }
+  if (revertFrom) {
+    const prev = revertFrom.value;
+    revertFrom.innerHTML = options || `<option value="">No saved versions yet</option>`;
+    if (prev && [...revertFrom.options].some((o) => o.value === prev)) revertFrom.value = prev;
+  }
+}
+
+function compareStatusLabel(status) {
+  if (status === "changed") return "changed";
+  if (status === "onlyLeft") return "only left";
+  if (status === "onlyRight") return "only right";
+  return "same";
+}
+
+async function loadVersionFiles(versionId) {
+  if (versionId === "current") {
+    if (!state.stagedFiles?.length) throw new Error("Retrieve files first, or pick a saved version on the left.");
+    return state.stagedFiles;
+  }
+  if (!versionId) throw new Error("Pick a version.");
+  if (state.versionFilesCache[versionId]) return state.versionFilesCache[versionId];
+  const version = findVersion(state.versions.versions, versionId);
+  if (!version) throw new Error(`No saved version found for "${versionId}".`);
+  let files = [];
+  if (version.storage === "local" || !useGitEnabled()) {
+    files = await loadLocalRelease(version.id);
+    if (!files.length && version.storage === "git" && isGithubConfigured(state.settings)) {
+      /* fall through to GitHub below */
+    } else if (!files.length) {
+      throw new Error(`No files found for ${version.id}.`);
+    }
+  }
+  if (!files.length) {
+    requireGithub();
+    const { token, owner, repo, branch } = ghCreds();
+    const ref = await getRef(token, owner, repo, branch);
+    const sha = version.commitSha || ref?.object?.sha;
+    if (!sha) throw new Error("Repo branch has no commits yet.");
+    files = await fetchReleaseFiles({ token, owner, repo, commitSha: sha, prefix: version.path });
+    if (!files.length) throw new Error(`No files found at ${version.path}.`);
+  }
+  state.versionFilesCache[versionId] = files;
+  return files;
+}
+
+function renderCompareFileList() {
+  const el = $("compare-file-list");
+  if (!el) return;
+  const rows = (state.compareRows || []).filter((r) => r.status !== "same");
+  if (!state.compareRows.length) {
+    el.innerHTML = `<div class="empty">Pick two versions and click Show diff.</div>`;
+    return;
+  }
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty">These versions match — no metadata or Apex differences.</div>`;
+    return;
+  }
+  el.innerHTML = rows
+    .map((row) => {
+      const active = row.path === state.compareActivePath ? "active" : "";
+      return `<button type="button" class="compare-row ${active}" data-compare-file="${escapeHtml(row.path)}">
+        <span class="badge ${escapeHtml(row.status)}">${escapeHtml(compareStatusLabel(row.status))}</span>
+        <span>${escapeHtml(row.path)}</span>
+      </button>`;
+    })
+    .join("");
+}
+
+function showCompareDiff(path) {
+  state.compareActivePath = path;
+  const row = (state.compareRows || []).find((r) => r.path === path);
+  const pane = $("compare-diff");
+  if (!pane || !row) return;
+  pane.hidden = false;
+  const leftText = fileText(row.left);
+  const rightText = fileText(row.right);
+  if (leftText === null && rightText === null && (row.left || row.right)) {
+    pane.innerHTML = `<span class="diff-meta">${escapeHtml(path)} is binary — no text diff.</span>`;
+    renderCompareFileList();
+    return;
+  }
+  if (row.status === "onlyLeft") {
+    pane.innerHTML = `<span class="diff-meta">${escapeHtml(path)} exists only on the left.</span>\n<span class="diff-del">${escapeHtml(leftText || "")}</span>`;
+    renderCompareFileList();
+    return;
+  }
+  if (row.status === "onlyRight") {
+    pane.innerHTML = `<span class="diff-meta">${escapeHtml(path)} exists only on the right (selected version).</span>\n<span class="diff-add">${escapeHtml(rightText || "")}</span>`;
+    renderCompareFileList();
+    return;
+  }
+  const diff = unifiedDiff(leftText || "", rightText || "", { leftLabel: `left/${path}`, rightLabel: `right/${path}` });
+  if (!diff) {
+    pane.innerHTML = `<span class="diff-meta">${escapeHtml(path)} is unchanged.</span>`;
+    renderCompareFileList();
+    return;
+  }
+  pane.innerHTML = diff
+    .split("\n")
+    .map((line) => {
+      const cls = line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@")
+        ? "diff-hunk"
+        : line.startsWith("+")
+          ? "diff-add"
+          : line.startsWith("-")
+            ? "diff-del"
+            : "";
+      return `<span class="${cls}">${escapeHtml(line)}</span>`;
+    })
+    .join("\n");
+  renderCompareFileList();
+}
+
+async function runCompareVersions() {
+  await loadVersionStore();
+  fillVersionSelects();
+  const leftId = $("compare-left")?.value;
+  const rightId = $("compare-right")?.value;
+  if (!rightId) throw new Error("Pick a version on the right to compare.");
+  if (leftId === rightId) throw new Error("Pick two different versions (or current retrieve vs a saved version).");
+  log(`Loading files to compare ${leftId} → ${rightId}…`);
+  const [leftFiles, rightFiles] = await Promise.all([loadVersionFiles(leftId), loadVersionFiles(rightId)]);
+  state.compareRows = compareFileSets(leftFiles, rightFiles);
+  const counts = { changed: 0, onlyLeft: 0, onlyRight: 0, same: 0 };
+  for (const row of state.compareRows) counts[row.status] += 1;
+  const summary = `${counts.changed} changed · ${counts.onlyLeft} only on left · ${counts.onlyRight} only on right · ${counts.same} same`;
+  if ($("compare-summary")) $("compare-summary").textContent = summary;
+  state.compareActivePath = "";
+  if ($("compare-diff")) {
+    $("compare-diff").hidden = true;
+    $("compare-diff").textContent = "";
+  }
+  renderCompareFileList();
+  const first = state.compareRows.find((r) => r.status !== "same");
+  if (first) showCompareDiff(first.path);
+  log(`Compared ${leftId} with ${rightId}: ${summary}`);
+}
+
+async function loadRevertFileList() {
+  await loadVersionStore();
+  fillVersionSelects();
+  const fromId = $("revert-from")?.value;
+  if (!fromId) throw new Error("Pick a version to restore files from.");
+  const fromFiles = await loadVersionFiles(fromId);
+  const current = state.stagedFiles || [];
+  const compared = compareFileSets(current, fromFiles);
+  const el = $("revert-file-list");
+  if (!el) return;
+  if (!fromFiles.length) {
+    el.innerHTML = `<div class="empty">That version has no files.</div>`;
+    return;
+  }
+  el.innerHTML = fromFiles
+    .map((file) => {
+      const row = compared.find((r) => r.path === file.path);
+      const status = !current.length ? "onlyRight" : row?.status || "same";
+      return `<label class="revert-item">
+        <input type="checkbox" data-revert-path="${escapeHtml(file.path)}" ${status === "same" ? "" : "data-changed='1'"} />
+        <span class="badge ${escapeHtml(status)}">${escapeHtml(compareStatusLabel(status))}</span>
+        <span>${escapeHtml(file.path)}</span>
+      </label>`;
+    })
+    .join("");
+  log(`Loaded ${fromFiles.length} file(s) from ${fromId} for revert.`);
+}
+
+function selectChangedRevertFiles() {
+  document.querySelectorAll("#revert-file-list input[data-revert-path]").forEach((box) => {
+    box.checked = box.dataset.changed === "1";
+  });
+}
+
+async function revertSelectedFiles() {
+  const fromId = $("revert-from")?.value;
+  if (!fromId) throw new Error("Pick a version to restore files from.");
+  const selected = [...document.querySelectorAll("#revert-file-list input[data-revert-path]:checked")].map((el) => el.dataset.revertPath);
+  if (!selected.length) throw new Error("Tick the files you want to restore from that version.");
+  const fromFiles = await loadVersionFiles(fromId);
+  const next = revertSelectedInto(state.stagedFiles || [], fromFiles, selected);
+  if (!next.length) throw new Error("Nothing to restore.");
+  state.stagedFiles = next;
+  const source = selectedOrg("source-org");
+  state.retrieveOk = true;
+  state.selectionFrozen = true;
+  state.deployFinished = "";
+  state.lastDeploy = null;
+  state.lastSaved = null;
+  state.retrieveSnapshot = {
+    sourceKey: source ? orgKey(source) : "reverted",
+    fingerprint: packageFingerprint(),
+    fileCount: next.length
+  };
+  renderFileList();
+  applyRetrieveLockUi();
+  updateActionState();
+  log(`Restored ${selected.length} file(s) from ${fromId} into the retrieve package.`);
+  setStatus(`Restored ${selected.length} file(s) from ${fromId}. Review, then deploy.`, "ok");
+  goStep(3, { force: true });
+}
+
 function renderVersions() {
-  const q = $("version-filter").value.trim().toLowerCase();
+  fillVersionSelects();
+  const q = $("version-filter")?.value.trim().toLowerCase() || "";
   const items = sortVersions(state.versions.versions).filter((v) => {
     if (!q) return true;
     return `${v.id} ${v.jira} ${v.comment}`.toLowerCase().includes(q);
   });
   if (!items.length) {
-    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet." : "No versions in this browser yet. Save a Jira version on Deploy."}</div>`;
+    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to GitHub." : "No versions in this browser yet. Retrieve, then save a snapshot."}</div>`;
     return;
   }
   $("version-list").innerHTML = items
@@ -1288,8 +1563,10 @@ function renderVersions() {
         ${comps ? `<div class="meta">${escapeHtml(comps)}</div>` : ""}
         ${deploys ? `<div class="meta">${escapeHtml(deploys)}</div>` : ""}
         <div class="tiny">
+          <button class="secondary" data-compare="${escapeHtml(v.id)}">Compare</button>
+          <button class="secondary" data-revert="${escapeHtml(v.id)}">Revert files…</button>
           <button class="secondary" data-use="${escapeHtml(v.id)}">Use on Deploy</button>
-          <button class="primary" data-deploy="${escapeHtml(v.id)}">Deploy</button>
+          <button class="primary" data-deploy="${escapeHtml(v.id)}">Deploy this version</button>
         </div>
       </article>`;
     })
@@ -1584,6 +1861,9 @@ async function persistGitToggle(on) {
 function resolveTicket(store) {
   const jiraField = $("jira").value.trim();
   const comment = $("comment").value.trim();
+  if (useGitEnabled() && !comment) {
+    throw new Error("Commit message is required when GitHub is on.");
+  }
   if (jiraField) {
     const parsed = parseTicketInput(jiraField);
     if (parsed.kind === "jira" || isJiraKey(parsed.ticket)) return { ticket: parsed.ticket, comment };
@@ -1674,6 +1954,10 @@ async function deploySelected() {
   if (alreadyDeployedToCurrentTarget()) {
     throw new Error(`Already deployed this package to ${target.label}. Change To, or start a new package.`);
   }
+  if (useGitEnabled()) {
+    requireGithub();
+    requireGitCommitMessage();
+  }
   state.deployFinished = "running";
   showOutcome({ running: true, operation: "deploy" });
   updateActionState();
@@ -1708,6 +1992,13 @@ async function deploySelected() {
     }
     log(`Deployed selected package to ${target.label} (${result.status || "Succeeded"}).`);
     setStatus(`Deployed package → ${target.label}`, "ok");
+    if (useGitEnabled()) {
+      try {
+        await recordSuccessfulGitDeploy(target, result, options);
+      } catch (gitErr) {
+        log(`Salesforce deploy succeeded, but GitHub could not record it: ${gitErr.message || gitErr}`, "error");
+      }
+    }
     return result;
   } catch (err) {
     state.deployFinished = "failed";
@@ -1715,6 +2006,38 @@ async function deploySelected() {
     updateActionState();
     throw err;
   }
+}
+
+async function recordSuccessfulGitDeploy(target, result, options, existingVersion) {
+  await loadVersionStore();
+  let version = existingVersion;
+  if (!version && state.lastSaved?.id && state.lastSaved.fingerprint === stagedFilesFingerprint()) {
+    version = findVersion(state.versions.versions, state.lastSaved.id);
+  }
+  if (!version) version = await saveVersion();
+  const message = requireGitCommitMessage();
+  const updated = addDeployment(version, {
+    org: { id: target.id, label: target.label, instanceUrl: target.instanceUrl },
+    status: result.status || "Succeeded",
+    comment: message,
+    checkOnly: options.checkOnly,
+    testLevel: options.testLevel
+  });
+  const store = upsertVersion(state.versions, updated);
+  if (useGitEnabled() && version.storage !== "local") {
+    requireGithub();
+    await commitFiles({
+      ...ghCreds(),
+      files: [{ path: versionsFilePath(), base64: encodeUtf8Base64(JSON.stringify(store, null, 2) + "\n") }],
+      message: `${message}\n\n${version.id}: deployed to ${target.label}${options.checkOnly ? " (validate)" : ""}`
+    });
+  } else {
+    await saveLocalVersionStore(store);
+  }
+  state.versions = store;
+  state.lastSaved = { id: updated.id, fingerprint: stagedFilesFingerprint() };
+  renderVersions();
+  return updated;
 }
 
 async function saveVersion() {
@@ -1745,6 +2068,7 @@ async function saveVersion() {
     const nextStore = upsertVersion(state.versions, record);
     await saveLocalRelease(record.id, files);
     state.versions = await saveLocalVersionStore(nextStore);
+    state.lastSaved = { id: record.id, fingerprint: stagedFilesFingerprint() };
     renderVersions();
     $("jira").value = record.jira;
     log(`Saved ${record.id} in this browser (${files.length} files).`);
@@ -1763,7 +2087,7 @@ async function saveVersion() {
   const commit = await commitFiles({
     ...ghCreds(),
     files: prefixed,
-    message: `${record.id}: ${comment || "Salesforce snapshot"}`
+    message: `${record.id}: ${comment}`
   });
   record.commitSha = commit.sha;
   const withSha = upsertVersion(nextStore, record);
@@ -1773,6 +2097,7 @@ async function saveVersion() {
     message: `chore: record ${record.id} at ${commit.sha.slice(0, 7)}`
   });
   state.versions = withSha;
+  state.lastSaved = { id: record.id, fingerprint: stagedFilesFingerprint() };
   renderVersions();
   $("jira").value = record.jira;
   log(`Saved ${record.id} (${files.length} files, commit ${commit.sha.slice(0, 7)}).`);
@@ -1789,6 +2114,10 @@ async function deployVersion(explicitId) {
   if (!wanted) throw new Error("Enter a Jira ticket or version id (for example PROJ-123 or PROJ-123-v2).");
   const version = findVersion(state.versions.versions, wanted);
   if (!version) throw new Error(`No saved version found for "${wanted}". Save it from the source org first.`);
+  if (useGitEnabled() && version.storage !== "local") {
+    requireGithub();
+    requireGitCommitMessage();
+  }
 
   let files = [];
   if (version.storage === "local" || !useGitEnabled()) {
@@ -1824,26 +2153,7 @@ async function deployVersion(explicitId) {
     setStatus(`Deploy failed — see the result panel`, "error");
     return version;
   }
-  const updated = addDeployment(version, {
-    org: { id: target.id, label: target.label, instanceUrl: target.instanceUrl },
-    status: result.status || "Succeeded",
-    comment: $("comment").value.trim(),
-    checkOnly: options.checkOnly,
-    testLevel: options.testLevel
-  });
-  const store = upsertVersion(state.versions, updated);
-  if (useGitEnabled() && version.storage !== "local") {
-    requireGithub();
-    await commitFiles({
-      ...ghCreds(),
-      files: [{ path: versionsFilePath(), base64: encodeUtf8Base64(JSON.stringify(store, null, 2) + "\n") }],
-      message: `${version.id}: deployed to ${target.label}${options.checkOnly ? " (validate)" : ""}`
-    });
-  } else {
-    await saveLocalVersionStore(store);
-  }
-  state.versions = store;
-  renderVersions();
+  const updated = await recordSuccessfulGitDeploy(target, result, options, version);
   log(`Deployed ${version.id} to ${target.label} (${result.status || "Succeeded"}).`);
   setStatus(`Deployed ${version.id} → ${target.label}`, "ok");
   return updated;
@@ -2002,6 +2312,22 @@ $("btn-next")?.addEventListener("click", async () => {
   wizardNext();
 });
 $("btn-goto-versions")?.addEventListener("click", showVersions);
+$("open-versions")?.addEventListener("click", () => {
+  run(async () => {
+    await loadVersionStore();
+    renderVersions();
+    showVersions();
+  });
+});
+$("btn-compare-versions")?.addEventListener("click", () => run(runCompareVersions));
+$("btn-load-revert-files")?.addEventListener("click", () => run(loadRevertFileList));
+$("btn-revert-select-changed")?.addEventListener("click", selectChangedRevertFiles);
+$("btn-revert-files")?.addEventListener("click", () => run(revertSelectedFiles));
+$("compare-file-list")?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-compare-file]");
+  if (btn) showCompareDiff(btn.dataset.compareFile);
+});
+$("comment")?.addEventListener("input", updateActionState);
 $("btn-show-xml")?.addEventListener("click", () => {
   state.xmlReview = true;
   switchSubtab("xml");
@@ -2141,13 +2467,30 @@ $("file-list").addEventListener("click", (event) => {
 });
 $("version-filter").addEventListener("input", renderVersions);
 $("version-list").addEventListener("click", (event) => {
+  const compareId = event.target.dataset.compare;
+  const revertId = event.target.dataset.revert;
   const useId = event.target.dataset.use;
   const deployId = event.target.dataset.deploy;
+  if (compareId) {
+    if ($("compare-left")) $("compare-left").value = state.stagedFiles?.length ? "current" : compareId;
+    if ($("compare-right")) $("compare-right").value = compareId;
+    run(runCompareVersions);
+  }
+  if (revertId) {
+    if ($("revert-from")) $("revert-from").value = revertId;
+    run(loadRevertFileList);
+    $("version-revert-card")?.scrollIntoView({ block: "nearest" });
+  }
   if (useId) {
     $("jira").value = useId;
     goStep(4, { force: true });
   }
   if (deployId) {
+    if (useGitEnabled() && !gitCommitMessage()) {
+      log("Enter a Git commit message before deploying this version.", "error");
+      $("comment")?.focus();
+      return;
+    }
     $("jira").value = deployId;
     goStep(4, { force: true });
     run(() => deployVersion(deployId));
