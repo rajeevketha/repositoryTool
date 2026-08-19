@@ -157,7 +157,7 @@
         <section id="view-ship" class="view">
           <p class="step-kicker">Step 5 of 5</p>
           <h2 class="page-title">Deploy</h2>
-          <p class="hint" id="deploy-path-line">Components below. Result appears in the panel.</p>
+          <p class="hint" id="deploy-path-line">Set From and To in the path bar.</p>
           <article class="card" id="package-summary-card">
             <div class="title">Components in this deploy <span id="package-count-deploy" class="badge">0</span></div>
             <div id="deploy-manifest" class="deploy-manifest"></div>
@@ -166,6 +166,7 @@
           <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
           <div class="actions">
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
+            <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
           </div>
 
           <div id="hidden-ship-fields" class="hidden" hidden>

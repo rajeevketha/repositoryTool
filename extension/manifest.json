@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OrgFlow",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "Sequential Salesforce metadata deploys (Start → Type → Members → Retrieve → Deploy) with a result panel for Salesforce success and component errors.",
   "icons": {
     "16": "icons/icon16.png",

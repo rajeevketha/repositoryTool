@@ -275,6 +275,23 @@ function updateActionState() {
     const doneOk = state.deployFinished === "success" || alreadyDeployedToCurrentTarget();
     if (deploying || doneOk) deployBtn.disabled = true;
     deployBtn.textContent = deploying ? "Deploying…" : doneOk ? "Deployed" : "Deploy";
+    const stateEl = $("deploy-btn-hint");
+    if (stateEl) {
+      if (deploying) {
+        stateEl.textContent = "Waiting for Salesforce…";
+        stateEl.dataset.state = "wait";
+      } else if (doneOk) {
+        stateEl.textContent = `Already sent to ${selectedOrg("target-org")?.label || "this org"}`;
+        stateEl.dataset.state = "done";
+      } else if (deployBtn.disabled) {
+        stateEl.textContent = reason || "Not ready yet";
+        stateEl.dataset.state = "off";
+      } else {
+        stateEl.textContent = `Ready — send to ${selectedOrg("target-org")?.label || "To org"}`;
+        stateEl.dataset.state = "on";
+      }
+    }
+    deployBtn.title = stateEl?.textContent || "";
   }
   const callout = $("deploy-reason");
   if (callout) {
@@ -454,7 +471,9 @@ function updateWizardNav() {
   next.textContent = labels[state.stepIndex] || "Next";
   next.classList.toggle("hidden", last);
   hint.textContent = reason
-    || (last ? "One Deploy button. It stays off until Salesforce returns success or failure." : `Step ${state.stepIndex + 1} of 5 · ${currentStep().label}`);
+    || (last
+      ? (state.busy ? "Waiting for Salesforce…" : (deployBlockReason() || `Ready to send this package to ${selectedOrg("target-org")?.label || "the To org"}.`))
+      : `Step ${state.stepIndex + 1} of 5 · ${currentStep().label}`);
 }
 
 function applyStepUi() {
@@ -736,7 +755,7 @@ function renderDeployManifest() {
     const source = selectedOrg("source-org");
     const target = selectedOrg("target-org");
     pathLine.textContent = source && target
-      ? `${source.label} → ${target.label}. One Deploy button. It stays off until Salesforce returns success or failure.`
+      ? `${source.label} → ${target.label}`
       : "Set From and To in the path bar.";
   }
   if (!el) return;
