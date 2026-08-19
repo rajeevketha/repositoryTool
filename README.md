@@ -14,7 +14,7 @@ Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → 
 4. **Retrieve** — pulls files from the From org. This screen does not change members. Failures (and a successful file count) show in the result panel. Unlock only if you need to change From or members, then retrieve again.
 5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel.
 
-The UI uses a dark charcoal + copper orange theme so the current step and selected members stay obvious without neon highlights.
+The UI uses a warm charcoal + bronze theme. Accent color is used on the current step and the main action, not on every heading.
 
 Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Search the type list for any other Metadata API type (Apex, LWC, Experience Cloud, settings, and so on). **Load all types from source org** refreshes the list from that sandbox.
 

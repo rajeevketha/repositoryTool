@@ -35,6 +35,7 @@ import {
 } from "./lib/pipelines.js";
 import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
 import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata } from "./lib/metadata.js";
+import { decodeUtf8Base64, withEditedText, isEditablePath } from "./lib/files.js";
 import {
   buildPackageXmlFromTypes,
   assertPackageXml,
@@ -107,6 +108,8 @@ const state = {
   selectionFrozen: false,
   retrieveSnapshot: null,
   deployFinished: "",
+  retrieveOk: false,
+  lastDeploy: null,
   autoRetrieveAttempted: false
 };
 
@@ -219,6 +222,14 @@ function unlockSelection() {
   setStatus("From org and members are unlocked. If you change them, retrieve again before deploy.", "ok");
 }
 
+function alreadyDeployedToCurrentTarget() {
+  const target = selectedOrg("target-org");
+  if (!target || !state.lastDeploy) return false;
+  return state.lastDeploy.targetKey === orgKey(target)
+    && state.lastDeploy.fingerprint === packageFingerprint()
+    && hasFreshRetrieve();
+}
+
 function deployBlockReason() {
   const source = selectedOrg("source-org");
   const target = selectedOrg("target-org");
@@ -228,8 +239,12 @@ function deployBlockReason() {
   if (!target) return "Select a target org in the path bar (To). Deploy stays disabled until then.";
   if (orgKey(source) === orgKey(target)) return "From and To are the same org. Pick a different target (for example Dev → QA).";
   if (!pack) return `Path is ${source.label} → ${target.label}. Pick configuration before deploy.`;
-  const retrieve = retrieveBlockReason();
-  if (retrieve && !hasFreshRetrieve()) return retrieve;
+  if (!state.retrieveOk || !hasFreshRetrieve()) {
+    return retrieveBlockReason() || "Retrieve must succeed before deploy. Next stays off until then.";
+  }
+  if (alreadyDeployedToCurrentTarget()) {
+    return `Already deployed this package to ${target.label}. Change To for another org, or start a new package.`;
+  }
   return "";
 }
 
@@ -257,7 +272,7 @@ function updateActionState() {
   const deployBtn = $("btn-deploy-selected");
   if (deployBtn) {
     const deploying = state.deployFinished === "running" || (state.busy && currentStepId() === "deploy" && state.deployFinished !== "failed");
-    const doneOk = state.deployFinished === "success";
+    const doneOk = state.deployFinished === "success" || alreadyDeployedToCurrentTarget();
     if (deploying || doneOk) deployBtn.disabled = true;
     deployBtn.textContent = deploying ? "Deploying…" : doneOk ? "Deployed" : "Deploy";
   }
@@ -326,7 +341,7 @@ function farthestStep() {
   if (!pathReady()) return 0;
   if (!state.typeChosen) return 1;
   if (!memberCount(state.packageTypes)) return 2;
-  if (!hasFreshRetrieve()) return 3;
+  if (!hasFreshRetrieve() || !state.retrieveOk) return 3;
   return 4;
 }
 
@@ -345,7 +360,10 @@ function leaveReason(index) {
   }
   if (index === 1 && !state.typeChosen) return "Tap a configuration type — for example Custom Field or Custom Object.";
   if (index === 2 && !memberCount(state.packageTypes)) return "Tick at least one member (orange check) before retrieve.";
-  if (index === 3 && !hasFreshRetrieve()) return retrieveBlockReason();
+  if (index === 3 && (!hasFreshRetrieve() || !state.retrieveOk)) {
+    if (!hasFreshRetrieve()) return retrieveBlockReason();
+    return "Retrieve must succeed before deploy. The result panel shows why it failed.";
+  }
   return "";
 }
 
@@ -370,12 +388,12 @@ function updatePickCopy() {
   } else if (stepId === "members") {
     if ($("pick-heading")) $("pick-heading").textContent = type ? `Tick ${type.label} members` : "Tick members";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Orange tick = in the package. Use the object chips to shrink a long list, then Next to retrieve. Back later if you need more members.";
+      $("pick-lead").textContent = "Tick rows to include. Next retrieves those files. Use Back later if you need more members.";
     }
   } else if (stepId === "review") {
     if ($("pick-heading")) $("pick-heading").textContent = "Retrieve from the From org";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "This step only retrieves files. To add members, use Back. After retrieve succeeds, Next opens Deploy.";
+      $("pick-lead").textContent = "This step only retrieves files. Next stays off until retrieve succeeds. Use Back to add members.";
     }
   }
   if ($("header-sub")) {
@@ -420,9 +438,16 @@ function updateWizardNav() {
     hint.textContent = "Versions are snapshots. Back returns to Deploy.";
     return;
   }
+  const last = state.stepIndex >= STEPS.length - 1;
+  if (last && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
+    back.disabled = false;
+    back.textContent = "New package";
+    next.classList.add("hidden");
+    hint.textContent = "This package is already on the To org. New package starts a fresh retrieve.";
+    return;
+  }
   back.disabled = state.stepIndex === 0;
   back.textContent = "Back";
-  const last = state.stepIndex >= STEPS.length - 1;
   const reason = leaveReason(state.stepIndex);
   next.disabled = last || Boolean(reason) || state.busy;
   const labels = ["Next: pick type", "Next: members", "Next: retrieve", "Next: deploy", "Deploy"];
@@ -492,6 +517,12 @@ function wizardBack() {
     applyStepUi();
     return;
   }
+  if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
+    resetForNewPackage();
+    goStep(2, { force: true });
+    setStatus("Start a new package — tick members, then retrieve again.", "ok");
+    return;
+  }
   if (state.stepIndex === 0) return;
   goStep(state.stepIndex - 1, { force: true });
 }
@@ -531,6 +562,8 @@ function invalidateStaged() {
   state.activeFilePath = "";
   state.selectionFrozen = false;
   state.deployFinished = "";
+  state.retrieveOk = false;
+  state.lastDeploy = null;
   state.autoRetrieveAttempted = false;
   $("file-editor-wrap")?.classList.add("hidden");
   renderFileList();
@@ -538,6 +571,25 @@ function invalidateStaged() {
     setStatus("From org or members changed. Retrieve again before deploy.", "error");
     if (state.stepIndex === 4) goStep(3, { force: true });
   }
+}
+
+function resetForNewPackage() {
+  state.stagedFiles = null;
+  state.activeFilePath = "";
+  state.selectionFrozen = false;
+  state.retrieveSnapshot = null;
+  state.retrieveOk = false;
+  state.deployFinished = "";
+  state.lastDeploy = null;
+  state.autoRetrieveAttempted = false;
+  $("file-editor-wrap")?.classList.add("hidden");
+  renderFileList();
+  if ($("outcome-badge")) $("outcome-badge").textContent = "—";
+  if ($("outcome-title")) $("outcome-title").textContent = "Result";
+  if ($("outcome-body")) $("outcome-body").innerHTML = `<p class="muted">No result yet.</p>`;
+  $("outcome-head")?.classList.remove("ok", "err", "wait");
+  applyRetrieveLockUi();
+  updateActionState();
 }
 
 function useGitEnabled() {
@@ -1006,13 +1058,14 @@ function updateMemberScrollHint() {
 
 function renderFileList() {
   const el = $("file-list");
+  if (!el) return;
   if (!state.stagedFiles?.length) {
-    el.innerHTML = `<div class="empty">Retrieve selected components to review and edit files here.</div>`;
+    el.innerHTML = `<div class="empty">Retrieve selected components to review files here.</div>`;
     return;
   }
   el.innerHTML = state.stagedFiles
     .map((file) => {
-      const editable = isEditablePath(file.path);
+      const editable = typeof isEditablePath === "function" ? isEditablePath(file.path) : true;
       const active = file.path === state.activeFilePath ? "active" : "";
       const edited = file.edited ? " · edited" : "";
       return `<button type="button" class="file-row ${active}" data-file="${escapeHtml(file.path)}" ${editable ? "" : "disabled"}>
@@ -1478,9 +1531,11 @@ async function scanOrgTests() {
 }
 
 function openWorkbench() {
+  if (isWorkbench()) return;
   const url = chrome.runtime.getURL("sidepanel.html") + "?layout=workbench";
   if (chrome.tabs?.create) chrome.tabs.create({ url });
   else window.open(url, "orgflow-workbench");
+  chrome.runtime?.sendMessage?.({ type: "closeSidePanel" })?.catch?.(() => {});
 }
 
 async function persistGitToggle(on) {
@@ -1529,8 +1584,14 @@ async function retrieveIntoReview() {
       fingerprint: packageFingerprint(),
       fileCount: files.length
     };
+    state.retrieveOk = true;
     state.deployFinished = "";
-    renderFileList();
+    state.lastDeploy = null;
+    try {
+      renderFileList();
+    } catch (uiErr) {
+      log(`Retrieved files, but the file list could not render: ${uiErr.message || uiErr}`, "error");
+    }
     applyRetrieveLockUi();
     showOutcome({ success: true, status: "Succeeded", fileCount: files.length, operation: "retrieve" });
     if (state.stepIndex !== 3) goStep(3, { force: true });
@@ -1538,6 +1599,13 @@ async function retrieveIntoReview() {
     setStatus(`Retrieved ${files.length} files — Next to deploy`, "ok");
     return files;
   } catch (err) {
+    if (state.stagedFiles?.length && state.retrieveSnapshot) {
+      state.retrieveOk = true;
+      showOutcome({ success: true, status: "Succeeded", fileCount: state.stagedFiles.length, operation: "retrieve" });
+      log(`Retrieved ${state.stagedFiles.length} file(s). A later UI error was ignored: ${err.message || err}`, "error");
+      return state.stagedFiles;
+    }
+    state.retrieveOk = false;
     showOutcome({
       success: false,
       status: "Failed",
@@ -1549,7 +1617,7 @@ async function retrieveIntoReview() {
 }
 
 async function filesForDeploy() {
-  if (!hasFreshRetrieve()) throw new Error(retrieveBlockReason());
+  if (!hasFreshRetrieve() || !state.retrieveOk) throw new Error(retrieveBlockReason() || "Retrieve must succeed before deploy.");
   return state.stagedFiles;
 }
 
@@ -1569,6 +1637,10 @@ function deployOptions() {
 async function deploySelected() {
   const target = selectedOrg("target-org");
   if (!target) throw new Error("Select a target org. Log into it in Chrome first.");
+  if (!state.retrieveOk || !hasFreshRetrieve()) throw new Error(retrieveBlockReason() || "Retrieve must succeed before deploy.");
+  if (alreadyDeployedToCurrentTarget()) {
+    throw new Error(`Already deployed this package to ${target.label}. Change To, or start a new package.`);
+  }
   state.deployFinished = "running";
   showOutcome({ running: true, operation: "deploy" });
   updateActionState();
@@ -1588,6 +1660,9 @@ async function deploySelected() {
       onProgress: (m) => log(m)
     });
     state.deployFinished = result.success ? "success" : "failed";
+    if (result.success) {
+      state.lastDeploy = { targetKey: orgKey(target), fingerprint: packageFingerprint() };
+    }
     showOutcome({ ...result, operation: "deploy" });
     updateActionState();
     if (!result.success) {
@@ -1855,7 +1930,9 @@ async function run(action) {
     console.error(err);
     log(err.message || String(err), "error");
     const step = currentStepId();
-    if (step === "review" || step === "deploy") {
+    if (step === "review" && state.retrieveOk) {
+      /* retrieve already succeeded — don't paint the result as failed */
+    } else if (step === "review" || step === "deploy") {
       showOutcome({
         success: false,
         status: "Failed",
@@ -2065,7 +2142,8 @@ $("target-org")?.addEventListener("change", () => run(async () => {
   await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
   state.settings = await loadSettings();
   if ($("pipeline-target") && $("target-org").value) $("pipeline-target").value = $("target-org").value;
-  if (state.deployFinished === "success") state.deployFinished = "";
+  if (alreadyDeployedToCurrentTarget()) state.deployFinished = "success";
+  else if (state.deployFinished === "success") state.deployFinished = "";
   updateActionState();
 }));
 $("inspector-filter")?.addEventListener("input", renderInspector);
@@ -2105,5 +2183,9 @@ $("suggested-tests")?.addEventListener("click", (event) => {
   run(() => setSpecifiedTest(name, on));
 });
 $("test-level")?.addEventListener("change", () => run(persistShipOptions));
+
+if (isWorkbench()) {
+  chrome.runtime?.sendMessage?.({ type: "closeSidePanel" })?.catch?.(() => {});
+}
 
 refreshAll();

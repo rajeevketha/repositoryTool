@@ -16,7 +16,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <button id="open-workbench" class="ghost-text" type="button" title="Open a wide window with the live selected package on the side">Workbench</button>
+        <button id="open-workbench" class="ghost-text" type="button" title="Open a wide tab and close this side panel">Workbench</button>
         <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
       </div>
     </header>
@@ -222,7 +222,7 @@
 
           <div id="subview-pick" class="subview active">
             <div class="workbench-banner" id="workbench-banner">
-              The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> so you can pick from thousands of fields and still see exactly what is in the package.
+              The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> — this side panel will close.
             </div>
             <div id="type-browse">
               <p class="hint">Search, use the picklist, or tap a common type. All three do the same thing.</p>
@@ -312,7 +312,7 @@
           <div id="subview-review" class="subview">
             <p class="hint">Retrieve only — this screen does not change members. Use Back to tick more, then retrieve again.</p>
             <div class="row-actions">
-              <button type="button" id="btn-retrieve-review" class="primary" data-busy data-needs="source,package">Retrieve from From org</button>
+              <button type="button" id="btn-retrieve-review" class="accent" data-busy data-needs="source,package">Retrieve from From org</button>
             </div>
             <div id="file-list" class="file-list"></div>
             <label id="file-editor-wrap" class="hidden">
