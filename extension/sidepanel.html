@@ -24,24 +24,127 @@
     <div id="status-bar" class="status-bar">Log into your Salesforce orgs, then pick configuration to deploy.</div>
 
     <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="ship">Deploy</button>
-      <button class="tab" data-tab="versions">Versions</button>
-      <button class="tab" data-tab="components">Components</button>
-      <button class="tab" data-tab="setup">Setup</button>
+      <button class="tab active" data-tab="start" type="button">Start</button>
+      <button class="tab" data-tab="components" type="button">Pick</button>
+      <button class="tab" data-tab="ship" type="button">Deploy</button>
+      <button class="tab" data-tab="versions" type="button">Versions</button>
     </nav>
 
     <div class="app-body">
       <main>
-        <section id="view-ship" class="view active">
+        <section id="view-start" class="view active">
+          <p class="step-kicker">Step-by-step for configurators</p>
+          <h2 class="page-title">How do you want to work?</h2>
+          <p class="hint">Confirm this first. You can change it later on this tab.</p>
+          <div class="mode-grid">
+            <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
+              <strong>Simple deploy</strong>
+              <span>Move configuration from one org to another now. No Git repo, no version history.</span>
+            </button>
+            <button type="button" class="mode-card" id="mode-git" data-mode="git">
+              <strong>Git version control</strong>
+              <span>Save Jira versions and a reusable pipeline (source → target) in Git so you pick it up next time.</span>
+            </button>
+          </div>
+          <div id="mode-status" class="muted">Choose Simple deploy or Git version control to continue.</div>
+
+          <h2>1. Salesforce orgs</h2>
+          <p class="hint">Log into the sandbox you configure in and every target org (QA, UAT, prod) in this Chrome profile, then detect them. OrgFlow uses your Salesforce session — no Connected App required.</p>
+          <div class="actions">
+            <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
+          </div>
+          <div id="org-list" class="list"></div>
+
+          <div id="git-setup-block">
+            <h2>2. Connect GitHub</h2>
+            <p class="hint">Needed only for Git version control. The token stays in this browser. It is never committed to the repo.</p>
+            <article class="card help-card">
+              <div class="title">How to create a GitHub token</div>
+              <ol class="help-steps">
+                <li>Open <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer">github.com/settings/tokens</a> while signed into GitHub.</li>
+                <li>Click <strong>Generate new token</strong>. Classic tokens need the <code>repo</code> scope. Fine-grained tokens need <strong>Contents: Read and write</strong> on the repo you will use.</li>
+                <li>Copy the token (it starts with <code>ghp_</code> or <code>github_pat_</code>) and paste it below.</li>
+                <li>Click <strong>Connect GitHub</strong>, pick <code>owner/repo</code> (or paste it), then <strong>Use this repo</strong>.</li>
+              </ol>
+            </article>
+            <label>
+              Personal access token
+              <input id="gh-token" type="password" placeholder="ghp_… or github_pat_…" autocomplete="off" />
+            </label>
+            <div class="actions">
+              <button id="btn-connect-github" class="secondary" data-busy>Connect GitHub</button>
+            </div>
+            <div id="github-user" class="muted"></div>
+            <label>
+              Select a repo
+              <select id="gh-repo"></select>
+            </label>
+            <label>
+              Or paste owner/repo
+              <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
+            </label>
+            <label>
+              Branch
+              <input id="gh-branch" type="text" placeholder="main" />
+            </label>
+            <div class="actions">
+              <button id="btn-save-repo" class="secondary" data-busy>Use this repo</button>
+            </div>
+
+            <h2>3. Pipeline</h2>
+            <p class="hint">A pipeline remembers source org, target org, and test setting. It is saved in Git at <code>.orgflow/pipelines.json</code> so the next time you open OrgFlow you can reuse it.</p>
+            <div id="pipeline-welcome" class="card hidden">
+              <div class="title">Welcome back</div>
+              <div class="meta" id="pipeline-welcome-body"></div>
+            </div>
+            <label>
+              Saved pipelines
+              <select id="pipeline-select">
+                <option value="">No pipelines yet — create one below</option>
+              </select>
+            </label>
+            <div class="row-actions">
+              <button type="button" id="btn-use-pipeline" class="primary">Use this pipeline</button>
+            </div>
+            <label>
+              New pipeline name
+              <input id="pipeline-name" type="text" placeholder="Config sandbox → UAT" />
+            </label>
+            <div class="row">
+              <label>
+                Source org
+                <select id="pipeline-source"></select>
+              </label>
+              <label>
+                Target org
+                <select id="pipeline-target"></select>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="button" id="btn-save-pipeline" class="secondary" data-busy>Save pipeline to Git</button>
+            </div>
+            <div id="pipeline-status" class="muted"></div>
+          </div>
+
+          <div class="actions">
+            <button type="button" id="btn-start-continue" class="accent">Continue to Pick configuration</button>
+          </div>
+        </section>
+
+        <section id="view-ship" class="view">
           <article class="card" id="package-summary-card">
             <div class="title">What to move</div>
-            <div id="package-summary-body" class="meta">Nothing selected yet — pick fields, layouts, flows, permission sets… on Components.</div>
+            <div id="package-summary-body" class="meta">Nothing selected yet — pick fields, layouts, flows, permission sets… on Pick.</div>
             <div class="tiny">
               <button type="button" class="secondary" id="goto-components">Pick configuration</button>
               <button type="button" class="secondary" id="goto-workbench">Open wide workbench</button>
             </div>
           </article>
-          <p class="hint">Log into the sandbox where you built the change and the org you want to update (QA, UAT, or prod). Turn Git on to keep Jira versions in a repo; turn it off for a one-off org-to-org deploy.</p>
+          <label id="deploy-pipeline-wrap">
+            Pipeline
+            <select id="deploy-pipeline"></select>
+          </label>
+          <p class="hint">Log into the sandbox where you built the change and the org you want to update. On Start you chose Simple deploy or Git version control.</p>
           <label>
             Jira ticket
             <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
@@ -131,41 +234,55 @@
           </nav>
 
           <div id="subview-pick" class="subview active">
-            <p class="hint">Search any Salesforce metadata type, tick members from the source org, then check the live selected package on the side. Common configurator types sit at the top; every Metadata API type is available.</p>
+            <p class="hint">1. Choose a configuration type. 2. Tick members (Account, Contact, and other standard objects are listed). 3. Confirm them in the selected package.</p>
             <div class="workbench-banner" id="workbench-banner">
               The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> so you can pick from thousands of fields and still see exactly what is in the package.
             </div>
-            <input id="type-search" type="search" placeholder="Search types: field, flow, layout, permission, apex…" />
-            <div class="row-actions">
-              <button type="button" id="btn-load-types" class="secondary" data-busy>Load all types from source org</button>
+            <div id="type-browse">
+              <input id="type-search" type="search" placeholder="Search types: field, object, flow, layout, permission…" />
+              <div class="row-actions">
+                <button type="button" id="btn-load-types" class="secondary" data-busy>Load all types from source org</button>
+              </div>
+              <div id="type-count" class="muted"></div>
+              <div id="type-picker" class="type-picker"></div>
             </div>
-            <div id="type-count" class="muted"></div>
-            <div id="type-picker" class="type-picker"></div>
-            <div id="active-type-label" class="card">
-              <div class="title" id="active-type-title">Selected type: Fields</div>
-              <div class="meta" id="active-type-meta">CustomField</div>
+            <div id="type-chosen" class="card hidden">
+              <div class="title" id="active-type-title">Selected type</div>
+              <div class="meta" id="active-type-meta"></div>
+              <div class="tiny">
+                <button type="button" id="btn-change-type" class="secondary">Change type</button>
+              </div>
             </div>
-            <div class="row-actions">
-              <button type="button" id="btn-load-members" class="secondary" data-busy>Load members from source org</button>
-              <button type="button" id="btn-select-visible" class="secondary">Select visible</button>
-              <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
-            </div>
-            <div class="member-toolbar">
-              <input id="member-filter" type="search" placeholder="Filter members" />
-              <label class="check compact">
-                <input id="show-selected-only" type="checkbox" />
-                Selected only
+            <div id="member-panel" class="hidden">
+              <p class="hint" id="member-help">Members for this type appear below. Tick what belongs on this Jira. Standard objects such as Account and Contact are included when you pick Objects.</p>
+              <div class="row-actions">
+                <button type="button" id="btn-load-members" class="secondary" data-busy>Reload members from source org</button>
+                <button type="button" id="btn-select-visible" class="secondary">Select visible</button>
+                <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
+              </div>
+              <label id="object-filter-wrap" class="hidden">
+                Object
+                <select id="object-filter">
+                  <option value="">All objects</option>
+                </select>
+              </label>
+              <div class="member-toolbar">
+                <input id="member-filter" type="search" placeholder="Filter members" />
+                <label class="check compact">
+                  <input id="show-selected-only" type="checkbox" />
+                  Selected only
+                </label>
+              </div>
+              <div id="member-status" class="muted"></div>
+              <div id="member-list" class="type-list"></div>
+              <label>
+                Add member by name
+                <div class="inline-add">
+                  <input id="manual-member" type="text" placeholder="Account.Customer_Status__c" />
+                  <button type="button" id="btn-add-member" class="secondary">Add</button>
+                </div>
               </label>
             </div>
-            <div id="member-status" class="muted"></div>
-            <div id="member-list" class="type-list"></div>
-            <label>
-              Add member by name
-              <div class="inline-add">
-                <input id="manual-member" type="text" placeholder="Account.Customer_Status__c" />
-                <button type="button" id="btn-add-member" class="secondary">Add</button>
-              </div>
-            </label>
             <article class="card sidepanel-only" id="compact-package-card">
               <div class="title">In this package <span id="package-count" class="badge">0</span></div>
               <div id="selected-package" class="meta">Open the inspector on the right (workbench) or the category view below.</div>
@@ -208,44 +325,6 @@
           </div>
         </section>
 
-        <section id="view-setup" class="view">
-          <h2>Salesforce orgs</h2>
-          <p class="hint">Log into the sandbox you configure in and every target org (QA, UAT, prod) in this Chrome profile, then detect them. OrgFlow uses your Salesforce session — no Connected App required.</p>
-          <div class="actions">
-            <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
-          </div>
-          <div id="org-list" class="list"></div>
-
-          <h2>Git versioning</h2>
-          <label class="check switch">
-            <input id="use-git-setup" type="checkbox" />
-            Use a Git repo to maintain metadata versions
-          </label>
-          <p class="hint">Keep this on for a proper release trail (Jira key → v1, v2). Org-to-org deploy still works if you turn it off.</p>
-          <label>
-            Personal access token
-            <input id="gh-token" type="password" placeholder="ghp_…" autocomplete="off" />
-          </label>
-          <p class="hint">Create a token with <code>repo</code> scope. Fine-grained tokens need Contents: Read and write.</p>
-          <div class="actions">
-            <button id="btn-connect-github" class="secondary" data-busy>Connect GitHub</button>
-          </div>
-          <div id="github-user" class="muted"></div>
-          <label>
-            Select a repo
-            <select id="gh-repo"></select>
-          </label>
-          <label>
-            Or paste owner/repo
-            <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
-          </label>
-          <label>
-            Branch
-            <input id="gh-branch" type="text" placeholder="main" />
-          </label>
-          <div class="actions">
-            <button id="btn-save-repo" class="secondary" data-busy>Use this repo</button>
-          </div>
         </section>
       </main>
 

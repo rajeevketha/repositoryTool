@@ -83,6 +83,89 @@ export const FOLDER_TYPES = {
   Dashboard: "DashboardFolder"
 };
 
+/** Standard Salesforce objects. listMetadata(CustomObject) only returns custom (__c) objects. */
+export const STANDARD_OBJECTS = [
+  "Account",
+  "Asset",
+  "Campaign",
+  "CampaignMember",
+  "Case",
+  "Contact",
+  "ContentVersion",
+  "Contract",
+  "Event",
+  "Lead",
+  "Opportunity",
+  "OpportunityLineItem",
+  "Order",
+  "OrderItem",
+  "Pricebook2",
+  "PricebookEntry",
+  "Product2",
+  "Quote",
+  "QuoteLineItem",
+  "Solution",
+  "Task",
+  "User"
+];
+
+export const OBJECT_FILTER_TYPES = [
+  "CustomField",
+  "RecordType",
+  "ValidationRule",
+  "ListView",
+  "WebLink",
+  "BusinessProcess",
+  "CompactLayout",
+  "FieldSet",
+  "Layout",
+  "QuickAction"
+];
+
+export function isStandardObject(name) {
+  return STANDARD_OBJECTS.includes(String(name || ""));
+}
+
+export function withStandardObjectMembers(typeName, items = []) {
+  if (typeName !== "CustomObject") return items;
+  const existing = new Set(items.map((i) => i.fullName));
+  const extras = STANDARD_OBJECTS.filter((name) => !existing.has(name)).map((name) => ({
+    fullName: name,
+    type: "CustomObject",
+    standard: true,
+    lastModifiedByName: "Standard object"
+  }));
+  return [...extras, ...items].sort((a, b) => {
+    const as = a.standard || isStandardObject(a.fullName) ? 0 : 1;
+    const bs = b.standard || isStandardObject(b.fullName) ? 0 : 1;
+    if (as !== bs) return as - bs;
+    return a.fullName.localeCompare(b.fullName);
+  });
+}
+
+export function memberObjectKey(typeName, fullName) {
+  const name = String(fullName || "");
+  if (!name || name === "*") return "";
+  if (OBJECT_FILTER_TYPES.includes(typeName) && name.includes(".")) return name.split(".")[0];
+  if (typeName === "Layout" && name.includes("-")) return name.split("-")[0];
+  if (typeName === "CustomObject") return name;
+  return "";
+}
+
+export function objectFilterOptions(typeName, items = []) {
+  const keys = new Set(STANDARD_OBJECTS);
+  for (const item of items) {
+    const key = memberObjectKey(typeName, item.fullName);
+    if (key) keys.add(key);
+  }
+  return [...keys].sort((a, b) => {
+    const as = isStandardObject(a) ? 0 : 1;
+    const bs = isStandardObject(b) ? 0 : 1;
+    if (as !== bs) return as - bs;
+    return a.localeCompare(b);
+  });
+}
+
 export const MEMBER_HINTS = {
   CustomField: "Account.Customer_Status__c",
   ValidationRule: "Account.Require_Industry",

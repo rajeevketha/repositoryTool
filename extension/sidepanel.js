@@ -1,5 +1,5 @@
 import { loadSettings, saveSettings, isGithubConfigured, repoLabel } from "./lib/storage.js";
-import { catalogGroupsFromTypes, memberHint, fallbackTypeRecords, mergeDescribedTypes } from "./lib/metadataTypes.js";
+import { catalogGroupsFromTypes, memberHint, fallbackTypeRecords, mergeDescribedTypes, withStandardObjectMembers, objectFilterOptions, memberObjectKey, OBJECT_FILTER_TYPES, isStandardObject } from "./lib/metadataTypes.js";
 import {
   parseTicketInput,
   mintChangeId,
@@ -24,6 +24,15 @@ import {
   encodeUtf8Base64,
   getRef
 } from "./lib/github.js";
+import {
+  pipelinesFilePath,
+  emptyPipelineStore,
+  parsePipelineStore,
+  createPipeline,
+  upsertPipeline,
+  findPipeline,
+  matchOrg
+} from "./lib/pipelines.js";
 import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
 import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata } from "./lib/metadata.js";
 import {
@@ -73,7 +82,10 @@ const state = {
   activeFilePath: "",
   specifiedTests: [],
   testClassCache: null,
-  inspectorView: "categories"
+  inspectorView: "categories",
+  typeChosen: false,
+  objectFilter: "",
+  pipelines: emptyPipelineStore()
 };
 
 function escapeHtml(value) {
@@ -206,19 +218,24 @@ function renderGitUi() {
   $("versions-hint").textContent = on
     ? connected
       ? `Versions are stored in ${repoLabel(state.settings)}.`
-      : "Git is on — connect a repo in Setup so versions can be saved."
+      : "Git is on — connect a repo on Start so versions can be saved."
     : "Git is off. Direct org-to-org deploy still works. Turn Git on to keep Jira versions.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
-      : "Connect a GitHub repo in Setup. Deploy without Git still works until then."
+      : "Connect a GitHub repo on the Start tab. Deploy without Git still works until then."
     : "One-off deploy: nothing is written to Git.";
   $("git-hint").textContent = on
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod can take the same snapshot."
     : "Git is off. Use this only when you do not need a reusable version.";
-  if ($("use-git-setup") && $("use-git-setup").checked !== on) {
-    $("use-git-setup").checked = on;
-  }
+  $("git-setup-block")?.classList.toggle("hidden", !on);
+  document.querySelectorAll(".mode-card").forEach((card) => {
+    card.classList.toggle("selected", card.dataset.mode === (on ? "git" : "simple"));
+  });
+  $("mode-status").textContent = on
+    ? "Git version control is on. Connect a repo and save a pipeline so you can reuse it next time."
+    : "Simple deploy is on. You can move configuration org-to-org without Git.";
+  renderPipelines();
 }
 
 function typesForPicker() {
@@ -263,6 +280,40 @@ function renderTypePicker() {
     $("manual-member").placeholder = hint;
     $("member-filter").placeholder = `Filter… e.g. ${hint}`;
   }
+  syncTypeChosenUi();
+}
+
+function syncTypeChosenUi() {
+  const chosen = Boolean(state.typeChosen);
+  $("type-browse")?.classList.toggle("hidden", chosen);
+  $("type-chosen")?.classList.toggle("hidden", !chosen);
+  $("member-panel")?.classList.toggle("hidden", !chosen);
+  const objectScoped = OBJECT_FILTER_TYPES.includes(state.activeType) || state.activeType === "CustomObject";
+  $("object-filter-wrap")?.classList.toggle("hidden", !chosen || !objectScoped);
+  if (state.activeType === "CustomObject") {
+    $("member-help").textContent = "Standard objects (Account, Contact, Opportunity, …) are listed first. Custom objects (__c) follow. Tick the object to include its CustomObject metadata; pick Fields for individual fields.";
+  } else if (OBJECT_FILTER_TYPES.includes(state.activeType)) {
+    $("member-help").textContent = "Filter by object (Account, Contact, …) then tick members. Add a name such as Account.Customer_Status__c if it is not in the list yet.";
+  } else {
+    $("member-help").textContent = "Tick members that belong on this Jira. You can also add a member by API name.";
+  }
+}
+
+function renderObjectFilter() {
+  const sel = $("object-filter");
+  if (!sel) return;
+  const items = state.membersCache[state.activeType]?.items || [];
+  const options = objectFilterOptions(state.activeType, items);
+  const current = state.objectFilter;
+  sel.innerHTML = `<option value="">All objects</option>` +
+    options
+      .map((name) => {
+        const tag = isStandardObject(name) ? " (standard)" : "";
+        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}${tag}</option>`;
+      })
+      .join("");
+  sel.value = options.includes(current) ? current : "";
+  state.objectFilter = sel.value;
 }
 
 function renderTypeSelect() {
@@ -272,13 +323,15 @@ function renderTypeSelect() {
 function renderMembers() {
   const typeName = state.activeType;
   const cache = state.membersCache[typeName];
-  const filter = $("member-filter").value.trim().toLowerCase();
+  const filter = $("member-filter")?.value.trim().toLowerCase() || "";
   const selected = selectedMembersFor(typeName);
   const list = $("member-list");
   const status = $("member-status");
+  renderObjectFilter();
+  const objectFilter = $("object-filter")?.value || state.objectFilter || "";
 
   if (!cache) {
-    status.textContent = "Load this type from the source org, or add a member by name.";
+    status.textContent = "Loading members from the source org, or add a member by name below.";
     const extras = [...selected].filter((name) => name !== "*");
     list.innerHTML = extras.length
       ? extras
@@ -287,7 +340,7 @@ function renderMembers() {
               `<label><input type="checkbox" data-member="${escapeHtml(name)}" checked /> ${escapeHtml(name)}</label>`
           )
           .join("")
-      : `<div class="empty">No members loaded.</div>`;
+      : `<div class="empty">Members appear here after you pick a type.</div>`;
     return;
   }
   if (cache.error) {
@@ -297,6 +350,12 @@ function renderMembers() {
   }
 
   let items = cache.items || [];
+  if (objectFilter) {
+    items = items.filter((i) => {
+      if (typeName === "CustomObject") return i.fullName === objectFilter;
+      return memberObjectKey(typeName, i.fullName) === objectFilter;
+    });
+  }
   if (filter) items = items.filter((i) => i.fullName.toLowerCase().includes(filter));
   if ($("show-selected-only")?.checked) {
     items = items.filter((i) => selected.has("*") || selected.has(i.fullName));
@@ -309,7 +368,7 @@ function renderMembers() {
   const cap = isWorkbench() ? WORKBENCH_MEMBERS : MAX_MEMBERS;
   const shown = combined.slice(0, cap);
   if (!shown.length) {
-    list.innerHTML = `<div class="empty">No members match the filter.</div>`;
+    list.innerHTML = `<div class="empty">No members match the filter. Try All objects, or add a name such as Account.My_Field__c.</div>`;
     return;
   }
   list.innerHTML =
@@ -317,11 +376,14 @@ function renderMembers() {
       .map((item) => {
         const checked = selected.has("*") || selected.has(item.fullName) ? "checked" : "";
         const mark = item.extra ? " <span class=\"muted\">(manual)</span>" : "";
-        return `<label><input type="checkbox" data-member="${escapeHtml(item.fullName)}" ${checked} /> ${escapeHtml(item.fullName)}${mark}</label>`;
+        const std = item.standard || isStandardObject(item.fullName) && typeName === "CustomObject"
+          ? ` <span class="member-tag">standard</span>`
+          : "";
+        return `<label><input type="checkbox" data-member="${escapeHtml(item.fullName)}" ${checked} /> ${escapeHtml(item.fullName)}${std}${mark}</label>`;
       })
       .join("") +
     (combined.length > cap
-      ? `<div class="muted">Showing ${cap} of ${combined.length}. Filter or tick Selected only to find the rest.</div>`
+      ? `<div class="muted">Showing ${cap} of ${combined.length}. Filter by object or tick Selected only to find the rest.</div>`
       : "");
 }
 
@@ -345,17 +407,124 @@ function renderFileList() {
 }
 
 function fillOrgSelects() {
-  const source = $("source-org");
-  const target = $("target-org");
   const html = state.orgs.length
     ? state.orgs.map((o) => `<option value="${escapeHtml(orgKey(o))}">${escapeHtml(o.label)} — ${escapeHtml(o.username || o.instanceUrl)}</option>`).join("")
-    : `<option value="">No orgs detected — open Setup and log in</option>`;
+    : `<option value="">No orgs detected — log in, then Detect orgs on Start</option>`;
   const prevSource = state.settings.lastSourceOrgId;
   const prevTarget = state.settings.lastTargetOrgId;
-  source.innerHTML = html;
-  target.innerHTML = html;
-  if (prevSource) source.value = prevSource;
-  if (prevTarget) target.value = prevTarget;
+  for (const id of ["source-org", "target-org", "pipeline-source", "pipeline-target"]) {
+    const el = $(id);
+    if (!el) continue;
+    el.innerHTML = html;
+    if (id.includes("source") && prevSource) el.value = prevSource;
+    if (id.includes("target") && prevTarget) el.value = prevTarget;
+  }
+}
+
+function renderPipelines() {
+  const items = state.pipelines?.pipelines || [];
+  const lastId = state.settings?.lastPipelineId || "";
+  const options = items.length
+    ? items.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} — ${escapeHtml(p.source?.label || "")} → ${escapeHtml(p.target?.label || "")}</option>`).join("")
+    : `<option value="">No pipelines yet — create one below</option>`;
+  for (const id of ["pipeline-select", "deploy-pipeline"]) {
+    const el = $(id);
+    if (!el) continue;
+    el.innerHTML = options;
+    if (lastId && items.some((p) => p.id === lastId)) el.value = lastId;
+  }
+  $("deploy-pipeline-wrap")?.classList.toggle("hidden", !useGitEnabled() || !items.length);
+  const last = findPipeline(items, lastId);
+  const welcome = $("pipeline-welcome");
+  if (welcome) {
+    if (last) {
+      welcome.classList.remove("hidden");
+      $("pipeline-welcome-body").textContent = `Use “${last.name}” again (${last.source?.label || "source"} → ${last.target?.label || "target"}) or create a new pipeline.`;
+    } else {
+      welcome.classList.add("hidden");
+    }
+  }
+  $("pipeline-status").textContent = items.length
+    ? `${items.length} pipeline${items.length === 1 ? "" : "s"} in Git (${pipelinesFilePath()}).`
+    : useGitEnabled()
+      ? "No pipeline saved yet. Name it, pick source and target, then save to Git."
+      : "";
+}
+
+async function loadPipelines() {
+  if (!isGithubConfigured(state.settings) || !useGitEnabled()) {
+    state.pipelines = emptyPipelineStore();
+    return;
+  }
+  const { token, owner, repo, branch } = ghCreds();
+  const raw = await getFileContent(token, owner, repo, pipelinesFilePath(), branch);
+  state.pipelines = parsePipelineStore(raw);
+}
+
+function applyPipeline(record) {
+  if (!record) throw new Error("Select a saved pipeline first.");
+  const source = matchOrg(state.orgs, record.source);
+  const target = matchOrg(state.orgs, record.target);
+  if (source && $("source-org")) $("source-org").value = orgKey(source);
+  if (target && $("target-org")) $("target-org").value = orgKey(target);
+  if (source && $("pipeline-source")) $("pipeline-source").value = orgKey(source);
+  if (target && $("pipeline-target")) $("pipeline-target").value = orgKey(target);
+  if (record.testLevel && $("test-level")) $("test-level").value = record.testLevel;
+  if ($("pipeline-name")) $("pipeline-name").value = record.name;
+  if ($("pipeline-select")) $("pipeline-select").value = record.id;
+  if ($("deploy-pipeline")) $("deploy-pipeline").value = record.id;
+  $("use-git").checked = record.useGit !== false;
+}
+
+async function useSelectedPipeline() {
+  const id = $("pipeline-select")?.value || $("deploy-pipeline")?.value;
+  const record = findPipeline(state.pipelines.pipelines, id);
+  if (!record) throw new Error("Save a pipeline on Start first.");
+  applyPipeline(record);
+  await saveSettings({
+    lastPipelineId: record.id,
+    lastSourceOrgId: $("source-org").value,
+    lastTargetOrgId: $("target-org").value,
+    testLevel: $("test-level").value,
+    useGit: useGitEnabled()
+  });
+  state.settings = await loadSettings();
+  renderGitUi();
+  log(`Using pipeline ${record.name}.`);
+  setStatus(`Pipeline: ${record.name}`, "ok");
+}
+
+async function saveCurrentPipeline() {
+  requireGithub();
+  const source = selectedOrg("pipeline-source") || selectedOrg("source-org");
+  const target = selectedOrg("pipeline-target") || selectedOrg("target-org");
+  if (!source || !target) throw new Error("Detect orgs and pick source and target first.");
+  const record = createPipeline({
+    id: $("pipeline-select")?.value || undefined,
+    name: $("pipeline-name").value.trim() || `${source.label} → ${target.label}`,
+    source,
+    target,
+    testLevel: $("test-level").value,
+    useGit: true
+  });
+  const next = upsertPipeline(state.pipelines, record);
+  await commitFiles({
+    ...ghCreds(),
+    files: [{ path: pipelinesFilePath(), base64: encodeUtf8Base64(JSON.stringify(next, null, 2) + "\n") }],
+    message: `chore: save pipeline ${record.name}`
+  });
+  state.pipelines = next;
+  await saveSettings({
+    lastPipelineId: record.id,
+    lastSourceOrgId: orgKey(source),
+    lastTargetOrgId: orgKey(target),
+    setupComplete: true
+  });
+  state.settings = await loadSettings();
+  applyPipeline(record);
+  renderPipelines();
+  log(`Saved pipeline “${record.name}” to ${pipelinesFilePath()}.`);
+  setStatus(`Saved pipeline ${record.name}`, "ok");
 }
 
 function renderRepos() {
@@ -452,7 +621,7 @@ function updateHeaderStatus() {
   const pack = memberCount(state.packageTypes);
   const n = state.orgs.length;
   if (!n) {
-    setStatus("Log into each Salesforce org in Chrome, then Detect orgs in Setup.");
+    setStatus("Start here: choose Simple deploy or Git, then Detect logged-in orgs.");
     return;
   }
   if (!pack) {
@@ -475,7 +644,6 @@ async function refreshAll() {
   $("test-level").value = state.settings.testLevel || "NoTestRun";
   $("check-only").checked = Boolean(state.settings.checkOnly);
   $("use-git").checked = state.settings.useGit !== false;
-  if ($("use-git-setup")) $("use-git-setup").checked = $("use-git").checked;
   state.specifiedTests = normalizeTestNames(state.settings.specifiedTests);
   $("package-xml").value = currentXml();
   state.xmlDirty = false;
@@ -498,7 +666,16 @@ async function refreshAll() {
   } catch (err) {
     log(`Could not read versions.json: ${err.message}`, "error");
   }
+  try {
+    await loadPipelines();
+    renderPipelines();
+    const last = findPipeline(state.pipelines.pipelines, state.settings.lastPipelineId);
+    if (last) applyPipeline(last);
+  } catch (err) {
+    log(`Could not read pipelines.json: ${err.message}`, "error");
+  }
   updateHeaderStatus();
+  switchTab(state.settings.setupComplete ? "components" : "start");
 }
 
 async function connectGithub() {
@@ -537,6 +714,8 @@ async function saveRepo() {
   $("gh-branch").value = state.settings.github.branch;
   await loadVersionStore();
   renderVersions();
+  await loadPipelines();
+  renderPipelines();
   updateHeaderStatus();
   log(`Using ${repoLabel(state.settings)}`);
 }
@@ -554,13 +733,13 @@ async function persistShipOptions() {
 }
 
 function requireGithub() {
-  if (!useGitEnabled()) throw new Error("Turn on Use Git repo for versioning first.");
-  if (!isGithubConfigured(state.settings)) throw new Error("Connect a GitHub repo in Setup first.");
+  if (!useGitEnabled()) throw new Error("Choose Git version control on the Start tab first.");
+  if (!isGithubConfigured(state.settings)) throw new Error("Connect a GitHub repo on the Start tab first.");
 }
 
 function requirePackage() {
   const types = normalizePackageTypes(state.packageTypes);
-  if (!types.length) throw new Error("Select components on the Components tab, or paste a package.xml.");
+  if (!types.length) throw new Error("Pick configuration on the Pick tab, or paste a package.xml.");
   return types;
 }
 
@@ -648,7 +827,7 @@ async function setSpecifiedTest(name, selected) {
 
 async function scanOrgTests() {
   const source = selectedOrg("source-org");
-  if (!source) throw new Error("Select a source org on the Deploy tab first.");
+  if (!source) throw new Error("Select a source org on Start or Deploy first.");
   log(`Listing Apex classes in ${source.label} to find test classes…`);
   const items = await listMetadataType({
     instanceUrl: source.instanceUrl,
@@ -671,7 +850,6 @@ function openWorkbench() {
 
 async function persistGitToggle(on) {
   $("use-git").checked = on;
-  if ($("use-git-setup")) $("use-git-setup").checked = on;
   await saveSettings({ useGit: on });
   state.settings = await loadSettings();
   renderGitUi();
@@ -856,7 +1034,7 @@ async function deployVersion(explicitId) {
 
 async function loadOrgTypes() {
   const source = selectedOrg("source-org");
-  if (!source) throw new Error("Select a source org on the Deploy tab first.");
+  if (!source) throw new Error("Select a source org on Start or Deploy first.");
   log(`Loading every metadata type from ${source.label}…`);
   const described = await describeOrgMetadata({
     instanceUrl: source.instanceUrl,
@@ -870,13 +1048,13 @@ async function loadOrgTypes() {
 
 async function loadMembers() {
   const source = selectedOrg("source-org");
-  if (!source) throw new Error("Select a source org on the Deploy tab first.");
+  if (!source) throw new Error("Select a source org on Start or Deploy first.");
   const typeName = state.activeType;
   if (!typeName) throw new Error("Pick a metadata type first.");
   const meta = typesForPicker().find((t) => t.name === typeName);
   log(`Listing ${typeName} in ${source.label}…`);
   try {
-    const items = await listMetadataType({
+    const listed = await listMetadataType({
       instanceUrl: source.instanceUrl,
       sid: source.sid,
       typeName,
@@ -885,11 +1063,18 @@ async function loadMembers() {
       apiVersion: apiVersion(),
       onProgress: (m) => log(m)
     });
+    const items = withStandardObjectMembers(typeName, listed);
     state.membersCache[typeName] = { items, error: "" };
-    log(`Found ${items.length} ${typeName} member(s).`);
+    const extra = typeName === "CustomObject" ? " (standard objects included)" : "";
+    log(`Found ${items.length} ${typeName} member(s)${extra}.`);
   } catch (err) {
-    state.membersCache[typeName] = { items: [], error: err.message };
-    throw err;
+    const fallback = withStandardObjectMembers(typeName, []);
+    state.membersCache[typeName] = {
+      items: fallback,
+      error: fallback.length ? `${err.message} Standard objects are still listed.` : err.message
+    };
+    if (!fallback.length) throw err;
+    log(err.message, "error");
   }
   renderMembers();
 }
@@ -1039,8 +1224,37 @@ $("type-picker").addEventListener("click", (event) => {
   const btn = event.target.closest("[data-type]");
   if (!btn) return;
   state.activeType = btn.dataset.type;
+  state.typeChosen = true;
+  state.objectFilter = "";
+  if (state.activeType === "CustomObject" && !state.membersCache.CustomObject) {
+    state.membersCache.CustomObject = { items: withStandardObjectMembers("CustomObject", []), error: "" };
+  }
   renderTypePicker();
   renderMembers();
+  if (selectedOrg("source-org")) run(loadMembers);
+});
+$("btn-change-type")?.addEventListener("click", () => {
+  state.typeChosen = false;
+  syncTypeChosenUi();
+  renderTypePicker();
+});
+$("object-filter")?.addEventListener("change", () => {
+  state.objectFilter = $("object-filter").value;
+  renderMembers();
+});
+$("mode-simple")?.addEventListener("click", () => run(() => persistGitToggle(false)));
+$("mode-git")?.addEventListener("click", () => run(() => persistGitToggle(true)));
+$("btn-start-continue")?.addEventListener("click", () => run(async () => {
+  await saveSettings({ setupComplete: true, useGit: useGitEnabled() });
+  state.settings = await loadSettings();
+  switchTab("components");
+  setStatus("Pick a configuration type, then tick members to add.", "ok");
+}));
+$("btn-use-pipeline")?.addEventListener("click", () => run(useSelectedPipeline));
+$("btn-save-pipeline")?.addEventListener("click", () => run(saveCurrentPipeline));
+$("deploy-pipeline")?.addEventListener("change", () => {
+  if ($("pipeline-select") && $("deploy-pipeline").value) $("pipeline-select").value = $("deploy-pipeline").value;
+  run(useSelectedPipeline);
 });
 $("member-filter").addEventListener("input", renderMembers);
 $("show-selected-only")?.addEventListener("change", renderMembers);
@@ -1079,7 +1293,6 @@ $("version-list").addEventListener("click", (event) => {
   }
 });
 $("use-git")?.addEventListener("change", () => run(() => persistGitToggle($("use-git").checked)));
-$("use-git-setup")?.addEventListener("change", () => run(() => persistGitToggle($("use-git-setup").checked)));
 $("inspector-filter")?.addEventListener("input", renderInspector);
 document.querySelectorAll(".insp-tab").forEach((btn) => {
   btn.addEventListener("click", () => {

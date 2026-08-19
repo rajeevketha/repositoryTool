@@ -31,7 +31,10 @@ const DEFAULTS = {
   useGit: true,
   specifiedTests: [],
   apiVersion: "61.0",
-  packageTypes: []
+  packageTypes: [],
+  setupComplete: false,
+  lastPipelineId: "",
+  objectFilter: ""
 };
 
 export { DEFAULT_METADATA_TYPES, DEFAULTS };
@@ -59,7 +62,9 @@ export function mergeSettings(input = {}) {
     savedOrgs: Array.isArray(input.savedOrgs) ? input.savedOrgs : [],
     packageTypes: Array.isArray(input.packageTypes) ? input.packageTypes : [],
     specifiedTests: Array.isArray(input.specifiedTests) ? input.specifiedTests : [],
-    useGit: input.useGit !== false
+    useGit: input.useGit !== false,
+    setupComplete: Boolean(input.setupComplete),
+    lastPipelineId: input.lastPipelineId || ""
   };
 }
 

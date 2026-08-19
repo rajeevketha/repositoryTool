@@ -6,15 +6,11 @@ GitHub storage versions each Jira ticket (`PROJ-123-v1`) so later orgs get the i
 
 ## Configurator workflow
 
-1. Log into the **source sandbox** and the **target org** in Chrome. Setup → **Detect logged-in orgs**.
-2. **Components** (defaults to configuration types, not Apex):
-   - Objects & fields, pages/layouts, automation, access, picklists, reports/email
-   - Load members from the sandbox, tick what belongs to the Jira
-   - Or edit `package.xml` / retrieved XML on the other sub-tabs
-3. Confirm the live **Selected package** inspector (by category / `package.xml`) — or click **Workbench** for a wide two-pane view when the org has thousands of fields.
-4. **Deploy** tab: source org = sandbox, target org = QA/UAT/prod, Jira key + comment. Keep **Use Git repo for versioning** on when you want `PROJ-123-v1` in the repo.
-5. If the package includes Apex, pick test classes in the **Test class runner** (`RunSpecifiedTests`).
-6. **Save Git version & deploy**, or **Deploy configuration to target org** for a one-off. Tick **Validate only** first if you want a dry run.
+1. **Start** — choose **Simple deploy** or **Git version control**. Detect logged-in orgs. If Git: paste a token (help steps are on the tab), connect the repo, save a **pipeline** (source → target) to `.orgflow/pipelines.json`.
+2. **Pick** — choose a type (Objects, Fields, Layouts…). The type list then hides so you can tick **members**. Standard objects (Account, Contact, …) are listed. Filter fields by object when the list is long.
+3. Confirm the live **Selected package** (by category / `package.xml`), or open **Workbench**.
+4. **Deploy** — Jira + comment, then deploy. Git pipelines are reused the next time you open OrgFlow.
+5. If the package includes Apex, pick test classes in the **Test class runner**.
 
 Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Search the type list for any other Metadata API type (Apex, LWC, Experience Cloud, settings, and so on). **Load all types from source org** refreshes the list from that sandbox.
 
@@ -43,12 +39,13 @@ If an org does not appear, open it (Lightning or Setup) so a `*.my.salesforce.co
 
 ### GitHub repo (versioning)
 
-Keep **Use Git repo for versioning** on so each Jira save is a reusable snapshot for later orgs. Direct org-to-org deploy still works if you turn the toggle off.
+On **Start**, choose **Git version control** if you want reusable Jira versions and pipelines.
 
-1. Create a GitHub personal access token (`repo` scope, or fine-grained **Contents: Read and write**).
-2. Setup → paste the token → **Connect GitHub** → pick or paste `owner/repo` → **Use this repo**.
+1. Open [github.com/settings/tokens](https://github.com/settings/tokens) and create a token (`repo` scope, or fine-grained **Contents: Read and write**).
+2. Paste it on Start → **Connect GitHub** → pick or paste `owner/repo` → **Use this repo**.
+3. Name a pipeline (for example `Sandbox → UAT`), pick source and target, **Save pipeline to Git**.
 
-Each configurator connects **their** repo with **their** token. Settings stay in that browser profile.
+Each configurator connects **their** repo with **their** token. Pipelines are stored in the repo at `.orgflow/pipelines.json` (no passwords, no session ids). Direct org-to-org deploy still works if you choose **Simple deploy**.
 
 ### Components
 

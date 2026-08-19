@@ -13,6 +13,7 @@ describe("settings", () => {
     assert.equal(isGithubConfigured(merged), true);
     assert.equal(repoLabel(merged), "acme/sf@main");
     assert.equal(merged.useGit, true);
+    assert.equal(merged.setupComplete, false);
     assert.deepEqual(merged.specifiedTests, []);
   });
 
