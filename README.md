@@ -9,8 +9,8 @@ GitHub storage versions each Jira ticket (`PROJ-123-v1`) so later orgs get the i
 Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Review → Deploy) is sequential: you cannot skip ahead.
 
 1. **Start** — choose **Simple deploy** or **Git version control**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If Git: paste a token, connect the repo, save a **pipeline** to `.orgflow/pipelines.json`.
-2. **Type** — tap one configuration type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
-3. **Members** — tick rows (orange check = in the package). For fields, use **object chips** (Account, Case, …) to shrink a long list.
+2. **Type** — search, use the picklist, or tap a common type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
+3. **Members** — tick rows (orange check = in the package). The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list.
 4. **Review** — retrieve files. That **freezes** the From org and selected members to the snapshot. Unlock only if you need to change them, then retrieve again — deploy stays off until you do. Edit XML if needed, then Next.
 5. **Deploy** — Jira + comment, then deploy. Apex: pick tests in the **Test class runner**.
 

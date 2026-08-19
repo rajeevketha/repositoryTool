@@ -5,14 +5,14 @@
   --line: #3a3a3a;
   --text: #f4f1ec;
   --muted: #b9aea3;
-  --orange: #e5a872;
-  --orange-2: #f0c49a;
-  --orange-deep: #c4894a;
-  --navy: #e5a872;
-  --blue: #e5a872;
-  --blue-hover: #f0c49a;
-  --teal: #e5a872;
-  --teal-hover: #f0c49a;
+  --orange: #ff8c1a;
+  --orange-2: #ffb347;
+  --orange-deep: #e06a00;
+  --navy: #ff8c1a;
+  --blue: #ff8c1a;
+  --blue-hover: #ffb347;
+  --teal: #ff8c1a;
+  --teal-hover: #ffb347;
   --ok: #7dcc7d;
   --danger: #ff6b6b;
   --radius: 12px;
@@ -26,7 +26,7 @@ body {
   margin: 0;
   padding: 0;
   min-width: 360px;
-  background: radial-gradient(900px 400px at 100% -10%, rgba(229, 168, 114, 0.1), transparent 55%), var(--bg);
+  background: radial-gradient(900px 400px at 100% -10%, rgba(255, 140, 26, 0.14), transparent 55%), var(--bg);
   color: var(--text);
   font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
 }
@@ -240,7 +240,7 @@ input, select, textarea {
 }
 textarea { resize: vertical; }
 input:focus, select:focus, textarea:focus {
-  outline: 2px solid rgba(229, 168, 114, 0.35);
+  outline: 2px solid rgba(255, 140, 26, 0.4);
   border-color: var(--orange);
 }
 #type-browse {
@@ -248,17 +248,34 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
   gap: 10px;
 }
-#type-search {
+.type-find {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.type-find .grow { min-width: 0; }
+#type-search,
+#type-picklist {
   display: block;
   width: 100%;
   min-height: 44px;
   font-size: 14px;
+}
+#type-search {
   appearance: none;
   -webkit-appearance: none;
+}
+.type-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 #type-browse .row-actions,
 #type-browse .row-actions button {
   width: 100%;
+}
+@media (min-width: 720px) {
+  .type-find { grid-template-columns: 1fr 1fr; }
 }
 
 .hint { margin: 0; color: var(--muted); font-weight: 400; font-size: 12px; }
@@ -328,6 +345,17 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 8px;
+  scrollbar-width: auto;
+  scrollbar-color: var(--orange) #2a2a2a;
+}
+.type-picker::-webkit-scrollbar,
+.type-list::-webkit-scrollbar,
+.file-list::-webkit-scrollbar { width: 12px; }
+.type-picker::-webkit-scrollbar-thumb,
+.type-list::-webkit-scrollbar-thumb,
+.file-list::-webkit-scrollbar-thumb {
+  background: var(--orange);
+  border-radius: 8px;
 }
 .type-group-label {
   font-size: 11px;
@@ -476,7 +504,80 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
 }
 .app-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
 .path-node { display: flex; flex-direction: column; }
-.member-list { max-height: 380px; }
+.member-list {
+  max-height: min(52vh, 440px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: var(--orange) #2a2a2a;
+}
+.member-list::-webkit-scrollbar { width: 14px; }
+.member-list::-webkit-scrollbar-track {
+  background: #111;
+  border-radius: 8px;
+}
+.member-list::-webkit-scrollbar-thumb {
+  background: var(--orange);
+  border-radius: 8px;
+  border: 3px solid #191919;
+}
+.scroll-shell { position: relative; }
+.scroll-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 36px 10px 10px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #111;
+  background: linear-gradient(transparent, var(--orange) 55%);
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  pointer-events: none;
+}
+.playbook {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.playbook li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1b1b1b;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-weight: 700;
+}
+.playbook li span {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #333;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.playbook li.done {
+  border-color: var(--orange);
+  color: #fff;
+}
+.playbook li.done span {
+  background: var(--orange);
+  color: #111;
+}
+body.mode-simple .git-only { display: none !important; }
+body.mode-git #simple-playbook { display: none; }
 body[data-step="start"] .inspector,
 body[data-step="versions"] .inspector { display: none !important; }
 body[data-layout="workbench"][data-step="start"] .app-body,

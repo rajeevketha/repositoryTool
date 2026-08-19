@@ -1,5 +1,5 @@
 import { loadSettings, saveSettings, isGithubConfigured, repoLabel } from "./lib/storage.js";
-import { catalogGroupsFromTypes, memberHint, fallbackTypeRecords, mergeDescribedTypes, withStandardObjectMembers, objectFilterOptions, memberObjectKey, OBJECT_FILTER_TYPES, isStandardObject } from "./lib/metadataTypes.js";
+import { catalogGroupsFromTypes, memberHint, fallbackTypeRecords, mergeDescribedTypes, withStandardObjectMembers, objectFilterOptions, memberObjectKey, OBJECT_FILTER_TYPES, isStandardObject, COMMON_CONFIG_TYPES } from "./lib/metadataTypes.js";
 import {
   parseTicketInput,
   mintChangeId,
@@ -257,6 +257,7 @@ function updateActionState() {
   applyRetrieveLockUi();
   updateWizardNav();
   renderStepper();
+  renderSimplePlaybook();
 }
 
 function renderOrgPath() {
@@ -349,7 +350,7 @@ function updatePickCopy() {
   if (stepId === "type") {
     if ($("pick-heading")) $("pick-heading").textContent = "Choose a configuration type";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Tap one card (Custom Field, Custom Object, Flow…). That opens the member list for only that type.";
+      $("pick-lead").textContent = "Search, use the picklist, or tap a common type. That opens the member list for only that type.";
     }
   } else if (stepId === "members") {
     if ($("pick-heading")) $("pick-heading").textContent = type ? `Tick ${type.label} members` : "Tick members";
@@ -599,13 +600,82 @@ function renderGitUi() {
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod can take the same snapshot."
     : "Git is off. Use this only when you do not need a reusable version.";
   $("git-setup-block")?.classList.toggle("hidden", !on);
+  document.body.classList.toggle("mode-simple", !on);
+  document.body.classList.toggle("mode-git", on);
   document.querySelectorAll(".mode-card").forEach((card) => {
     card.classList.toggle("selected", card.dataset.mode === (on ? "git" : "simple"));
   });
   $("mode-status").textContent = on
     ? "Git version control is on. Connect a repo and save a pipeline so you can reuse it next time."
-    : "Simple deploy is on. You can move configuration org-to-org without Git.";
+    : "Simple deploy is on. Detect orgs, set From and To, then Next — no Git required.";
+  renderSimplePlaybook();
   renderPipelines();
+}
+
+function renderSimplePlaybook() {
+  const el = $("simple-playbook");
+  if (!el) return;
+  const items = [
+    { done: state.orgs.length > 0, text: "Detect logged-in orgs" },
+    { done: pathReady(), text: "Set From and To (must be different)" },
+    { done: state.typeChosen, text: "Pick a configuration type" },
+    { done: memberCount(state.packageTypes) > 0, text: "Tick members to include" },
+    { done: hasFreshRetrieve(), text: "Retrieve, then deploy" }
+  ];
+  el.innerHTML = items
+    .map((item, i) => `<li class="${item.done ? "done" : ""}"><span>${item.done ? "✓" : i + 1}</span>${escapeHtml(item.text)}</li>`)
+    .join("");
+}
+
+function renderTypePicklist() {
+  const sel = $("type-picklist");
+  if (!sel) return;
+  const types = typesForPicker();
+  const groups = catalogGroupsFromTypes(types, "");
+  const current = state.activeType;
+  sel.innerHTML = `<option value="">Pick a type…</option>` +
+    groups
+      .map((group) => {
+        const opts = group.types
+          .map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.label)} — ${escapeHtml(t.name)}</option>`)
+          .join("");
+        return `<optgroup label="${escapeHtml(group.label)}">${opts}</optgroup>`;
+      })
+      .join("");
+  if (types.some((t) => t.name === current)) sel.value = current;
+}
+
+function renderTypeShortcuts() {
+  const el = $("type-shortcuts");
+  if (!el) return;
+  const types = typesForPicker();
+  el.innerHTML = COMMON_CONFIG_TYPES.slice(0, 8)
+    .map((name) => {
+      const t = types.find((x) => x.name === name);
+      if (!t) return "";
+      const active = name === state.activeType ? "active" : "";
+      return `<button type="button" class="obj-chip ${active}" data-type="${escapeHtml(name)}">${escapeHtml(t.label)}</button>`;
+    })
+    .join("");
+}
+
+function chooseType(typeName) {
+  if (!typeName) return;
+  if (state.selectionFrozen && hasFreshRetrieve()) {
+    setStatus("Unlock the retrieved snapshot first if you need a different type.", "error");
+    return;
+  }
+  state.activeType = typeName;
+  state.typeChosen = true;
+  state.objectFilter = "";
+  if (state.activeType === "CustomObject" && !state.membersCache.CustomObject) {
+    state.membersCache.CustomObject = { items: withStandardObjectMembers("CustomObject", []), error: "" };
+  }
+  const pick = $("type-picklist");
+  if (pick) pick.value = typeName;
+  goStep(2, { force: true });
+  renderMembers();
+  if (selectedOrg("source-org")) run(loadMembers);
 }
 
 function typesForPicker() {
@@ -636,14 +706,15 @@ function renderTypePicker() {
         .join("");
       return `<div class="type-group-label">${escapeHtml(group.label)}</div>${chips}${extra}`;
     })
-    .join("") || `<div class="empty">No types match that search.</div>`;
+    .join("") || `<div class="empty">No types match that search. Use the picklist to jump to a type.</div>`;
+  renderTypePicklist();
+  renderTypeShortcuts();
   const fromOrg = types.some((t) => t.fromOrg);
   $("type-count").textContent = fromOrg
-    ? `${types.length} metadata types from the source org. Search to find any of them.`
-    : `${types.length} metadata types ready. Load from the source org to match that org exactly.`;
-  const active = types.find((t) => t.name === state.activeType) || types[0];
+    ? `${types.length} metadata types from the source org. Search or use the picklist.`
+    : `${types.length} metadata types ready. Search, pick from the list, or tap a shortcut.`;
+  const active = types.find((t) => t.name === state.activeType);
   if (active) {
-    state.activeType = active.name;
     $("active-type-title").textContent = `Selected type: ${active.label}`;
     $("active-type-meta").textContent = active.name;
     const hint = memberHint(state.activeType);
@@ -668,7 +739,7 @@ function syncTypeChosenUi() {
   } else if (OBJECT_FILTER_TYPES.includes(state.activeType)) {
     $("member-help").textContent = "Tap an object chip (Account, Case, …) to shrink the list, then tick members. Orange check = selected.";
   } else {
-    $("member-help").textContent = "Tick members that belong in this deploy. Orange check means selected. You can also add a name at the bottom.";
+    $("member-help").textContent = "Scroll the orange bar if the list is long. Tick a row — orange check means it is in the package.";
   }
 }
 
@@ -755,6 +826,7 @@ function renderMembers() {
     list.innerHTML = extras.length
       ? extras.map((name) => memberRowHtml({ fullName: name, extra: true }, typeName, selected)).join("")
       : `<div class="empty">Members appear here after you pick a type.</div>`;
+    updateMemberScrollHint();
     return;
   }
   if (cache.error) {
@@ -783,6 +855,7 @@ function renderMembers() {
   const shown = combined.slice(0, cap);
   if (!shown.length) {
     list.innerHTML = `<div class="empty">No members match the filter. Try All objects, or add a name such as Account.My_Field__c.</div>`;
+    updateMemberScrollHint();
     return;
   }
   list.innerHTML =
@@ -790,6 +863,27 @@ function renderMembers() {
     (combined.length > cap
       ? `<div class="muted">Showing ${cap} of ${combined.length}. Filter by object or tick Selected only to find the rest.</div>`
       : "");
+  updateMemberScrollHint();
+}
+
+function updateMemberScrollHint() {
+  const list = $("member-list");
+  const hint = $("member-scroll-hint");
+  if (!list || !hint) return;
+  const refresh = () => {
+    const overflow = list.scrollHeight > list.clientHeight + 12;
+    const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
+    const remaining = overflow && !atBottom;
+    hint.classList.toggle("hidden", !remaining);
+    if (remaining) {
+      hint.textContent = "Scroll for more members ↓";
+    }
+  };
+  if (!list.dataset.scrollBound) {
+    list.dataset.scrollBound = "1";
+    list.addEventListener("scroll", refresh, { passive: true });
+  }
+  requestAnimationFrame(refresh);
 }
 
 function renderFileList() {
@@ -1674,22 +1768,16 @@ $("btn-add-member").addEventListener("click", () => run(async () => {
 $("type-search").addEventListener("input", () => {
   renderTypePicker();
 });
+$("type-picklist")?.addEventListener("change", () => {
+  chooseType($("type-picklist").value);
+});
+$("type-shortcuts")?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-type]");
+  if (btn) chooseType(btn.dataset.type);
+});
 $("type-picker").addEventListener("click", (event) => {
   const btn = event.target.closest("[data-type]");
-  if (!btn) return;
-  if (state.selectionFrozen && hasFreshRetrieve()) {
-    setStatus("Unlock the retrieved snapshot first if you need a different type.", "error");
-    return;
-  }
-  state.activeType = btn.dataset.type;
-  state.typeChosen = true;
-  state.objectFilter = "";
-  if (state.activeType === "CustomObject" && !state.membersCache.CustomObject) {
-    state.membersCache.CustomObject = { items: withStandardObjectMembers("CustomObject", []), error: "" };
-  }
-  goStep(2, { force: true });
-  renderMembers();
-  if (selectedOrg("source-org")) run(loadMembers);
+  if (btn) chooseType(btn.dataset.type);
 });
 $("btn-change-type")?.addEventListener("click", () => {
   if (state.selectionFrozen && hasFreshRetrieve()) {

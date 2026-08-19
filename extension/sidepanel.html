@@ -69,6 +69,7 @@
             </button>
           </div>
           <div id="mode-status" class="muted">Choose Simple deploy or Git version control to continue.</div>
+          <ol id="simple-playbook" class="playbook"></ol>
 
           <h2>Salesforce orgs</h2>
           <p class="hint">Log into both orgs in Chrome, detect them, then set From and To above — for example Dev → QA. That path stays visible on every step.</p>
@@ -164,22 +165,22 @@
               <button type="button" class="secondary" id="goto-workbench">Open wide workbench</button>
             </div>
           </article>
-          <label id="deploy-pipeline-wrap">
+          <label id="deploy-pipeline-wrap" class="git-only">
             Saved Git pipeline
             <select id="deploy-pipeline"></select>
           </label>
           <p class="hint">The path bar at the top is the live From → To route. Change it there if this deploy should go to a different org.</p>
-          <label>
+          <label class="git-only">
             Jira ticket
             <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
           </label>
-          <p class="hint">Configurators: put the Jira on the version so the same package can be pushed sandbox → QA → prod.</p>
-          <label>
+          <p class="hint git-only">Configurators: put the Jira on the version so the same package can be pushed sandbox → QA → prod.</p>
+          <label class="git-only">
             Comment
             <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
           </label>
 
-          <article class="card git-card">
+          <article class="card git-card git-only">
             <label class="check switch">
               <input id="use-git" type="checkbox" />
               Use Git repo for versioning
@@ -227,12 +228,12 @@
           <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
           <div class="actions">
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy configuration to target org</button>
-            <div id="git-actions" class="actions">
+            <div id="git-actions" class="actions git-only">
               <button id="btn-both" class="primary" data-busy data-needs="source,target,package,distinct,retrieve,git">Save Git version &amp; deploy</button>
               <button id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve,git">Save version to Git</button>
               <button id="btn-deploy" class="secondary" data-busy data-needs="target,git">Deploy a saved Jira version</button>
             </div>
-            <button type="button" id="btn-goto-versions" class="ghost-text">Open saved versions</button>
+            <button type="button" id="btn-goto-versions" class="ghost-text git-only">Open saved versions</button>
           </div>
         </section>
 
@@ -259,7 +260,18 @@
               The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> so you can pick from thousands of fields and still see exactly what is in the package.
             </div>
             <div id="type-browse">
-              <input id="type-search" type="search" placeholder="Search types: field, object, flow, layout, permission…" autocomplete="off" />
+              <p class="hint">Search, use the picklist, or tap a common type. All three do the same thing.</p>
+              <div class="type-find">
+                <label class="grow">Search types
+                  <input id="type-search" type="search" placeholder="field, object, flow, layout, permission…" autocomplete="off" />
+                </label>
+                <label class="grow">Or pick from the list
+                  <select id="type-picklist">
+                    <option value="">Pick a type…</option>
+                  </select>
+                </label>
+              </div>
+              <div id="type-shortcuts" class="type-shortcuts"></div>
               <div class="row-actions">
                 <button type="button" id="btn-load-types" class="secondary" data-busy data-needs="source">Load all types from source org</button>
               </div>
@@ -296,7 +308,10 @@
                 </label>
               </div>
               <div id="member-status" class="muted"></div>
-              <div id="member-list" class="type-list member-list"></div>
+              <div class="scroll-shell">
+                <div id="member-list" class="type-list member-list" tabindex="0"></div>
+                <div id="member-scroll-hint" class="scroll-hint hidden">Scroll for more members ↓</div>
+              </div>
               <label>
                 Add member by name
                 <div class="inline-add">
