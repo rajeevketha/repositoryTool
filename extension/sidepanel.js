@@ -62,7 +62,7 @@ import {
   isTestClassName,
   normalizeTestNames
 } from "./lib/packageView.js";
-import { inspectRepoLayout, layoutCopy, snapshotTreeText, scaffoldProjectFiles } from "./lib/projectLayout.js";
+import { inspectRepoLayout, layoutCopy, snapshotTreeText, scaffoldProjectFiles, shouldAutoScaffold } from "./lib/projectLayout.js";
 import {
   loadLocalVersionStore,
   saveLocalVersionStore,
@@ -127,7 +127,8 @@ const state = {
   lastSaved: null,
   gitShipWarned: false,
   versionsReturnStep: 3,
-  gitLayout: null
+  gitLayout: null,
+  gitAutoScaffoldDone: false
 };
 
 function escapeHtml(value) {
@@ -1998,6 +1999,7 @@ async function saveRepo() {
   state.settings = await loadSettings();
   $("gh-repo-input").value = provider === "azuredevops" ? `${owner}/${project}/${parsed.repo}` : `${owner}/${parsed.repo}`;
   $("gh-branch").value = gitHost.branch;
+  state.gitAutoScaffoldDone = false;
   await loadVersionStore();
   renderVersions();
   await loadPipelines();
@@ -2027,19 +2029,20 @@ function renderGitLayoutCard() {
   const tree = $("git-layout-tree");
   if (tree) {
     const sample = [
-      ".orgflow/releases/PROJ-123/v1/",
+      "force-app/main/default/",
       "  classes/",
       "  objects/",
       "  layouts/",
       "  lwc/",
-      "  package.xml"
+      "  flows/",
+      ".orgflow/releases/PROJ-123/v1/   ← after Save or Deploy"
     ].join("\n");
     tree.textContent = sample;
     tree.classList.remove("hidden");
   }
   if ($("git-layout-status")) {
     $("git-layout-status").textContent = copy.canScaffold
-      ? "Create folders only if this repo should look like a Salesforce DX project. Existing force-app is never overwritten."
+      ? "Brand-new repos get these folders automatically. Existing Salesforce projects are never overwritten."
       : "Use Open files in Git to browse the connected branch.";
   }
 }
@@ -2059,6 +2062,10 @@ async function inspectGitLayout() {
     log(`Could not inspect repo folders: ${err.message || err}`, "error");
   }
   renderGitLayoutCard();
+  if (shouldAutoScaffold(state.gitLayout) && !state.gitAutoScaffoldDone) {
+    state.gitAutoScaffoldDone = true;
+    await createSalesforceLayout();
+  }
 }
 
 function openGitFiles() {

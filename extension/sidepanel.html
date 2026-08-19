@@ -79,7 +79,7 @@
 
           <div id="git-setup-block" class="hidden">
             <h2>Connect the team repo</h2>
-            <p class="hint">OrgFlow stores each Jira version under <code>.orgflow/releases/</code> using Salesforce metadata folders (<code>classes</code>, <code>objects</code>, <code>layouts</code>, …). After you pick a repo, OrgFlow checks whether it already has <code>force-app</code> so we never overwrite a DX project.</p>
+            <p class="hint">Brand-new repos get Salesforce folders automatically (<code>force-app/main/default/classes</code>, <code>objects</code>, …). If the repo already has a DX project, OrgFlow leaves it alone and stores Jira versions under <code>.orgflow/releases/</code>.</p>
             <label>Host
               <select id="git-provider">
                 <option value="github">GitHub</option>
@@ -126,7 +126,7 @@
               <pre id="git-layout-tree" class="git-tree hidden"></pre>
               <div class="row-actions">
                 <button type="button" id="btn-view-git-files" class="primary">Open files in Git</button>
-                <button type="button" id="btn-create-sf-layout" class="secondary hidden">Create Salesforce folders</button>
+              <button type="button" id="btn-create-sf-layout" class="secondary hidden">Create Salesforce folders</button>
               </div>
               <p id="git-layout-status" class="muted"></p>
             </article>

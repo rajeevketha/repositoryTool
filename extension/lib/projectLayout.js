@@ -44,6 +44,7 @@ export function inspectRepoLayout(entries = []) {
   const hasManifest = names.has("manifest");
   const hasSrc = names.has("src");
   const hasOrgflow = names.has(".orgflow");
+  const looksLikeOrgflowApp = names.has("extension") && (names.has("files") || names.has("tests"));
   const significant = [...names].filter((n) => !IGNORE_ROOT.has(n) && n !== ".git");
   const empty = significant.length === 0;
 
@@ -60,9 +61,23 @@ export function inspectRepoLayout(entries = []) {
     hasManifest,
     hasSrc,
     hasOrgflow,
+    looksLikeOrgflowApp,
     empty,
     names: [...names].sort()
   };
+}
+
+/** True unless the repo already has a Salesforce DX / mdapi tree. */
+export function canScaffold(inspect) {
+  if (!inspect) return false;
+  return !inspect.hasForceApp && !inspect.hasSfdxJson && !inspect.hasSrc && !inspect.hasManifest;
+}
+
+/** Brand-new warehouse: empty, or only OrgFlow pipelines — no force-app yet. */
+export function shouldAutoScaffold(inspect) {
+  if (!canScaffold(inspect)) return false;
+  if (inspect.looksLikeOrgflowApp) return false;
+  return inspect.empty || inspect.kind === "orgflow";
 }
 
 export function layoutCopy(inspect, { repoLabel: label = "this repo" } = {}) {
@@ -77,7 +92,7 @@ export function layoutCopy(inspect, { repoLabel: label = "this repo" } = {}) {
   if (inspect.kind === "sfdx") {
     return {
       title: "This repo already has a Salesforce project",
-      body: `${label} already has force-app (Salesforce DX). OrgFlow will not overwrite those folders. Jira snapshots go to .orgflow/releases/PROJ-123/v1/ with the same metadata folders — classes, objects, layouts, lwc, and so on — so teammates can find files without mixing them into your main project.`,
+      body: `${label} already has force-app (Salesforce DX). OrgFlow will not overwrite those folders. Jira snapshots go to .orgflow/releases/PROJ-123/v1/ with the same metadata folders — classes, objects, layouts, lwc, and so on.`,
       canScaffold: false,
       viewPath: inspect.hasOrgflow ? ".orgflow" : "force-app/main/default"
     };
@@ -90,27 +105,27 @@ export function layoutCopy(inspect, { repoLabel: label = "this repo" } = {}) {
       viewPath: inspect.hasOrgflow ? ".orgflow" : inspect.hasSrc ? "src" : "manifest"
     };
   }
-  if (inspect.kind === "orgflow") {
+  if (inspect.looksLikeOrgflowApp) {
     return {
-      title: "OrgFlow snapshots are in this repo",
-      body: `Open .orgflow/releases in ${label}. Each Jira version is a folder of Salesforce metadata (classes, objects, layouts, …).`,
-      canScaffold: false,
-      viewPath: ".orgflow"
+      title: "This repo looks like the OrgFlow app, not a Salesforce warehouse",
+      body: `${label} contains the OrgFlow extension source. Snapshots can live here, but a dedicated empty Salesforce repo is cleaner. You can still create force-app folders if you want this repo to hold metadata too.`,
+      canScaffold: true,
+      viewPath: inspect.hasOrgflow ? ".orgflow" : ""
     };
   }
-  if (inspect.kind === "empty") {
+  if (inspect.kind === "orgflow" || inspect.kind === "empty") {
     return {
-      title: "Create a Salesforce file structure?",
-      body: `${label} is empty (or only has a README). Create Salesforce DX folders (force-app/main/default/classes, objects, layouts, …) so the repo looks like a normal Salesforce project in VS Code. OrgFlow still saves each Jira version under .orgflow/releases/ so v1 is never overwritten by v2. Skip if you only want snapshots.`,
+      title: "New Salesforce warehouse",
+      body: `${label} does not have force-app yet — only a README and/or OrgFlow pipelines. OrgFlow will create Salesforce DX folders (force-app/main/default/classes, objects, layouts, lwc, …) so you can browse files like in VS Code. Retrieved packages still version under .orgflow/releases/ after Save or Deploy — empty folders appear immediately.`,
       canScaffold: true,
-      viewPath: ""
+      viewPath: inspect.hasOrgflow ? ".orgflow" : ""
     };
   }
   return {
     title: "This is not a Salesforce project yet",
-    body: `${label} does not look like Salesforce DX. Create force-app/main/default/{classes,objects,layouts,…} for a familiar tree, or skip — snapshots still go to .orgflow/releases/ and never overwrite unrelated files.`,
+    body: `${label} does not look like Salesforce DX. Create force-app/main/default/{classes,objects,layouts,…} for a familiar tree, or skip — snapshots still go to .orgflow/releases/.`,
     canScaffold: true,
-      viewPath: inspect.hasOrgflow ? ".orgflow" : ""
+    viewPath: inspect.hasOrgflow ? ".orgflow" : ""
   };
 }
 
