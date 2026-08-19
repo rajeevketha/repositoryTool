@@ -6,11 +6,15 @@ GitHub storage versions each Jira ticket (`PROJ-123-v1`) so later orgs get the i
 
 ## Configurator workflow
 
-1. **Start** — choose **Simple deploy** or **Git version control**. Detect logged-in orgs. If Git: paste a token (help steps are on the tab), connect the repo, save a **pipeline** (source → target) to `.orgflow/pipelines.json`.
-2. **Pick** — choose a type (Objects, Fields, Layouts…). The type list then hides so you can tick **members**. Standard objects (Account, Contact, …) are listed. Filter fields by object when the list is long.
-3. Confirm the live **Selected package** (by category / `package.xml`), or open **Workbench**.
-4. **Deploy** — Jira + comment, then deploy. Git pipelines are reused the next time you open OrgFlow.
-5. If the package includes Apex, pick test classes in the **Test class runner**.
+Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Review → Deploy) is sequential: you cannot skip ahead.
+
+1. **Start** — choose **Simple deploy** or **Git version control**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If Git: paste a token, connect the repo, save a **pipeline** to `.orgflow/pipelines.json`.
+2. **Type** — tap one configuration type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
+3. **Members** — tick rows (orange check = in the package). For fields, use **object chips** (Account, Case, …) to shrink a long list.
+4. **Review** — retrieve files, edit XML if needed, then Next.
+5. **Deploy** — Jira + comment, then deploy. Apex: pick tests in the **Test class runner**.
+
+The UI uses a dark charcoal + orange theme so the current step and selected members stay obvious.
 
 Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Search the type list for any other Metadata API type (Apex, LWC, Experience Cloud, settings, and so on). **Load all types from source org** refreshes the list from that sandbox.
 
@@ -18,7 +22,7 @@ Typical configuration you can pick by name: **CustomField** (`Account.Status__c`
 
 Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minute). Open [docs/user-manual.html](docs/user-manual.html) in a browser to replay the same slides.
 
-The **From → To path bar** at the top of every screen is the live route (for example Dev sandbox → QA). Deploy stays disabled until those two orgs are selected and different.
+The **From → To path bar** at the top of every screen is the live route (for example Dev sandbox → QA). **Next** and **Deploy** stay disabled until those two orgs are selected and different.
 
 ## Install (unpacked Chrome extension)
 
@@ -47,16 +51,14 @@ On **Start**, choose **Git version control** if you want reusable Jira versions 
 
 Each configurator connects **their** repo with **their** token. Pipelines are stored in the repo at `.orgflow/pipelines.json` (no passwords, no session ids). Direct org-to-org deploy still works if you choose **Simple deploy**.
 
-### Components
+### Pick configuration (Type → Members → Review)
 
-On the **Components** tab:
-
-1. **Pick** — common configurator types first, every Metadata API type searchable. Load members from the source sandbox, tick what belongs to this Jira, or type a member such as `Account.Customer_Status__c`. Use **Selected only** and member search when an object has thousands of fields.
-2. **Selected package** (side of the workbench, or below the picker in the side panel) updates on every tick:
+1. **Type** — common configurator types first, every Metadata API type searchable. Tap a type to open its members (the type grid goes away on purpose).
+2. **Members** — load from the source sandbox, tick what belongs to this Jira, or type a member such as `Account.Customer_Status__c`. Object chips and **Selected only** help when an object has thousands of fields.
+3. **Selected package** (side of the workbench, or below the picker in the side panel) updates on every tick:
    - **By category** — columns/groups by metadata type, and by object for fields/layouts
    - **package.xml** — the exact manifest Salesforce will retrieve
-3. **package.xml** sub-tab — edit the XML by hand, then **Apply XML to picker**. Or **Rebuild from picker**.
-4. **Review / edit** — retrieve the package, then open metadata XML and edit it before deploy.
+4. **Review** — retrieve the package, then open metadata XML and edit it before deploy. **Edit package.xml instead** if you want to paste a manifest.
 
 **Deploy configuration to target org** still works with Git off. With Git on, **Save Git version & deploy** stores the same snapshot under the Jira key so you can redeploy it later.
 

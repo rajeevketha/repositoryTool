@@ -65,6 +65,14 @@ if (new URLSearchParams(location.search).get("layout") === "workbench") {
 
 const isWorkbench = () => document.body.dataset.layout === "workbench";
 
+const STEPS = [
+  { id: "start", label: "Start", view: "start" },
+  { id: "type", label: "Type", view: "components" },
+  { id: "members", label: "Members", view: "components" },
+  { id: "review", label: "Review", view: "components" },
+  { id: "deploy", label: "Deploy", view: "ship" }
+];
+
 const state = {
   settings: null,
   orgs: [],
@@ -85,7 +93,11 @@ const state = {
   inspectorView: "categories",
   typeChosen: false,
   objectFilter: "",
-  pipelines: emptyPipelineStore()
+  pipelines: emptyPipelineStore(),
+  stepIndex: 0,
+  reviewSeen: false,
+  showingVersions: false,
+  xmlReview: false
 };
 
 function escapeHtml(value) {
@@ -170,6 +182,8 @@ function updateActionState() {
     callout.classList.toggle("hidden", !reason && !selectedOrg("target-org"));
   }
   renderOrgPath();
+  updateWizardNav();
+  renderStepper();
 }
 
 function renderOrgPath() {
@@ -201,8 +215,200 @@ function renderOrgPath() {
   if (sub) {
     sub.textContent = ready
       ? `Simple path: configuration moves ${orgKind(source)} → ${orgKind(target)}.`
-      : "Deploy stays off until From and To are different Salesforce orgs.";
+      : "Next stays off until From and To are different Salesforce orgs.";
   }
+}
+
+function pathReady() {
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  return Boolean(source && target && orgKey(source) !== orgKey(target));
+}
+
+function currentStep() {
+  return STEPS[state.stepIndex] || STEPS[0];
+}
+
+function currentStepId() {
+  return state.showingVersions ? "versions" : currentStep().id;
+}
+
+function farthestStep() {
+  if (!pathReady()) return 0;
+  if (!state.typeChosen) return 1;
+  if (!memberCount(state.packageTypes)) return 2;
+  if (!state.reviewSeen && state.stepIndex < 3) return 3;
+  return 4;
+}
+
+function canAdvanceTo(index) {
+  if (index < 0 || index >= STEPS.length) return false;
+  if (index <= state.stepIndex) return true;
+  return index <= farthestStep();
+}
+
+function leaveReason(index) {
+  if (index === 0 && !pathReady()) {
+    const source = selectedOrg("source-org");
+    const target = selectedOrg("target-org");
+    if (!source || !target) return "Set From and To in the path bar, then Next.";
+    return "From and To must be different orgs before you pick configuration.";
+  }
+  if (index === 1 && !state.typeChosen) return "Tap a configuration type — for example Custom Field or Custom Object.";
+  if (index === 2 && !memberCount(state.packageTypes)) return "Tick at least one member (orange check) before review.";
+  return "";
+}
+
+function stepBlockReason(index) {
+  if (canAdvanceTo(index)) return "";
+  if (index > 0 && !pathReady()) return leaveReason(0);
+  if (index > 1 && !state.typeChosen) return leaveReason(1);
+  if (index > 2 && !memberCount(state.packageTypes)) return leaveReason(2);
+  if (index > 3) return "Open Review first, then you can deploy.";
+  return "Finish the current step before skipping ahead.";
+}
+
+function updatePickCopy() {
+  const stepId = currentStepId();
+  const type = typesForPicker().find((t) => t.name === state.activeType);
+  if ($("pick-kicker")) $("pick-kicker").textContent = `Step ${state.stepIndex + 1} of 5`;
+  if (stepId === "type") {
+    if ($("pick-heading")) $("pick-heading").textContent = "Choose a configuration type";
+    if ($("pick-lead")) {
+      $("pick-lead").textContent = "Tap one card (Custom Field, Custom Object, Flow…). That opens the member list for only that type.";
+    }
+  } else if (stepId === "members") {
+    if ($("pick-heading")) $("pick-heading").textContent = type ? `Tick ${type.label} members` : "Tick members";
+    if ($("pick-lead")) {
+      $("pick-lead").textContent = "Orange tick = in the package. Use the object chips to shrink a long list, then Next to review files.";
+    }
+  } else if (stepId === "review") {
+    if ($("pick-heading")) $("pick-heading").textContent = "Review files";
+    if ($("pick-lead")) {
+      $("pick-lead").textContent = "Retrieve from the From org, open a file to edit XML, then Next to deploy.";
+    }
+  }
+  if ($("header-sub")) {
+    const labels = {
+      start: "Step 1 · Connect orgs",
+      type: "Step 2 · Choose a type",
+      members: "Step 3 · Tick members",
+      review: "Step 4 · Review files",
+      deploy: "Step 5 · Deploy",
+      versions: "Saved versions"
+    };
+    $("header-sub").textContent = labels[stepId] || "Config sandbox → other orgs";
+  }
+}
+
+function renderStepper() {
+  const el = $("stepper");
+  if (!el) return;
+  const max = farthestStep();
+  const current = state.showingVersions ? -1 : state.stepIndex;
+  el.innerHTML = STEPS.map((step, i) => {
+    const active = i === current ? "active" : "";
+    const done = !state.showingVersions && i < state.stepIndex ? "done" : "";
+    const allowed = i <= Math.max(max, state.stepIndex);
+    return `<button type="button" class="step ${active} ${done}" data-step="${i}" ${allowed ? "" : "disabled"} aria-current="${i === current ? "step" : "false"}">
+      <span>${i + 1}</span>${escapeHtml(step.label)}
+    </button>`;
+  }).join("");
+}
+
+function updateWizardNav() {
+  const back = $("btn-back");
+  const next = $("btn-next");
+  const hint = $("wizard-hint");
+  if (!back || !next || !hint) return;
+  if (state.showingVersions) {
+    back.disabled = false;
+    next.disabled = true;
+    back.textContent = "Back to deploy";
+    next.textContent = "Next";
+    hint.textContent = "Versions are snapshots. Back returns to Deploy.";
+    return;
+  }
+  back.disabled = state.stepIndex === 0;
+  back.textContent = "Back";
+  const last = state.stepIndex >= STEPS.length - 1;
+  const reason = leaveReason(state.stepIndex);
+  next.disabled = last || Boolean(reason) || state.busy;
+  const labels = ["Next: pick type", "Next: members", "Next: review", "Next: deploy", "Deploy above"];
+  next.textContent = labels[state.stepIndex] || "Next";
+  hint.textContent = reason
+    || (last ? "Last step — use Deploy to target org above." : `Step ${state.stepIndex + 1} of 5 · ${currentStep().label}`);
+}
+
+function applyStepUi() {
+  const names = ["start", "components", "ship", "versions"];
+  names.forEach((name) => $(`view-${name}`)?.classList.toggle("active", false));
+  if (state.showingVersions) {
+    $("view-versions")?.classList.add("active");
+    document.body.dataset.step = "versions";
+    updatePickCopy();
+    renderStepper();
+    updateWizardNav();
+    return;
+  }
+  const step = currentStep();
+  document.body.dataset.step = step.id;
+  $(`view-${step.view}`)?.classList.add("active");
+  if (step.view === "components") {
+    if (step.id === "review") switchSubtab(state.xmlReview ? "xml" : "review");
+    else {
+      state.xmlReview = false;
+      switchSubtab("pick");
+    }
+  }
+  if (step.id === "type" && selectedOrg("source-org") && !typesForPicker().some((t) => t.fromOrg)) {
+    setTimeout(() => run(loadOrgTypes), 0);
+  }
+  updatePickCopy();
+  syncTypeChosenUi();
+  renderStepper();
+  updateWizardNav();
+}
+
+function goStep(index, { force = false } = {}) {
+  if (state.showingVersions && index >= 0) state.showingVersions = false;
+  if (!force && !canAdvanceTo(index)) {
+    setStatus(stepBlockReason(index), "error");
+    renderStepper();
+    updateWizardNav();
+    return;
+  }
+  if (index === 3) state.reviewSeen = true;
+  state.stepIndex = Math.max(0, Math.min(STEPS.length - 1, index));
+  applyStepUi();
+}
+
+function wizardBack() {
+  if (state.showingVersions) {
+    state.showingVersions = false;
+    state.stepIndex = 4;
+    applyStepUi();
+    return;
+  }
+  if (state.stepIndex === 0) return;
+  goStep(state.stepIndex - 1, { force: true });
+}
+
+function wizardNext() {
+  if (state.showingVersions) return;
+  const reason = leaveReason(state.stepIndex);
+  if (reason) {
+    setStatus(reason, "error");
+    updateWizardNav();
+    return;
+  }
+  if (state.stepIndex >= STEPS.length - 1) return;
+  goStep(state.stepIndex + 1, { force: true });
+}
+
+function showVersions() {
+  state.showingVersions = true;
+  applyStepUi();
 }
 
 function apiVersion() {
@@ -368,19 +574,47 @@ function renderTypePicker() {
 }
 
 function syncTypeChosenUi() {
-  const chosen = Boolean(state.typeChosen);
-  $("type-browse")?.classList.toggle("hidden", chosen);
-  $("type-chosen")?.classList.toggle("hidden", !chosen);
-  $("member-panel")?.classList.toggle("hidden", !chosen);
+  const stepId = currentStepId();
+  const onType = stepId === "type";
+  const onMembers = stepId === "members";
+  $("type-browse")?.classList.toggle("hidden", !onType);
+  $("type-chosen")?.classList.toggle("hidden", !onMembers);
+  $("member-panel")?.classList.toggle("hidden", !onMembers);
+  $("compact-package-card")?.classList.toggle("hidden", !(onType || onMembers));
   const objectScoped = OBJECT_FILTER_TYPES.includes(state.activeType) || state.activeType === "CustomObject";
-  $("object-filter-wrap")?.classList.toggle("hidden", !chosen || !objectScoped);
+  $("object-filter-wrap")?.classList.toggle("hidden", !onMembers || !objectScoped);
   if (state.activeType === "CustomObject") {
-    $("member-help").textContent = "Standard objects (Account, Contact, Opportunity, …) are listed first. Custom objects (__c) follow. Tick the object to include its CustomObject metadata; pick Fields for individual fields.";
+    $("member-help").textContent = "Standard objects (Account, Contact, Opportunity, …) are listed first. Custom objects (__c) follow. Tick a row — orange check means it is in the package.";
   } else if (OBJECT_FILTER_TYPES.includes(state.activeType)) {
-    $("member-help").textContent = "Filter by object (Account, Contact, …) then tick members. Add a name such as Account.Customer_Status__c if it is not in the list yet.";
+    $("member-help").textContent = "Tap an object chip (Account, Case, …) to shrink the list, then tick members. Orange check = selected.";
   } else {
-    $("member-help").textContent = "Tick members that belong on this Jira. You can also add a member by API name.";
+    $("member-help").textContent = "Tick members that belong in this deploy. Orange check means selected. You can also add a name at the bottom.";
   }
+}
+
+function renderObjectChips() {
+  const el = $("object-chips");
+  if (!el) return;
+  const objectScoped = OBJECT_FILTER_TYPES.includes(state.activeType) || state.activeType === "CustomObject";
+  const items = state.membersCache[state.activeType]?.items || [];
+  const options = objectFilterOptions(state.activeType, items);
+  if (!objectScoped || !options.length) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+  el.classList.remove("hidden");
+  const current = $("object-filter")?.value || state.objectFilter || "";
+  const chips = [`<button type="button" class="obj-chip ${current ? "" : "active"}" data-object="">All objects</button>`];
+  for (const name of options.slice(0, 30)) {
+    const active = name === current ? "active" : "";
+    const tag = isStandardObject(name) ? " · std" : "";
+    chips.push(`<button type="button" class="obj-chip ${active}" data-object="${escapeHtml(name)}">${escapeHtml(name)}${tag}</button>`);
+  }
+  if (options.length > 30) {
+    chips.push(`<span class="muted">+${options.length - 30} more — use the Object list</span>`);
+  }
+  el.innerHTML = chips.join("");
 }
 
 function renderObjectFilter() {
@@ -398,6 +632,20 @@ function renderObjectFilter() {
       .join("");
   sel.value = options.includes(current) ? current : "";
   state.objectFilter = sel.value;
+  renderObjectChips();
+}
+
+function memberRowHtml(item, typeName, selected) {
+  const checked = selected.has("*") || selected.has(item.fullName);
+  const mark = item.extra ? ` <span class="muted">(manual)</span>` : "";
+  const std = item.standard || (isStandardObject(item.fullName) && typeName === "CustomObject")
+    ? ` <span class="member-tag">standard</span>`
+    : "";
+  return `<label class="member-row">
+    <input type="checkbox" data-member="${escapeHtml(item.fullName)}" ${checked ? "checked" : ""} />
+    <span class="member-mark" aria-hidden="true">✓</span>
+    <span class="member-name">${escapeHtml(item.fullName)}${std}${mark}</span>
+  </label>`;
 }
 
 function renderTypeSelect() {
@@ -414,23 +662,25 @@ function renderMembers() {
   renderObjectFilter();
   const objectFilter = $("object-filter")?.value || state.objectFilter || "";
 
+  const selectedCount = [...selected].filter((name) => name !== "*").length;
+  if ($("member-count")) {
+    $("member-count").textContent = selectedCount
+      ? `${selectedCount} selected in ${typeName}`
+      : "Nothing selected yet — tick members below";
+  }
+
   if (!cache) {
     status.textContent = "Loading members from the source org, or add a member by name below.";
     const extras = [...selected].filter((name) => name !== "*");
     list.innerHTML = extras.length
-      ? extras
-          .map(
-            (name) =>
-              `<label><input type="checkbox" data-member="${escapeHtml(name)}" checked /> ${escapeHtml(name)}</label>`
-          )
-          .join("")
+      ? extras.map((name) => memberRowHtml({ fullName: name, extra: true }, typeName, selected)).join("")
       : `<div class="empty">Members appear here after you pick a type.</div>`;
     return;
   }
   if (cache.error) {
     status.textContent = cache.error;
   } else {
-    status.textContent = `${cache.items.length} in org · ${selected.size} selected in this type`;
+    status.textContent = `${cache.items.length} in org · ${selectedCount} selected in this type`;
   }
 
   let items = cache.items || [];
@@ -456,16 +706,7 @@ function renderMembers() {
     return;
   }
   list.innerHTML =
-    shown
-      .map((item) => {
-        const checked = selected.has("*") || selected.has(item.fullName) ? "checked" : "";
-        const mark = item.extra ? " <span class=\"muted\">(manual)</span>" : "";
-        const std = item.standard || isStandardObject(item.fullName) && typeName === "CustomObject"
-          ? ` <span class="member-tag">standard</span>`
-          : "";
-        return `<label><input type="checkbox" data-member="${escapeHtml(item.fullName)}" ${checked} /> ${escapeHtml(item.fullName)}${std}${mark}</label>`;
-      })
-      .join("") +
+    shown.map((item) => memberRowHtml(item, typeName, selected)).join("") +
     (combined.length > cap
       ? `<div class="muted">Showing ${cap} of ${combined.length}. Filter by object or tick Selected only to find the rest.</div>`
       : "");
@@ -725,7 +966,7 @@ function updateHeaderStatus() {
     return;
   }
   if (!pack) {
-    setStatus(`${n} org${n === 1 ? "" : "s"} ready · pick configuration on Components, then deploy.`);
+    setStatus(`${n} org${n === 1 ? "" : "s"} ready · Next to pick a configuration type.`);
     return;
   }
   const git = useGitEnabled() && isGithubConfigured(state.settings) ? ` · ${repoLabel(state.settings)}` : useGitEnabled() ? " · Git on (connect a repo)" : "";
@@ -775,7 +1016,7 @@ async function refreshAll() {
     log(`Could not read pipelines.json: ${err.message}`, "error");
   }
   updateHeaderStatus();
-  switchTab(state.settings.setupComplete ? "components" : "start");
+  goStep(0, { force: true });
 }
 
 async function connectGithub() {
@@ -987,7 +1228,7 @@ async function retrieveIntoReview() {
   if (!files.length) throw new Error("Retrieve returned no files. Check package.xml members.");
   state.stagedFiles = files;
   renderFileList();
-  switchSubtab("review");
+  goStep(3, { force: true });
   log(`Retrieved ${files.length} file(s). You can edit XML before deploy.`);
   setStatus(`Retrieved ${files.length} files — review or deploy`, "ok");
   return files;
@@ -1227,11 +1468,10 @@ function saveFileEdits() {
 }
 
 function switchTab(name) {
-  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
-  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
-  if (name === "components" && selectedOrg("source-org") && !typesForPicker().some((t) => t.fromOrg)) {
-    run(loadOrgTypes);
-  }
+  if (name === "start") goStep(0, { force: true });
+  else if (name === "components") goStep(state.typeChosen ? 2 : 1, { force: true });
+  else if (name === "ship") goStep(canAdvanceTo(4) ? 4 : farthestStep(), { force: true });
+  else if (name === "versions") showVersions();
 }
 
 function switchSubtab(name) {
@@ -1258,8 +1498,33 @@ document.querySelectorAll(".tab").forEach((tab) => {
 document.querySelectorAll(".subtab").forEach((tab) => {
   tab.addEventListener("click", () => switchSubtab(tab.dataset.subtab));
 });
+$("stepper")?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-step]");
+  if (!btn || btn.disabled) return;
+  goStep(Number(btn.dataset.step));
+});
+$("btn-back")?.addEventListener("click", wizardBack);
+$("btn-next")?.addEventListener("click", async () => {
+  if (state.busy) return;
+  if (state.stepIndex === 0) {
+    await run(async () => {
+      await saveSettings({ setupComplete: true, useGit: useGitEnabled() });
+      state.settings = await loadSettings();
+    });
+  }
+  wizardNext();
+});
+$("btn-goto-versions")?.addEventListener("click", showVersions);
+$("btn-show-xml")?.addEventListener("click", () => {
+  state.xmlReview = true;
+  switchSubtab("xml");
+});
+$("btn-back-to-files")?.addEventListener("click", () => {
+  state.xmlReview = false;
+  switchSubtab("review");
+});
 
-$("goto-components").addEventListener("click", () => switchTab("components"));
+$("goto-components").addEventListener("click", () => goStep(state.typeChosen ? 2 : 1, { force: true }));
 $("goto-workbench")?.addEventListener("click", openWorkbench);
 $("open-workbench")?.addEventListener("click", openWorkbench);
 $("open-workbench-banner")?.addEventListener("click", openWorkbench);
@@ -1330,14 +1595,21 @@ $("type-picker").addEventListener("click", (event) => {
   if (state.activeType === "CustomObject" && !state.membersCache.CustomObject) {
     state.membersCache.CustomObject = { items: withStandardObjectMembers("CustomObject", []), error: "" };
   }
-  renderTypePicker();
+  goStep(2, { force: true });
   renderMembers();
   if (selectedOrg("source-org")) run(loadMembers);
 });
 $("btn-change-type")?.addEventListener("click", () => {
   state.typeChosen = false;
-  syncTypeChosenUi();
+  goStep(1, { force: true });
   renderTypePicker();
+});
+$("object-chips")?.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-object]");
+  if (!chip) return;
+  state.objectFilter = chip.dataset.object || "";
+  if ($("object-filter")) $("object-filter").value = state.objectFilter;
+  renderMembers();
 });
 $("object-filter")?.addEventListener("change", () => {
   state.objectFilter = $("object-filter").value;
@@ -1348,8 +1620,7 @@ $("mode-git")?.addEventListener("click", () => run(() => persistGitToggle(true))
 $("btn-start-continue")?.addEventListener("click", () => run(async () => {
   await saveSettings({ setupComplete: true, useGit: useGitEnabled() });
   state.settings = await loadSettings();
-  switchTab("components");
-  setStatus("Pick a configuration type, then tick members to add.", "ok");
+  wizardNext();
 }));
 $("btn-use-pipeline")?.addEventListener("click", () => run(useSelectedPipeline));
 $("btn-save-pipeline")?.addEventListener("click", () => run(saveCurrentPipeline));
@@ -1385,11 +1656,11 @@ $("version-list").addEventListener("click", (event) => {
   const deployId = event.target.dataset.deploy;
   if (useId) {
     $("jira").value = useId;
-    switchTab("ship");
+    goStep(4, { force: true });
   }
   if (deployId) {
     $("jira").value = deployId;
-    switchTab("ship");
+    goStep(4, { force: true });
     run(() => deployVersion(deployId));
   }
 });

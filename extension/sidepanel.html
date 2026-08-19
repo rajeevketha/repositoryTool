@@ -6,13 +6,13 @@
     <title>OrgFlow</title>
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
-  <body data-layout="sidepanel">
+  <body data-layout="sidepanel" data-step="start">
     <header class="app-header">
       <div class="brand">
         <img src="icons/icon32.png" alt="" width="24" height="24" />
         <div>
           <strong>OrgFlow</strong>
-          <span>Config sandbox → other orgs</span>
+          <span id="header-sub">Config sandbox → other orgs</span>
         </div>
       </div>
       <div class="header-actions">
@@ -23,18 +23,13 @@
 
     <div id="status-bar" class="status-bar">Log into your Salesforce orgs, then pick configuration to deploy.</div>
 
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="start" type="button">Start</button>
-      <button class="tab" data-tab="components" type="button">Pick</button>
-      <button class="tab" data-tab="ship" type="button">Deploy</button>
-      <button class="tab" data-tab="versions" type="button">Versions</button>
-    </nav>
+    <nav class="stepper" id="stepper" role="tablist" aria-label="Deployment steps"></nav>
 
     <section id="org-path" class="org-path incomplete" aria-label="Deployment path">
       <div class="path-copy">
         <span class="path-kicker">Deployment path</span>
         <strong id="path-caption">Select source and target orgs</strong>
-        <span id="path-sub" class="path-sub">Deploy stays off until From and To are different Salesforce orgs.</span>
+        <span id="path-sub" class="path-sub">Next stays off until From and To are different Salesforce orgs.</span>
       </div>
       <div class="path-flow">
         <label class="path-node source">
@@ -56,9 +51,9 @@
     <div class="app-body">
       <main>
         <section id="view-start" class="view active">
-          <p class="step-kicker">Step-by-step for configurators</p>
-          <h2 class="page-title">How do you want to work?</h2>
-          <p class="hint">Confirm this first. You can change it later on this tab.</p>
+          <p class="step-kicker">Step 1 of 5</p>
+          <h2 class="page-title">Connect From and To</h2>
+          <p class="hint">Choose a work mode, detect both orgs, then set <strong>From</strong> and <strong>To</strong> in the path bar. Next unlocks only when they are different orgs.</p>
           <div class="mode-grid">
             <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
               <strong>Simple deploy</strong>
@@ -71,15 +66,15 @@
           </div>
           <div id="mode-status" class="muted">Choose Simple deploy or Git version control to continue.</div>
 
-          <h2>1. Salesforce orgs</h2>
-          <p class="hint">Log into both orgs in Chrome, detect them, then set <strong>From</strong> and <strong>To</strong> in the blue path bar above — for example Dev → QA. That path stays visible on every tab.</p>
+          <h2>Salesforce orgs</h2>
+          <p class="hint">Log into both orgs in Chrome, detect them, then set From and To above — for example Dev → QA. That path stays visible on every step.</p>
           <div class="actions">
             <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
           </div>
           <div id="org-list" class="list"></div>
 
           <div id="git-setup-block">
-            <h2>2. Connect GitHub</h2>
+            <h2>Connect GitHub</h2>
             <p class="hint">Needed only for Git version control. The token stays in this browser. It is never committed to the repo.</p>
             <article class="card help-card">
               <div class="title">How to create a GitHub token</div>
@@ -114,7 +109,7 @@
               <button id="btn-save-repo" class="secondary" data-busy>Use this repo</button>
             </div>
 
-            <h2>3. Pipeline</h2>
+            <h2>Pipeline</h2>
             <p class="hint">A pipeline remembers source org, target org, and test setting. It is saved in Git at <code>.orgflow/pipelines.json</code> so the next time you open OrgFlow you can reuse it.</p>
             <div id="pipeline-welcome" class="card hidden">
               <div class="title">Welcome back</div>
@@ -149,17 +144,19 @@
             <div id="pipeline-status" class="muted"></div>
           </div>
 
-          <div class="actions">
+          <div class="actions hidden">
             <button type="button" id="btn-start-continue" class="accent">Continue to Pick configuration</button>
           </div>
         </section>
 
         <section id="view-ship" class="view">
+          <p class="step-kicker">Step 5 of 5</p>
+          <h2 class="page-title">Deploy to the To org</h2>
           <article class="card" id="package-summary-card">
             <div class="title">What to move</div>
-            <div id="package-summary-body" class="meta">Nothing selected yet — pick fields, layouts, flows, permission sets… on Pick.</div>
+            <div id="package-summary-body" class="meta">Nothing selected yet — pick fields, layouts, flows, permission sets… on earlier steps.</div>
             <div class="tiny">
-              <button type="button" class="secondary" id="goto-components">Pick configuration</button>
+              <button type="button" class="secondary" id="goto-components">Back to members</button>
               <button type="button" class="secondary" id="goto-workbench">Open wide workbench</button>
             </div>
           </article>
@@ -231,16 +228,22 @@
               <button id="btn-save" class="secondary" data-busy data-needs="source,package,git">Save version to Git</button>
               <button id="btn-deploy" class="secondary" data-busy data-needs="target,git">Deploy a saved Jira version</button>
             </div>
+            <button type="button" id="btn-goto-versions" class="ghost-text">Open saved versions</button>
           </div>
         </section>
 
         <section id="view-versions" class="view">
-          <p class="hint" id="versions-hint">Versions live in the connected Git repo. Turn on Git versioning and connect a repo in Setup.</p>
+          <p class="step-kicker">Saved snapshots</p>
+          <h2 class="page-title">Versions</h2>
+          <p class="hint" id="versions-hint">Versions live in the connected Git repo. Use Back to return to Deploy.</p>
           <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
           <div id="version-list" class="list"></div>
         </section>
 
         <section id="view-components" class="view">
+          <p class="step-kicker" id="pick-kicker">Pick configuration</p>
+          <h2 class="page-title" id="pick-heading">Choose a configuration type</h2>
+          <p class="hint" id="pick-lead">One type at a time. After you tap a type, Next takes you to its members.</p>
           <nav class="subtabs" role="tablist">
             <button type="button" class="subtab active" data-subtab="pick">Pick</button>
             <button type="button" class="subtab" data-subtab="xml">package.xml</button>
@@ -248,7 +251,6 @@
           </nav>
 
           <div id="subview-pick" class="subview active">
-            <p class="hint">1. Choose a configuration type. 2. Tick members (Account, Contact, and other standard objects are listed). 3. Confirm them in the selected package.</p>
             <div class="workbench-banner" id="workbench-banner">
               The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> so you can pick from thousands of fields and still see exactly what is in the package.
             </div>
@@ -263,15 +265,16 @@
             <div id="type-chosen" class="card hidden">
               <div class="title" id="active-type-title">Selected type</div>
               <div class="meta" id="active-type-meta"></div>
+              <p class="hint" id="member-count">Nothing selected yet</p>
               <div class="tiny">
                 <button type="button" id="btn-change-type" class="secondary">Change type</button>
               </div>
             </div>
             <div id="member-panel" class="hidden">
-              <p class="hint" id="member-help">Members for this type appear below. Tick what belongs on this Jira. Standard objects such as Account and Contact are included when you pick Objects.</p>
+              <p class="hint" id="member-help">Tick the orange boxes for members that belong in this deploy. Filter by object first when the list is long.</p>
               <div class="row-actions">
                 <button type="button" id="btn-load-members" class="secondary" data-busy data-needs="source">Reload members from source org</button>
-                <button type="button" id="btn-select-visible" class="secondary">Select visible</button>
+                <button type="button" id="btn-select-visible" class="secondary">Tick visible</button>
                 <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
               </div>
               <label id="object-filter-wrap" class="hidden">
@@ -280,6 +283,7 @@
                   <option value="">All objects</option>
                 </select>
               </label>
+              <div id="object-chips" class="object-chips hidden"></div>
               <div class="member-toolbar">
                 <input id="member-filter" type="search" placeholder="Filter members" />
                 <label class="check compact">
@@ -288,7 +292,7 @@
                 </label>
               </div>
               <div id="member-status" class="muted"></div>
-              <div id="member-list" class="type-list"></div>
+              <div id="member-list" class="type-list member-list"></div>
               <label>
                 Add member by name
                 <div class="inline-add">
@@ -304,7 +308,7 @@
                 <button type="button" id="btn-clear-package" class="secondary">Clear package</button>
               </div>
             </article>
-            <div class="actions">
+            <div class="actions hidden">
               <button type="button" id="btn-retrieve" class="secondary" data-busy data-needs="source,package">Retrieve into Review</button>
               <button type="button" id="btn-deploy-from-pick" class="accent" data-busy data-needs="source,target,package,distinct">Deploy configuration to target org</button>
             </div>
@@ -317,6 +321,7 @@
             <div class="row-actions">
               <button type="button" id="btn-apply-xml" class="primary">Apply XML to picker</button>
               <button type="button" id="btn-rebuild-xml" class="secondary">Rebuild from picker</button>
+              <button type="button" id="btn-back-to-files" class="ghost-text">Back to retrieved files</button>
             </div>
           </div>
 
@@ -334,7 +339,8 @@
               </div>
             </label>
             <div class="actions">
-              <button type="button" id="btn-deploy-review" class="accent" data-busy data-needs="source,target,package,distinct">Deploy these files to target org</button>
+              <button type="button" id="btn-show-xml" class="ghost-text">Edit package.xml instead</button>
+              <button type="button" id="btn-deploy-review" class="accent hidden" data-busy data-needs="source,target,package,distinct">Deploy these files to target org</button>
             </div>
           </div>
         </section>
@@ -371,6 +377,12 @@
       <div class="log-head">Activity</div>
       <pre id="log"></pre>
     </section>
+
+    <footer class="wizard-nav">
+      <button type="button" id="btn-back" class="secondary">Back</button>
+      <p class="wizard-hint" id="wizard-hint">Set From and To, then Next.</p>
+      <button type="button" id="btn-next" class="primary">Next</button>
+    </footer>
 
     <script src="lib/jszip.min.js"></script>
     <script type="module" src="sidepanel.js"></script>
