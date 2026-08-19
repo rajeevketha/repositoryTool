@@ -26,9 +26,11 @@ The flow is: detect orgs → pick components → confirm the live selected packa
 
 ## Install (unpacked Chrome extension)
 
-1. Clone this repository.
+**Download the test zip:** [files/orgflow-extension.zip](files/orgflow-extension.zip) (unzip, then load the `orgflow` folder).
+
+1. Clone this repository, or unzip `files/orgflow-extension.zip`.
 2. Chrome → `chrome://extensions` → enable **Developer mode**.
-3. **Load unpacked** → select the `extension/` folder.
+3. **Load unpacked** → select the unzipped `orgflow` folder (or the repo `extension/` folder).
 4. Pin OrgFlow and open it. Chrome opens a side panel. Use **Workbench** when you need a wide picker plus the live selected-package pane.
 
 ## First-time setup
