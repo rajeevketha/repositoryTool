@@ -372,6 +372,19 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
 .mode-card span { font-weight: 500; color: var(--muted); font-size: 12px; }
 .mode-card.selected { border-color: #4a5568; background: #1e2430; box-shadow: none; }
 
+.help-card summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  color: #fff;
+}
+.help-card summary::-webkit-details-marker { display: none; }
+.help-card summary::after {
+  content: " ▾";
+  color: var(--muted);
+  font-weight: 500;
+}
+.help-card:not([open]) summary::after { content: " ▸"; }
 .help-steps { margin: 8px 0 0; padding-left: 18px; }
 .help-card a { color: var(--orange-2); }
 
@@ -581,44 +594,7 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
   border-bottom-right-radius: var(--radius);
   pointer-events: none;
 }
-.playbook {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.playbook li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #1b1b1b;
-  border: 1px solid #333;
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-weight: 700;
-}
-.playbook li span {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #333;
-  font-size: 11px;
-  flex-shrink: 0;
-}
-.playbook li.done {
-  border-color: #5c5348;
-  color: var(--text);
-}
-.playbook li.done span {
-  background: #3a342c;
-  color: var(--orange-2);
-}
 body.mode-simple .git-only { display: none !important; }
-body.mode-git #simple-playbook { display: none; }
 
 .git-ship {
   display: flex;
@@ -698,7 +674,7 @@ body[data-layout="workbench"][data-step="start"] .app-body,
 body[data-layout="workbench"][data-step="versions"] .app-body {
   grid-template-columns: 1fr;
 }
-.step { font-size: 11px; }
+body[data-layout="workbench"] .mode-grid { grid-template-columns: 1fr 1fr; }
 @media (max-width: 420px) {
   .stepper { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .step { font-size: 10px; padding: 8px 2px 10px; }

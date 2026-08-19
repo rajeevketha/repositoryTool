@@ -263,8 +263,8 @@ function deployBlockReason() {
     return `Already deployed this package to ${target.label}. Change To for another org, or start a new package.`;
   }
   if (useGitEnabled()) {
-    if (!isGitConfigured(state.settings)) return "Connect a Git repo on Start before deploying with Git.";
-    if (!gitCommitMessage()) return "Enter a Git commit message before deploying. It is required when a Git repo is on.";
+    if (!isGitConfigured(state.settings)) return "Connect GitHub, GitLab, or Azure on Start before deploying from a team repo.";
+    if (!gitCommitMessage()) return "Enter a commit message before deploying. It is required when a team repo is on.";
   }
   return "";
 }
@@ -317,7 +317,7 @@ function updateActionState() {
   const saveBtn = $("btn-save");
   if (saveBtn && useGitEnabled() && !state.busy && !gitCommitMessage()) {
     saveBtn.disabled = true;
-    saveBtn.title = "Enter a Git commit message first";
+    saveBtn.title = "Enter a commit message first";
   }
   const callout = $("deploy-reason");
   if (callout) {
@@ -330,7 +330,6 @@ function updateActionState() {
   applyRetrieveLockUi();
   updateWizardNav();
   renderStepper();
-  renderSimplePlaybook();
 }
 
 function renderOrgPath() {
@@ -656,7 +655,7 @@ function requireGitCommitMessage() {
   if (!useGitEnabled()) return gitCommitMessage();
   const message = gitCommitMessage();
   if (!message) {
-    throw new Error("Commit message is required when a Git repo is on. Describe the change before saving or deploying.");
+    throw new Error("Commit message is required when a team repo is on. Describe the change before saving or deploying.");
   }
   return message;
 }
@@ -721,7 +720,7 @@ function renderInspector() {
   const gitOn = useGitEnabled();
   const repo = isGitConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
   $("inspector-git").textContent = gitOn
-    ? `Jira versions in Git · ${repo}`
+    ? `Jira versions in the team repo · ${repo}`
     : "Jira versions in this browser · same snapshot for QA then prod";
   const tests = state.specifiedTests;
   $("inspector-tests").textContent = tests.length
@@ -826,15 +825,15 @@ function renderGitUi() {
     ? connected
       ? `Shared Jira versions are stored in ${repoLabel(state.settings)}.`
       : `${host} is on — connect a repo on Start so the team can reuse versions.`
-    : "Jira versions are stored in this Chrome profile. The same PROJ-123-v1 can go sandbox → QA → prod. Connect a Git repo only if the team needs a shared warehouse.";
+    : "Jira versions are stored in this Chrome profile. Connect GitHub, GitLab, or Azure only if the team needs a shared warehouse.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
       : `Connect a ${host} repo on Start. Until then, versions stay in this browser.`
-    : "Saving versions in this browser (no Git token).";
+    : "Saving versions in this browser (no token).";
   $("git-hint").textContent = on
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod get the same snapshot."
-    : "Each Jira save creates v1, v2, … on this computer. Git is optional sharing, not the versioning itself.";
+    : "Each Jira save creates v1, v2, … on this computer. A team repo is optional sharing, not the versioning itself.";
   $("git-setup-block")?.classList.toggle("hidden", !on);
   document.body.classList.toggle("mode-simple", !on);
   document.body.classList.toggle("mode-git", on);
@@ -842,15 +841,16 @@ function renderGitUi() {
     card.classList.toggle("selected", card.dataset.mode === (on ? "git" : "simple"));
   });
   $("mode-status").textContent = on
-    ? `Git sharing is on (${host}). Connect a repo so teammates can load the same Jira versions.`
-    : "Versioning is on in this browser. Detect orgs, set From and To, then Next. No Git token required.";
+    ? connected
+      ? `Sharing in ${repoLabel(state.settings)}.`
+      : `Sharing is on — ${host}. Open “How to connect ${host}” if you need a token, then connect a repo below.`
+    : "Snapshots stay on this Chrome profile. Detect orgs, set From and To, then Next.";
   const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   if ($("git-ship-hint")) {
     $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version.`;
   }
   fillGitHostUi();
-  renderSimplePlaybook();
   renderPipelines();
 }
 
@@ -870,6 +870,11 @@ function fillGitHostUi() {
     const link = `<li>Create a token: <a href="${escapeHtml(linkHref)}" target="_blank" rel="noreferrer">${escapeHtml(linkHref.replace(/^https?:\/\//, ""))}</a></li>`;
     $("git-help-steps").innerHTML = link + meta.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
   }
+  const help = $("git-help");
+  if (help && useGitEnabled() && !isGitConfigured(state.settings) && help.dataset.opened !== "1") {
+    help.open = true;
+    help.dataset.opened = "1";
+  }
   $("git-base-url-wrap")?.classList.toggle("hidden", !meta.needsBaseUrl);
   $("git-org-wrap")?.classList.toggle("hidden", !meta.needsOrg);
   const tokenLabel = $("git-token-label");
@@ -884,21 +889,6 @@ function fillGitHostUi() {
       : "Or paste owner/repo ";
     $("gh-repo-input").placeholder = meta.repoPlaceholder;
   }
-}
-
-function renderSimplePlaybook() {
-  const el = $("simple-playbook");
-  if (!el) return;
-  const items = [
-    { done: state.orgs.length > 0, text: "Detect logged-in orgs" },
-    { done: pathReady(), text: "Set From and To (must be different)" },
-    { done: state.typeChosen, text: "Pick a configuration type" },
-    { done: memberCount(state.packageTypes) > 0, text: "Tick members to include" },
-    { done: hasFreshRetrieve(), text: "Retrieve, then deploy" }
-  ];
-  el.innerHTML = items
-    .map((item, i) => `<li class="${item.done ? "done" : ""}"><span>${item.done ? "✓" : i + 1}</span>${escapeHtml(item.text)}</li>`)
-    .join("");
 }
 
 function renderTypePicklist() {
@@ -1235,9 +1225,9 @@ function renderPipelines() {
     }
   }
   $("pipeline-status").textContent = items.length
-    ? `${items.length} pipeline${items.length === 1 ? "" : "s"} in Git (${pipelinesFilePath()}).`
+    ? `${items.length} pipeline${items.length === 1 ? "" : "s"} in the repo (${pipelinesFilePath()}).`
     : useGitEnabled()
-      ? "No pipeline saved yet. Name it, pick source and target, then save to Git."
+      ? "No pipeline saved yet. Name it, pick source and target, then save to the repo."
       : "";
 }
 
@@ -1594,7 +1584,7 @@ function renderVersions() {
     return `${v.id} ${v.jira} ${v.comment}`.toLowerCase().includes(q);
   });
   if (!items.length) {
-    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to Git." : "No versions in this browser yet. Retrieve, then save a snapshot."}</div>`;
+    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to repo." : "No versions in this browser yet. Retrieve, then save a snapshot."}</div>`;
     return;
   }
   $("version-list").innerHTML = items
@@ -1820,7 +1810,7 @@ async function persistShipOptions() {
 }
 
 function requireGithub() {
-  if (!useGitEnabled()) throw new Error("Choose Git version control on the Start tab first.");
+  if (!useGitEnabled()) throw new Error("Choose GitHub, GitLab, or Azure on Start first.");
   if (!isGitConfigured(state.settings)) throw new Error(`Connect a ${providerMeta(providerId(state.settings)).label} repo on the Start tab first.`);
 }
 
@@ -1951,7 +1941,7 @@ function resolveTicket(store) {
   const jiraField = $("jira").value.trim();
   const comment = $("comment").value.trim();
   if (useGitEnabled() && !comment) {
-    throw new Error("Commit message is required when a Git repo is on.");
+    throw new Error("Commit message is required when a team repo is on.");
   }
   if (jiraField) {
     const parsed = parseTicketInput(jiraField);
@@ -2219,7 +2209,7 @@ async function deployVersion(explicitId) {
     const ref = await getRef(creds);
     const sha = version.commitSha || ref?.object?.sha;
     if (!sha) throw new Error("Repo branch has no commits yet.");
-    log(`Loading ${version.id} from Git (${version.path})…`);
+    log(`Loading ${version.id} from the repo (${version.path})…`);
     files = await fetchReleaseFiles({ ...creds, commitSha: sha, prefix: version.path });
     if (!files.length) throw new Error(`No files found at ${version.path}.`);
   }
@@ -2433,6 +2423,8 @@ $("open-workbench-banner")?.addEventListener("click", openWorkbench);
 $("btn-connect-github").addEventListener("click", () => run(connectGithub));
 $("git-provider")?.addEventListener("change", () => {
   fillGitHostUi();
+  const help = $("git-help");
+  if (help) help.open = true;
   state.repos = [];
   renderRepos();
 });
@@ -2583,7 +2575,7 @@ $("version-list").addEventListener("click", (event) => {
   }
   if (deployId) {
     if (useGitEnabled() && !gitCommitMessage()) {
-      log("Enter a Git commit message before deploying this version.", "error");
+      log("Enter a commit message before deploying this version.", "error");
       $("comment")?.focus();
       return;
     }

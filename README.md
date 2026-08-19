@@ -2,17 +2,17 @@
 
 Chrome extension for **Salesforce configurators**: build fields, layouts, flows, permission sets (and other metadata) in a sandbox, then deploy that same package to QA, UAT, or production.
 
-GitHub, GitLab, or Azure DevOps is **optional**. OrgFlow always versions by Jira (`PROJ-123-v1`). Without a Git host, snapshots live in this Chrome profile so you can promote the same package sandbox → QA → prod. Turn on **Version in a Git repo** when the team needs a shared warehouse.
+GitHub, GitLab, or Azure DevOps is **optional**. OrgFlow always versions by Jira (`PROJ-123-v1`). Without a team repo, snapshots live in this Chrome profile so you can promote the same package sandbox → QA → prod. Choose **GitHub, GitLab, or Azure** when the team needs a shared warehouse.
 
 ## Configurator workflow
 
 Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Retrieve → Deploy) is sequential: you cannot skip ahead.
 
-1. **Start** — choose **Version in this browser** (default) or **Version in a Git repo**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If Git: pick **GitHub**, **GitLab**, or **Azure DevOps**, follow the on-screen token steps, connect the repo, optionally save a **pipeline** to `.orgflow/pipelines.json`.
+1. **Start** — choose **This browser** (default) or **GitHub, GitLab, or Azure**. Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). If a team repo: pick the host, follow **How to connect**, then **Use this repo**. Optionally save a **pipeline** to `.orgflow/pipelines.json`.
 2. **Type** — search, use the picklist, or tap a common type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
 3. **Members** — tick rows (orange check = in the package). The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list. Next goes to Retrieve (not another picker). Use **Back** later if you need more members.
 4. **Retrieve** — pulls files from the From org. This screen does not change members. Failures (and a successful file count) show in the result panel. Unlock only if you need to change From or members, then retrieve again.
-5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel. If **Version in a Git repo** is on, a **commit message is required** before Deploy or Save to Git. Use **Versions** to compare a retrieve with a previous snapshot (latest first) and revert selected metadata or Apex files.
+5. **Deploy** — lists the components in this package and one **Deploy** button. The button stays off until Salesforce returns success or failure. Component errors (name + problem + line) and successes appear in the result panel. If a **team repo** is on, a **commit message is required** before Deploy or Save to repo. Use **Versions** to compare a retrieve with a previous snapshot (latest first) and revert selected metadata or Apex files.
 
 The UI uses a warm charcoal + bronze theme. Accent color is used on the current step and the main action, not on every heading.
 
@@ -51,12 +51,12 @@ If an org does not appear, open it (Lightning or Setup) so a `*.my.salesforce.co
 
 On **Start**, choose where snapshots are stored:
 
-- **Version in this browser** — no Git token. Jira versions (`PROJ-123-v1`) stay on this Chrome profile. Promote that same snapshot to QA, then prod.
-- **Version in a Git repo** — same Jira versions, written to GitHub, GitLab, or Azure DevOps so teammates can reuse them. Token stays in this browser.
+- **This browser** — no token. Jira versions (`PROJ-123-v1`) stay on this Chrome profile. Promote that same snapshot to QA, then prod.
+- **GitHub, GitLab, or Azure** — same Jira versions, written to the host you pick so teammates can reuse them. Token stays in this browser.
 
-Git is the shared warehouse, not the versioning itself. Without a place to keep the retrieved files, there is no version — only a one-shot copy, which OrgFlow no longer treats as the main path.
+Git hosts are the shared warehouse, not the versioning itself. Without a place to keep the retrieved files, there is no version — only a one-shot copy, which OrgFlow no longer treats as the main path.
 
-On Start, pick the host. OrgFlow shows the token steps for that host:
+On Start, pick the host. Open **How to connect** for token steps for that host:
 
 - **GitHub** — [github.com/settings/tokens](https://github.com/settings/tokens) (`repo` or Contents: Read and write). Connect, pick `owner/repo`, **Use this repo**.
 - **GitLab** — Preferences → Access tokens (`api`, or `read_repository` + `write_repository`). gitlab.com or your company GitLab URL. Connect, pick `group/project`.
@@ -88,13 +88,13 @@ Wildcard `*` for a type still works if you want everything of that type. For rea
 | Target org | UAT |
 | Tests | `No tests` for config-only; **Test class runner** → `RunSpecifiedTests`; `Run local tests` if you prefer the whole org’s local tests |
 
-- **Version in this browser / Git repo** — versioning is always on. GitHub, GitLab, or Azure DevOps is optional sharing.
+- **This browser / GitHub, GitLab, or Azure** — versioning is always on. A team repo is optional sharing.
 - **Workbench** — wide window: picker on the left, live selected package on the right (category columns + package.xml). On Retrieve/Deploy the right pane is the Salesforce result panel.
 - **Deploy** — one button on the last step. It stays off until Salesforce returns success or failure. Component and test errors (name + problem) show in the result panel.
 
 ## Can this be a real deployment / version tool?
 
-Yes, for metadata. OrgFlow talks to the same **Salesforce Metadata API** that Salesforce CLI, change sets, and tools like Gearset use: retrieve a package, optionally edit files, deploy the zip, and keep Jira-keyed snapshots (this browser, or a Git repo).
+Yes, for metadata. OrgFlow talks to the same **Salesforce Metadata API** that Salesforce CLI, change sets, and tools like Gearset use: retrieve a package, optionally edit files, deploy the zip, and keep Jira-keyed snapshots (this browser, or GitHub / GitLab / Azure).
 
 Use it that way when:
 
@@ -116,7 +116,7 @@ It is **not** a full Copado/Gearset replacement: no dependency graph, no data (r
 
 `versions.json` keeps increment history, comments, source org, Git commit SHA, and deployment audit entries. A second save of the same Jira key creates `v2` so `v1` stays deployable.
 
-When a Git repo is on:
+When a team repo is on:
 
 - **Compare** — picklist of versions, newest first. Diff metadata XML and Apex against the current retrieve or another version.
 - **Revert selected files** — restore specific files from any version into the current retrieve, then deploy.
@@ -151,4 +151,4 @@ Chrome side panel / workbench
   └─ Git host PAT → GitHub / GitLab / Azure Repos APIs when Git versioning is on
 ```
 
-The Metadata API zip is unpacked and stored as normal files so you can review a Jira version in the connected Git repo like any other commit.
+The Metadata API zip is unpacked and stored as normal files so you can review a Jira version in the connected repo like any other commit.

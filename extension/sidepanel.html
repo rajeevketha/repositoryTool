@@ -58,41 +58,39 @@
         <section id="view-start" class="view active">
           <p class="step-kicker">Step 1 of 5</p>
           <h2 class="page-title">Connect From and To</h2>
-          <p class="hint">Choose where Jira versions are stored. Versioning is always on — a Git repo is optional for sharing with the team.</p>
+          <p class="hint">Set From and To in the path bar. Choose where snapshots live — this browser, or a shared GitHub / GitLab / Azure repo.</p>
           <div class="mode-grid">
             <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
-              <strong>Version in this browser</strong>
-              <span>Keep Jira snapshots here (PROJ-123-v1). Promote the same package sandbox → QA → prod. No Git token. Versions stay on this Chrome profile.</span>
+              <strong>This browser</strong>
+              <span>Keep Jira snapshots on this Chrome profile. No token.</span>
             </button>
             <button type="button" class="mode-card" id="mode-git" data-mode="git">
-              <strong>Version in a Git repo</strong>
-              <span>Same Jira snapshots, stored in GitHub, GitLab, or Azure DevOps so the team can reuse them. Token stays in this browser.</span>
+              <strong>GitHub, GitLab, or Azure</strong>
+              <span>Share the same snapshots with the team. Pick the host below.</span>
             </button>
           </div>
-          <div id="mode-status" class="muted">Choose Simple deploy or Git version control to continue.</div>
-          <ol id="simple-playbook" class="playbook"></ol>
+          <div id="mode-status" class="muted">Snapshots stay on this Chrome profile.</div>
 
           <h2>Salesforce orgs</h2>
-          <p class="hint">Log into both orgs in Chrome, detect them, then set From and To above — for example Dev → QA. That path stays visible on every step.</p>
           <div class="actions">
             <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
           </div>
           <div id="org-list" class="list"></div>
 
           <div id="git-setup-block" class="hidden">
-            <h2>Connect a Git repo</h2>
-            <p class="hint">Needed only when Git versioning is on. OrgFlow writes snapshots to <code>.orgflow/</code> in the repo you pick. The token stays in this browser. Compatible hosts: GitHub, GitLab (gitlab.com or your company instance), and Azure Repos.</p>
-            <label>Git host
+            <h2>Connect the team repo</h2>
+            <p class="hint">OrgFlow writes snapshots to <code>.orgflow/</code> in the repo you pick. The token stays in this browser.</p>
+            <label>Host
               <select id="git-provider">
                 <option value="github">GitHub</option>
                 <option value="gitlab">GitLab</option>
                 <option value="azuredevops">Azure DevOps</option>
               </select>
             </label>
-            <article class="card help-card">
-              <div class="title" id="git-help-title">How to connect GitHub</div>
+            <details class="card help-card" id="git-help">
+              <summary class="title" id="git-help-title">How to connect GitHub</summary>
               <ol class="help-steps" id="git-help-steps"></ol>
-            </article>
+            </details>
             <label id="git-base-url-wrap" class="hidden">GitLab instance URL
               <input id="git-base-url" type="url" placeholder="https://gitlab.com" />
             </label>
@@ -122,7 +120,7 @@
             </div>
 
             <h2>Pipeline</h2>
-            <p class="hint">A pipeline remembers source org, target org, and test setting. It is saved in Git at <code>.orgflow/pipelines.json</code> so the next time you open OrgFlow you can reuse it.</p>
+            <p class="hint">Optional. Remembers From, To, and test level in <code>.orgflow/pipelines.json</code>.</p>
             <div id="pipeline-welcome" class="card hidden">
               <div class="title">Welcome back</div>
               <div class="meta" id="pipeline-welcome-body"></div>
@@ -151,7 +149,7 @@
               </label>
             </div>
             <div class="actions">
-              <button type="button" id="btn-save-pipeline" class="secondary" data-busy>Save pipeline to Git</button>
+              <button type="button" id="btn-save-pipeline" class="secondary" data-busy>Save pipeline to repo</button>
             </div>
             <div id="pipeline-status" class="muted"></div>
           </div>
@@ -374,8 +372,8 @@
         </section>
 
         <section id="git-ship-panel" class="git-ship git-only hidden">
-          <h2>Git commit</h2>
-          <p class="hint" id="git-ship-hint">A commit message is required when a Git repo is on — for Save, Salesforce deploy, and deploying a saved version.</p>
+          <h2>Save to the team repo</h2>
+          <p class="hint" id="git-ship-hint">A commit message is required when sharing in GitHub, GitLab, or Azure — for Save, Salesforce deploy, and deploying a saved version.</p>
           <label>Jira key (optional)
             <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
           </label>
@@ -383,7 +381,7 @@
             <textarea id="comment" rows="3" placeholder="Required. Example: Account status field + layout for PROJ-123"></textarea>
           </label>
           <div class="row-actions">
-            <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to Git</button>
+            <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to repo</button>
           </div>
         </section>
       </main>
