@@ -11,7 +11,7 @@ describe("settings", () => {
     assert.equal(merged.apiVersion, "61.0");
     assert.deepEqual(merged.metadataTypes, DEFAULT_METADATA_TYPES);
     assert.equal(isGithubConfigured(merged), true);
-    assert.equal(repoLabel(merged), "acme/sf@main");
+    assert.equal(repoLabel(merged), "acme/sf@main (GitHub)");
     assert.equal(merged.useGit, false);
     assert.equal(merged.setupComplete, false);
     assert.deepEqual(merged.specifiedTests, []);

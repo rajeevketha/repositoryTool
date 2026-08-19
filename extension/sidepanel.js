@@ -1,4 +1,4 @@
-import { loadSettings, saveSettings, isGithubConfigured, repoLabel } from "./lib/storage.js";
+import { loadSettings, saveSettings, isGitConfigured, repoLabel } from "./lib/storage.js";
 import { catalogGroupsFromTypes, memberHint, fallbackTypeRecords, mergeDescribedTypes, withStandardObjectMembers, objectFilterOptions, memberObjectKey, OBJECT_FILTER_TYPES, isStandardObject, COMMON_CONFIG_TYPES } from "./lib/metadataTypes.js";
 import {
   parseTicketInput,
@@ -15,15 +15,20 @@ import {
   isJiraKey
 } from "./lib/versions.js";
 import {
+  providerMeta,
+  providerId,
+  hostCreds,
+  parseRepoInput,
+  ensureHostAccess,
   getUser,
   listRepos,
-  parseRepoInput,
   getFileContent,
   commitFiles,
   fetchReleaseFiles,
   encodeUtf8Base64,
-  getRef
-} from "./lib/github.js";
+  getRef,
+  tokenUrl
+} from "./lib/gitHost.js";
 import {
   pipelinesFilePath,
   emptyPipelineStore,
@@ -258,8 +263,8 @@ function deployBlockReason() {
     return `Already deployed this package to ${target.label}. Change To for another org, or start a new package.`;
   }
   if (useGitEnabled()) {
-    if (!isGithubConfigured(state.settings)) return "Connect a GitHub repo on Start before deploying with Git.";
-    if (!gitCommitMessage()) return "Enter a Git commit message before deploying. It is required when GitHub is on.";
+    if (!isGitConfigured(state.settings)) return "Connect a Git repo on Start before deploying with Git.";
+    if (!gitCommitMessage()) return "Enter a Git commit message before deploying. It is required when a Git repo is on.";
   }
   return "";
 }
@@ -282,7 +287,7 @@ function updateActionState() {
     if (needs.includes("package") && !pack) disabled = true;
     if (needs.includes("distinct") && same) disabled = true;
     if (needs.includes("retrieve") && !hasFreshRetrieve()) disabled = true;
-    if (needs.includes("git") && (!useGitEnabled() || !isGithubConfigured(state.settings))) disabled = true;
+    if (needs.includes("git") && (!useGitEnabled() || !isGitConfigured(state.settings))) disabled = true;
     btn.disabled = disabled;
   });
   const deployBtn = $("btn-deploy-selected");
@@ -651,7 +656,7 @@ function requireGitCommitMessage() {
   if (!useGitEnabled()) return gitCommitMessage();
   const message = gitCommitMessage();
   if (!message) {
-    throw new Error("Commit message is required when GitHub is on. Describe the change before saving or deploying.");
+    throw new Error("Commit message is required when a Git repo is on. Describe the change before saving or deploying.");
   }
   return message;
 }
@@ -714,9 +719,9 @@ function renderInspector() {
   $("insp-categories").classList.toggle("hidden", state.inspectorView !== "categories");
   $("insp-xml").classList.toggle("hidden", state.inspectorView !== "xml");
   const gitOn = useGitEnabled();
-  const repo = isGithubConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
+  const repo = isGitConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
   $("inspector-git").textContent = gitOn
-    ? `Jira versions in GitHub · ${repo}`
+    ? `Jira versions in Git · ${repo}`
     : "Jira versions in this browser · same snapshot for QA then prod";
   const tests = state.specifiedTests;
   $("inspector-tests").textContent = tests.length
@@ -815,20 +820,21 @@ function renderDeployManifest() {
 
 function renderGitUi() {
   const on = useGitEnabled();
-  const connected = isGithubConfigured(state.settings);
+  const connected = isGitConfigured(state.settings);
+  const host = providerMeta(providerId(state.settings)).label;
   $("versions-hint").textContent = on
     ? connected
       ? `Shared Jira versions are stored in ${repoLabel(state.settings)}.`
-      : "GitHub is on — connect a repo on Start so the team can reuse versions."
-    : "Jira versions are stored in this Chrome profile. The same PROJ-123-v1 can go sandbox → QA → prod. Connect GitHub only if the team needs a shared repo.";
+      : `${host} is on — connect a repo on Start so the team can reuse versions.`
+    : "Jira versions are stored in this Chrome profile. The same PROJ-123-v1 can go sandbox → QA → prod. Connect a Git repo only if the team needs a shared warehouse.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
-      : "Connect a GitHub repo on Start. Until then, versions stay in this browser."
-    : "Saving versions in this browser (no GitHub token).";
+      : `Connect a ${host} repo on Start. Until then, versions stay in this browser.`
+    : "Saving versions in this browser (no Git token).";
   $("git-hint").textContent = on
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod get the same snapshot."
-    : "Each Jira save creates v1, v2, … on this computer. GitHub is optional sharing, not the versioning itself.";
+    : "Each Jira save creates v1, v2, … on this computer. Git is optional sharing, not the versioning itself.";
   $("git-setup-block")?.classList.toggle("hidden", !on);
   document.body.classList.toggle("mode-simple", !on);
   document.body.classList.toggle("mode-git", on);
@@ -836,12 +842,48 @@ function renderGitUi() {
     card.classList.toggle("selected", card.dataset.mode === (on ? "git" : "simple"));
   });
   $("mode-status").textContent = on
-    ? "GitHub sharing is on. Connect a repo so teammates can load the same Jira versions."
-    : "Versioning is on in this browser. Detect orgs, set From and To, then Next. No GitHub token required.";
+    ? `Git sharing is on (${host}). Connect a repo so teammates can load the same Jira versions.`
+    : "Versioning is on in this browser. Detect orgs, set From and To, then Next. No Git token required.";
   const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
+  if ($("git-ship-hint")) {
+    $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version.`;
+  }
+  fillGitHostUi();
   renderSimplePlaybook();
   renderPipelines();
+}
+
+function selectedProvider() {
+  return $("git-provider")?.value || providerId(state.settings) || "github";
+}
+
+function fillGitHostUi() {
+  const provider = selectedProvider();
+  const meta = providerMeta(provider);
+  const linkHref = tokenUrl(provider, {
+    baseUrl: $("git-base-url")?.value.trim() || "https://gitlab.com",
+    owner: $("git-org")?.value.trim() || ""
+  });
+  if ($("git-help-title")) $("git-help-title").textContent = `How to connect ${meta.label}`;
+  if ($("git-help-steps")) {
+    const link = `<li>Create a token: <a href="${escapeHtml(linkHref)}" target="_blank" rel="noreferrer">${escapeHtml(linkHref.replace(/^https?:\/\//, ""))}</a></li>`;
+    $("git-help-steps").innerHTML = link + meta.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
+  }
+  $("git-base-url-wrap")?.classList.toggle("hidden", !meta.needsBaseUrl);
+  $("git-org-wrap")?.classList.toggle("hidden", !meta.needsOrg);
+  const tokenLabel = $("git-token-label");
+  if (tokenLabel && $("gh-token")) {
+    tokenLabel.childNodes[0].textContent = `${meta.tokenName} `;
+    $("gh-token").placeholder = meta.tokenPlaceholder;
+  }
+  if ($("btn-connect-github")) $("btn-connect-github").textContent = meta.connectLabel;
+  if ($("git-repo-paste-label") && $("gh-repo-input")) {
+    $("git-repo-paste-label").childNodes[0].textContent = provider === "azuredevops"
+      ? "Or paste org/project/repo "
+      : "Or paste owner/repo ";
+    $("gh-repo-input").placeholder = meta.repoPlaceholder;
+  }
 }
 
 function renderSimplePlaybook() {
@@ -1200,12 +1242,12 @@ function renderPipelines() {
 }
 
 async function loadPipelines() {
-  if (!isGithubConfigured(state.settings) || !useGitEnabled()) {
+  if (!isGitConfigured(state.settings) || !useGitEnabled()) {
     state.pipelines = emptyPipelineStore();
     return;
   }
-  const { token, owner, repo, branch } = ghCreds();
-  const raw = await getFileContent(token, owner, repo, pipelinesFilePath(), branch);
+  const creds = gitCreds();
+  const raw = await getFileContent(creds, pipelinesFilePath(), creds.branch);
   state.pipelines = parsePipelineStore(raw);
 }
 
@@ -1257,7 +1299,7 @@ async function saveCurrentPipeline() {
   });
   const next = upsertPipeline(state.pipelines, record);
   await commitFiles({
-    ...ghCreds(),
+    ...gitCreds(),
     files: [{ path: pipelinesFilePath(), base64: encodeUtf8Base64(JSON.stringify(next, null, 2) + "\n") }],
     message: `chore: save pipeline ${record.name}`
   });
@@ -1277,13 +1319,16 @@ async function saveCurrentPipeline() {
 
 function renderRepos() {
   const select = $("gh-repo");
-  const current = state.settings.github.owner && state.settings.github.repo
-    ? `${state.settings.github.owner}/${state.settings.github.repo}`
+  const creds = gitCreds();
+  const current = creds.owner && creds.repo
+    ? (creds.provider === "azuredevops" && creds.project
+      ? `${creds.owner}/${creds.project}/${creds.repo}`
+      : `${creds.owner}/${creds.repo}`)
     : "";
   if (!state.repos.length) {
     select.innerHTML = current
       ? `<option value="${escapeHtml(current)}">${escapeHtml(current)}</option>`
-      : `<option value="">Connect GitHub to load repos</option>`;
+      : `<option value="">Connect ${escapeHtml(providerMeta(selectedProvider()).label)} to load repos</option>`;
     return;
   }
   select.innerHTML = state.repos
@@ -1367,19 +1412,19 @@ async function loadVersionFiles(versionId) {
   let files = [];
   if (version.storage === "local" || !useGitEnabled()) {
     files = await loadLocalRelease(version.id);
-    if (!files.length && version.storage === "git" && isGithubConfigured(state.settings)) {
-      /* fall through to GitHub below */
+    if (!files.length && version.storage === "git" && isGitConfigured(state.settings)) {
+      /* fall through to Git below */
     } else if (!files.length) {
       throw new Error(`No files found for ${version.id}.`);
     }
   }
   if (!files.length) {
     requireGithub();
-    const { token, owner, repo, branch } = ghCreds();
-    const ref = await getRef(token, owner, repo, branch);
+    const creds = gitCreds();
+    const ref = await getRef(creds);
     const sha = version.commitSha || ref?.object?.sha;
     if (!sha) throw new Error("Repo branch has no commits yet.");
-    files = await fetchReleaseFiles({ token, owner, repo, commitSha: sha, prefix: version.path });
+    files = await fetchReleaseFiles({ ...creds, commitSha: sha, prefix: version.path });
     if (!files.length) throw new Error(`No files found at ${version.path}.`);
   }
   state.versionFilesCache[versionId] = files;
@@ -1549,7 +1594,7 @@ function renderVersions() {
     return `${v.id} ${v.jira} ${v.comment}`.toLowerCase().includes(q);
   });
   if (!items.length) {
-    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to GitHub." : "No versions in this browser yet. Retrieve, then save a snapshot."}</div>`;
+    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to Git." : "No versions in this browser yet. Retrieve, then save a snapshot."}</div>`;
     return;
   }
   $("version-list").innerHTML = items
@@ -1559,7 +1604,7 @@ function renderVersions() {
       return `<article class="card" data-id="${escapeHtml(v.id)}">
         <div class="title">${escapeHtml(v.id)}</div>
         <div class="meta">${escapeHtml(v.comment || "No comment")}</div>
-        <div class="meta">${escapeHtml(v.storage === "git" ? "GitHub" : "This browser")} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
+        <div class="meta">${escapeHtml(v.storage === "git" ? providerMeta(providerId(state.settings)).label : "This browser")} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
         ${comps ? `<div class="meta">${escapeHtml(comps)}</div>` : ""}
         ${deploys ? `<div class="meta">${escapeHtml(deploys)}</div>` : ""}
         <div class="tiny">
@@ -1573,15 +1618,14 @@ function renderVersions() {
     .join("");
 }
 
-function ghCreds() {
-  const { token, owner, repo, branch } = state.settings.github;
-  return { token, owner, repo, branch };
+function gitCreds() {
+  return hostCreds(state.settings);
 }
 
 async function loadVersionStore() {
-  if (useGitEnabled() && isGithubConfigured(state.settings)) {
-    const { token, owner, repo, branch } = ghCreds();
-    const raw = await getFileContent(token, owner, repo, versionsFilePath(), branch);
+  if (useGitEnabled() && isGitConfigured(state.settings)) {
+    const creds = gitCreds();
+    const raw = await getFileContent(creds, versionsFilePath(), creds.branch);
     state.versions = parseVersionStore(raw);
     return;
   }
@@ -1632,11 +1676,15 @@ function updateHeaderStatus() {
 async function refreshAll() {
   state.settings = await loadSettings();
   state.packageTypes = normalizePackageTypes(state.settings.packageTypes);
-  $("gh-token").value = state.settings.github.token || "";
-  $("gh-repo-input").value = state.settings.github.owner && state.settings.github.repo
-    ? `${state.settings.github.owner}/${state.settings.github.repo}`
+  const creds = hostCreds(state.settings);
+  if ($("git-provider")) $("git-provider").value = creds.provider || "github";
+  $("gh-token").value = creds.token || "";
+  $("git-org") && ($("git-org").value = creds.provider === "azuredevops" ? creds.owner : "");
+  $("git-base-url") && ($("git-base-url").value = creds.baseUrl || "https://gitlab.com");
+  $("gh-repo-input").value = creds.owner && creds.repo
+    ? (creds.provider === "azuredevops" && creds.project ? `${creds.owner}/${creds.project}/${creds.repo}` : `${creds.owner}/${creds.repo}`)
     : "";
-  $("gh-branch").value = state.settings.github.branch || "main";
+  $("gh-branch").value = creds.branch || "main";
   state.availableTypes = fallbackTypeRecords();
   $("test-level").value = state.settings.testLevel || "NoTestRun";
   $("check-only").checked = Boolean(state.settings.checkOnly);
@@ -1644,17 +1692,18 @@ async function refreshAll() {
   state.specifiedTests = normalizeTestNames(state.settings.specifiedTests);
   $("package-xml").value = currentXml();
   state.xmlDirty = false;
+  fillGitHostUi();
   renderTypeSelect();
   renderRepos();
   renderPackageUi();
   renderFileList();
   try {
-    if (state.settings.github.token) {
-      state.githubUser = await getUser(state.settings.github.token);
+    if (creds.token && (creds.provider !== "azuredevops" || creds.owner)) {
+      state.githubUser = await getUser(creds);
       $("github-user").textContent = `Signed in as ${state.githubUser.login}`;
     }
   } catch (err) {
-    $("github-user").textContent = `GitHub token error: ${err.message}`;
+    $("github-user").textContent = `${providerMeta(creds.provider).label} token error: ${err.message}`;
   }
   await refreshOrgs().catch((err) => log(err.message, "error"));
   try {
@@ -1677,39 +1726,79 @@ async function refreshAll() {
 }
 
 async function connectGithub() {
+  const provider = selectedProvider();
+  const meta = providerMeta(provider);
   const token = $("gh-token").value.trim();
-  if (!token) throw new Error("Paste a GitHub personal access token first.");
-  const user = await getUser(token);
+  if (!token) throw new Error(`Paste a ${meta.label} personal access token first.`);
+  const baseUrl = $("git-base-url")?.value.trim() || "https://gitlab.com";
+  const owner = $("git-org")?.value.trim() || "";
+  if (provider === "azuredevops" && !owner) throw new Error("Enter your Azure DevOps organization name first.");
+  await ensureHostAccess(provider, baseUrl);
+  const creds = {
+    provider,
+    token,
+    owner,
+    repo: "",
+    project: "",
+    branch: $("gh-branch").value.trim() || "main",
+    baseUrl: provider === "gitlab" ? baseUrl : ""
+  };
+  const user = await getUser(creds);
   state.githubUser = user;
   $("github-user").textContent = `Signed in as ${user.login}`;
-  await saveSettings({ github: { ...state.settings.github, token } });
+  await saveSettings({
+    gitHost: {
+      provider,
+      token,
+      owner: provider === "azuredevops" ? owner : state.settings.gitHost?.owner || "",
+      repo: state.settings.gitHost?.repo || "",
+      project: state.settings.gitHost?.project || "",
+      branch: creds.branch,
+      baseUrl: creds.baseUrl
+    },
+    github: provider === "github" ? { ...state.settings.github, token } : state.settings.github
+  });
   state.settings = await loadSettings();
-  state.repos = await listRepos(token);
+  state.repos = await listRepos({ ...creds, owner: provider === "azuredevops" ? owner : creds.owner });
   renderRepos();
-  log(`GitHub connected as ${user.login}. ${state.repos.length} repos available.`);
+  log(`${meta.label} connected as ${user.login}. ${state.repos.length} repos available.`);
 }
 
 async function saveRepo() {
-  const token = $("gh-token").value.trim() || state.settings.github.token;
-  const fromSelect = parseRepoInput($("gh-repo").value);
-  const fromInput = parseRepoInput($("gh-repo-input").value);
+  const provider = selectedProvider();
+  const meta = providerMeta(provider);
+  const token = $("gh-token").value.trim() || hostCreds(state.settings).token;
+  const fromSelect = parseRepoInput(provider, $("gh-repo").value);
+  const fromInput = parseRepoInput(provider, $("gh-repo-input").value);
   const parsed = fromInput || fromSelect;
   const selectedRepo = state.repos.find((r) => r.fullName === $("gh-repo").value);
   const branch = $("gh-branch").value.trim() || selectedRepo?.defaultBranch || "main";
-  if (!token) throw new Error("GitHub token is required.");
-  if (!parsed) throw new Error("Choose or paste a repository (owner/name).");
-  const repoMeta = state.repos.find((r) => r.owner === parsed.owner && r.name === parsed.repo);
+  if (!token) throw new Error(`${meta.label} token is required.`);
+  if (!parsed?.repo) throw new Error(provider === "azuredevops" ? "Choose or paste org/project/repo." : "Choose or paste a repository (owner/name).");
+  const owner = parsed.owner || $("git-org")?.value.trim() || selectedRepo?.owner || "";
+  const project = parsed.project || selectedRepo?.project || "";
+  if (provider === "azuredevops" && (!owner || !project)) {
+    throw new Error("Azure DevOps needs organization, project, and repo.");
+  }
+  if (provider !== "azuredevops" && !owner) throw new Error("Choose or paste a repository (owner/name).");
+  const gitHost = {
+    provider,
+    token,
+    owner,
+    repo: parsed.repo,
+    project: provider === "azuredevops" ? project : "",
+    branch: branch || selectedRepo?.defaultBranch || "main",
+    baseUrl: provider === "gitlab" ? ($("git-base-url")?.value.trim() || "https://gitlab.com") : ""
+  };
   await saveSettings({
-    github: {
-      token,
-      owner: parsed.owner,
-      repo: parsed.repo,
-      branch: branch || repoMeta?.defaultBranch || "main"
-    }
+    gitHost,
+    github: provider === "github"
+      ? { token, owner, repo: parsed.repo, branch: gitHost.branch }
+      : state.settings.github
   });
   state.settings = await loadSettings();
-  $("gh-repo-input").value = `${parsed.owner}/${parsed.repo}`;
-  $("gh-branch").value = state.settings.github.branch;
+  $("gh-repo-input").value = provider === "azuredevops" ? `${owner}/${project}/${parsed.repo}` : `${owner}/${parsed.repo}`;
+  $("gh-branch").value = gitHost.branch;
   await loadVersionStore();
   renderVersions();
   await loadPipelines();
@@ -1732,7 +1821,7 @@ async function persistShipOptions() {
 
 function requireGithub() {
   if (!useGitEnabled()) throw new Error("Choose Git version control on the Start tab first.");
-  if (!isGithubConfigured(state.settings)) throw new Error("Connect a GitHub repo on the Start tab first.");
+  if (!isGitConfigured(state.settings)) throw new Error(`Connect a ${providerMeta(providerId(state.settings)).label} repo on the Start tab first.`);
 }
 
 function requirePackage() {
@@ -1862,7 +1951,7 @@ function resolveTicket(store) {
   const jiraField = $("jira").value.trim();
   const comment = $("comment").value.trim();
   if (useGitEnabled() && !comment) {
-    throw new Error("Commit message is required when GitHub is on.");
+    throw new Error("Commit message is required when a Git repo is on.");
   }
   if (jiraField) {
     const parsed = parseTicketInput(jiraField);
@@ -1996,7 +2085,7 @@ async function deploySelected() {
       try {
         await recordSuccessfulGitDeploy(target, result, options);
       } catch (gitErr) {
-        log(`Salesforce deploy succeeded, but GitHub could not record it: ${gitErr.message || gitErr}`, "error");
+        log(`Salesforce deploy succeeded, but ${providerMeta(providerId(state.settings)).label} could not record it: ${gitErr.message || gitErr}`, "error");
       }
     }
     return result;
@@ -2027,7 +2116,7 @@ async function recordSuccessfulGitDeploy(target, result, options, existingVersio
   if (useGitEnabled() && version.storage !== "local") {
     requireGithub();
     await commitFiles({
-      ...ghCreds(),
+      ...gitCreds(),
       files: [{ path: versionsFilePath(), base64: encodeUtf8Base64(JSON.stringify(store, null, 2) + "\n") }],
       message: `${message}\n\n${version.id}: deployed to ${target.label}${options.checkOnly ? " (validate)" : ""}`
     });
@@ -2085,14 +2174,14 @@ async function saveVersion() {
 
   log(`Writing ${files.length} files to ${repoLabel(state.settings)}…`);
   const commit = await commitFiles({
-    ...ghCreds(),
+    ...gitCreds(),
     files: prefixed,
     message: `${record.id}: ${comment}`
   });
   record.commitSha = commit.sha;
   const withSha = upsertVersion(nextStore, record);
   await commitFiles({
-    ...ghCreds(),
+    ...gitCreds(),
     files: [{ path: versionsFilePath(), base64: encodeUtf8Base64(JSON.stringify(withSha, null, 2) + "\n") }],
     message: `chore: record ${record.id} at ${commit.sha.slice(0, 7)}`
   });
@@ -2126,12 +2215,12 @@ async function deployVersion(explicitId) {
     log(`Loading ${version.id} from this browser…`);
   } else {
     requireGithub();
-    const { token, owner, repo, branch } = ghCreds();
-    const ref = await getRef(token, owner, repo, branch);
+    const creds = gitCreds();
+    const ref = await getRef(creds);
     const sha = version.commitSha || ref?.object?.sha;
     if (!sha) throw new Error("Repo branch has no commits yet.");
     log(`Loading ${version.id} from Git (${version.path})…`);
-    files = await fetchReleaseFiles({ token, owner, repo, commitSha: sha, prefix: version.path });
+    files = await fetchReleaseFiles({ ...creds, commitSha: sha, prefix: version.path });
     if (!files.length) throw new Error(`No files found at ${version.path}.`);
   }
 
@@ -2342,6 +2431,13 @@ $("goto-workbench")?.addEventListener("click", openWorkbench);
 $("open-workbench")?.addEventListener("click", openWorkbench);
 $("open-workbench-banner")?.addEventListener("click", openWorkbench);
 $("btn-connect-github").addEventListener("click", () => run(connectGithub));
+$("git-provider")?.addEventListener("change", () => {
+  fillGitHostUi();
+  state.repos = [];
+  renderRepos();
+});
+$("git-org")?.addEventListener("input", fillGitHostUi);
+$("git-base-url")?.addEventListener("input", fillGitHostUi);
 $("btn-save-repo").addEventListener("click", () => run(saveRepo));
 $("btn-refresh-orgs").addEventListener("click", () => run(refreshOrgs));
 $("refresh-all").addEventListener("click", () => run(refreshAll));

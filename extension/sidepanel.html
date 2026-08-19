@@ -58,15 +58,15 @@
         <section id="view-start" class="view active">
           <p class="step-kicker">Step 1 of 5</p>
           <h2 class="page-title">Connect From and To</h2>
-          <p class="hint">Choose where Jira versions are stored. Versioning is always on — GitHub is optional for sharing with the team.</p>
+          <p class="hint">Choose where Jira versions are stored. Versioning is always on — a Git repo is optional for sharing with the team.</p>
           <div class="mode-grid">
             <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
               <strong>Version in this browser</strong>
-              <span>Keep Jira snapshots here (PROJ-123-v1). Promote the same package sandbox → QA → prod. No GitHub token. Versions stay on this Chrome profile.</span>
+              <span>Keep Jira snapshots here (PROJ-123-v1). Promote the same package sandbox → QA → prod. No Git token. Versions stay on this Chrome profile.</span>
             </button>
             <button type="button" class="mode-card" id="mode-git" data-mode="git">
-              <strong>Version in GitHub</strong>
-              <span>Same Jira snapshots, stored in a repo so the team can reuse them. Token stays in this browser.</span>
+              <strong>Version in a Git repo</strong>
+              <span>Same Jira snapshots, stored in GitHub, GitLab, or Azure DevOps so the team can reuse them. Token stays in this browser.</span>
             </button>
           </div>
           <div id="mode-status" class="muted">Choose Simple deploy or Git version control to continue.</div>
@@ -79,20 +79,27 @@
           </div>
           <div id="org-list" class="list"></div>
 
-          <div id="git-setup-block">
-            <h2>Connect GitHub</h2>
-            <p class="hint">Needed only for Git version control. The token stays in this browser. It is never committed to the repo.</p>
+          <div id="git-setup-block" class="hidden">
+            <h2>Connect a Git repo</h2>
+            <p class="hint">Needed only when Git versioning is on. OrgFlow writes snapshots to <code>.orgflow/</code> in the repo you pick. The token stays in this browser. Compatible hosts: GitHub, GitLab (gitlab.com or your company instance), and Azure Repos.</p>
+            <label>Git host
+              <select id="git-provider">
+                <option value="github">GitHub</option>
+                <option value="gitlab">GitLab</option>
+                <option value="azuredevops">Azure DevOps</option>
+              </select>
+            </label>
             <article class="card help-card">
-              <div class="title">How to create a GitHub token</div>
-              <ol class="help-steps">
-                <li>Open <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer">github.com/settings/tokens</a> while signed into GitHub.</li>
-                <li>Click <strong>Generate new token</strong>. Classic tokens need the <code>repo</code> scope. Fine-grained tokens need <strong>Contents: Read and write</strong> on the repo you will use.</li>
-                <li>Copy the token (it starts with <code>ghp_</code> or <code>github_pat_</code>) and paste it below.</li>
-                <li>Click <strong>Connect GitHub</strong>, pick <code>owner/repo</code> (or paste it), then <strong>Use this repo</strong>.</li>
-              </ol>
+              <div class="title" id="git-help-title">How to connect GitHub</div>
+              <ol class="help-steps" id="git-help-steps"></ol>
             </article>
-            <label>
-              Personal access token
+            <label id="git-base-url-wrap" class="hidden">GitLab instance URL
+              <input id="git-base-url" type="url" placeholder="https://gitlab.com" />
+            </label>
+            <label id="git-org-wrap" class="hidden">Azure DevOps organization
+              <input id="git-org" type="text" placeholder="mycompany" autocomplete="off" />
+            </label>
+            <label id="git-token-label">Personal access token
               <input id="gh-token" type="password" placeholder="ghp_… or github_pat_…" autocomplete="off" />
             </label>
             <div class="actions">
@@ -103,8 +110,7 @@
               Select a repo
               <select id="gh-repo"></select>
             </label>
-            <label>
-              Or paste owner/repo
+            <label id="git-repo-paste-label">Or paste owner/repo
               <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
             </label>
             <label>
@@ -368,8 +374,8 @@
         </section>
 
         <section id="git-ship-panel" class="git-ship git-only hidden">
-          <h2>GitHub commit</h2>
-          <p class="hint">A commit message is required when GitHub is on — for Save, Salesforce deploy, and deploying a saved version.</p>
+          <h2>Git commit</h2>
+          <p class="hint" id="git-ship-hint">A commit message is required when a Git repo is on — for Save, Salesforce deploy, and deploying a saved version.</p>
           <label>Jira key (optional)
             <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
           </label>
@@ -377,7 +383,7 @@
             <textarea id="comment" rows="3" placeholder="Required. Example: Account status field + layout for PROJ-123"></textarea>
           </label>
           <div class="row-actions">
-            <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to GitHub</button>
+            <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to Git</button>
           </div>
         </section>
       </main>
