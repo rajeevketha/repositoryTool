@@ -6,7 +6,7 @@
     <title>OrgFlow</title>
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
-  <body>
+  <body data-layout="sidepanel">
     <header class="app-header">
       <div class="brand">
         <img src="icons/icon32.png" alt="" width="24" height="24" />
@@ -15,7 +15,10 @@
           <span>Config sandbox → other orgs</span>
         </div>
       </div>
-      <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
+      <div class="header-actions">
+        <button id="open-workbench" class="ghost-text" type="button" title="Open a wide window with the live selected package on the side">Workbench</button>
+        <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
+      </div>
     </header>
 
     <div id="status-bar" class="status-bar">Log into your Salesforce orgs, then pick configuration to deploy.</div>
@@ -27,174 +30,251 @@
       <button class="tab" data-tab="setup">Setup</button>
     </nav>
 
-    <main>
-      <section id="view-ship" class="view active">
-        <article class="card" id="package-summary-card">
-          <div class="title">What to move</div>
-          <div id="package-summary-body" class="meta">Nothing selected yet — pick fields, layouts, flows, permission sets… on Components.</div>
-          <div class="tiny">
-            <button type="button" class="secondary" id="goto-components">Pick configuration</button>
-          </div>
-        </article>
-        <p class="hint">Log into the sandbox where you built the change and the org you want to update (QA, UAT, or prod). Git is optional — use it when you want to reuse the same Jira version later.</p>
-        <label>
-          Jira ticket
-          <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
-        </label>
-        <p class="hint">Configurators: put the Jira on the version so the same package can be pushed sandbox → QA → prod.</p>
-        <label>
-          Comment
-          <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
-        </label>
-        <div class="row">
-          <label>
-            Source org
-            <select id="source-org"></select>
-          </label>
-          <label>
-            Target org
-            <select id="target-org"></select>
-          </label>
-        </div>
-        <div class="row">
-          <label>
-            Tests
-            <select id="test-level">
-              <option value="NoTestRun">No tests (config-only)</option>
-              <option value="RunLocalTests">Run local tests (prod / Apex in package)</option>
-              <option value="RunAllTestsInOrg">Run all tests</option>
-            </select>
-          </label>
-          <label class="check">
-            <input id="check-only" type="checkbox" />
-            Validate only
-          </label>
-        </div>
-        <div class="actions">
-          <button id="btn-deploy-selected" class="accent" data-busy>Deploy configuration to target org</button>
-          <button id="btn-save" class="secondary" data-busy>Save version to Git (optional)</button>
-          <button id="btn-deploy" class="secondary" data-busy>Deploy a saved Jira version</button>
-          <button id="btn-both" class="secondary" data-busy>Save version &amp; deploy</button>
-        </div>
-      </section>
-
-      <section id="view-versions" class="view">
-        <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
-        <div id="version-list" class="list"></div>
-      </section>
-
-      <section id="view-components" class="view">
-        <nav class="subtabs" role="tablist">
-          <button type="button" class="subtab active" data-subtab="pick">Pick</button>
-          <button type="button" class="subtab" data-subtab="xml">package.xml</button>
-          <button type="button" class="subtab" data-subtab="review">Review / edit</button>
-        </nav>
-
-        <div id="subview-pick" class="subview active">
-          <p class="hint">Search any Salesforce metadata type, tick members from the source org, then deploy. Common configurator types sit at the top; every Metadata API type is available.</p>
-          <input id="type-search" type="search" placeholder="Search types: field, flow, layout, permission, apex…" />
-          <div class="row-actions">
-            <button type="button" id="btn-load-types" class="secondary" data-busy>Load all types from source org</button>
-          </div>
-          <div id="type-count" class="muted"></div>
-          <div id="type-picker" class="type-picker"></div>
-          <div id="active-type-label" class="card">
-            <div class="title" id="active-type-title">Selected type: Fields</div>
-            <div class="meta" id="active-type-meta">CustomField</div>
-          </div>
-          <div class="row-actions">
-            <button type="button" id="btn-load-members" class="secondary" data-busy>Load members from source org</button>
-            <button type="button" id="btn-select-visible" class="secondary">Select visible</button>
-            <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
-          </div>
-          <input id="member-filter" type="search" placeholder="Filter members" />
-          <div id="member-status" class="muted"></div>
-          <div id="member-list" class="type-list"></div>
-          <label>
-            Add member by name
-            <div class="inline-add">
-              <input id="manual-member" type="text" placeholder="Account.Customer_Status__c" />
-              <button type="button" id="btn-add-member" class="secondary">Add</button>
-            </div>
-          </label>
-          <article class="card">
-            <div class="title">In this package <span id="package-count" class="badge">0</span></div>
-            <div id="selected-package" class="meta"></div>
+    <div class="app-body">
+      <main>
+        <section id="view-ship" class="view active">
+          <article class="card" id="package-summary-card">
+            <div class="title">What to move</div>
+            <div id="package-summary-body" class="meta">Nothing selected yet — pick fields, layouts, flows, permission sets… on Components.</div>
             <div class="tiny">
-              <button type="button" id="btn-clear-package" class="secondary">Clear package</button>
+              <button type="button" class="secondary" id="goto-components">Pick configuration</button>
+              <button type="button" class="secondary" id="goto-workbench">Open wide workbench</button>
             </div>
           </article>
-          <div class="actions">
-            <button type="button" id="btn-retrieve" class="secondary" data-busy>Retrieve into Review</button>
-            <button type="button" id="btn-deploy-from-pick" class="accent" data-busy>Deploy configuration to target org</button>
+          <p class="hint">Log into the sandbox where you built the change and the org you want to update (QA, UAT, or prod). Turn Git on to keep Jira versions in a repo; turn it off for a one-off org-to-org deploy.</p>
+          <label>
+            Jira ticket
+            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
+          </label>
+          <p class="hint">Configurators: put the Jira on the version so the same package can be pushed sandbox → QA → prod.</p>
+          <label>
+            Comment
+            <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
+          </label>
+          <div class="row">
+            <label>
+              Source org
+              <select id="source-org"></select>
+            </label>
+            <label>
+              Target org
+              <select id="target-org"></select>
+            </label>
           </div>
-        </div>
 
-        <div id="subview-xml" class="subview">
-          <p class="hint">Edit package.xml directly. Apply writes it back to the picker. Invalid XML is not used for retrieve/deploy.</p>
-          <textarea id="package-xml" class="xml-editor" spellcheck="false"></textarea>
-          <div id="xml-status" class="muted"></div>
-          <div class="row-actions">
-            <button type="button" id="btn-apply-xml" class="primary">Apply XML to picker</button>
-            <button type="button" id="btn-rebuild-xml" class="secondary">Rebuild from picker</button>
-          </div>
-        </div>
+          <article class="card git-card">
+            <label class="check switch">
+              <input id="use-git" type="checkbox" />
+              Use Git repo for versioning
+            </label>
+            <p class="hint" id="git-hint">When this is on, OrgFlow saves a Jira version in Git so later orgs get the same snapshot. Turn it off only for a one-off deploy with no version history.</p>
+            <div id="git-status" class="muted"></div>
+          </article>
 
-        <div id="subview-review" class="subview">
-          <p class="hint">Retrieved configuration files. Open a file to edit XML before it goes to the next org. Closing the panel discards an unsaved retrieve.</p>
-          <div class="row-actions">
-            <button type="button" id="btn-retrieve-review" class="secondary" data-busy>Retrieve selected</button>
+          <div class="row">
+            <label>
+              Tests
+              <select id="test-level">
+                <option value="NoTestRun">No tests (config-only)</option>
+                <option value="RunSpecifiedTests">Run specified tests (from runner)</option>
+                <option value="RunLocalTests">Run local tests (prod / Apex in package)</option>
+                <option value="RunAllTestsInOrg">Run all tests</option>
+              </select>
+            </label>
+            <label class="check">
+              <input id="check-only" type="checkbox" />
+              Validate only
+            </label>
           </div>
-          <div id="file-list" class="file-list"></div>
-          <label id="file-editor-wrap" class="hidden">
-            <span id="file-editor-name">File</span>
-            <textarea id="file-editor" class="xml-editor" spellcheck="false"></textarea>
+
+          <article class="card" id="test-runner-card">
+            <div class="title">Test class runner <span id="test-count" class="badge">0</span></div>
+            <p class="hint">If this package includes Apex, pick the test classes that cover it. Selected tests deploy with <code>RunSpecifiedTests</code>.</p>
+            <div id="suggested-tests"></div>
             <div class="row-actions">
-              <button type="button" id="btn-save-file" class="primary">Save file edits</button>
+              <button type="button" id="btn-scan-tests" class="secondary" data-busy>Find *Test classes in source org</button>
+              <button type="button" id="btn-clear-tests" class="secondary">Clear tests</button>
             </div>
+            <input id="test-filter" type="search" placeholder="Filter test classes" />
+            <div id="test-runner-status" class="muted"></div>
+            <div id="test-class-list" class="type-list"></div>
+            <label>
+              Add test class by name
+              <div class="inline-add">
+                <input id="manual-test" type="text" placeholder="AccountStatusTriggerTest" />
+                <button type="button" id="btn-add-test" class="secondary">Add</button>
+              </div>
+            </label>
+          </article>
+
+          <div class="actions">
+            <button id="btn-deploy-selected" class="accent" data-busy>Deploy configuration to target org</button>
+            <div id="git-actions" class="actions">
+              <button id="btn-both" class="primary" data-busy>Save Git version &amp; deploy</button>
+              <button id="btn-save" class="secondary" data-busy>Save version to Git</button>
+              <button id="btn-deploy" class="secondary" data-busy>Deploy a saved Jira version</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-versions" class="view">
+          <p class="hint" id="versions-hint">Versions live in the connected Git repo. Turn on Git versioning and connect a repo in Setup.</p>
+          <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
+          <div id="version-list" class="list"></div>
+        </section>
+
+        <section id="view-components" class="view">
+          <nav class="subtabs" role="tablist">
+            <button type="button" class="subtab active" data-subtab="pick">Pick</button>
+            <button type="button" class="subtab" data-subtab="xml">package.xml</button>
+            <button type="button" class="subtab" data-subtab="review">Review / edit</button>
+          </nav>
+
+          <div id="subview-pick" class="subview active">
+            <p class="hint">Search any Salesforce metadata type, tick members from the source org, then check the live selected package on the side. Common configurator types sit at the top; every Metadata API type is available.</p>
+            <div class="workbench-banner" id="workbench-banner">
+              The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> so you can pick from thousands of fields and still see exactly what is in the package.
+            </div>
+            <input id="type-search" type="search" placeholder="Search types: field, flow, layout, permission, apex…" />
+            <div class="row-actions">
+              <button type="button" id="btn-load-types" class="secondary" data-busy>Load all types from source org</button>
+            </div>
+            <div id="type-count" class="muted"></div>
+            <div id="type-picker" class="type-picker"></div>
+            <div id="active-type-label" class="card">
+              <div class="title" id="active-type-title">Selected type: Fields</div>
+              <div class="meta" id="active-type-meta">CustomField</div>
+            </div>
+            <div class="row-actions">
+              <button type="button" id="btn-load-members" class="secondary" data-busy>Load members from source org</button>
+              <button type="button" id="btn-select-visible" class="secondary">Select visible</button>
+              <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
+            </div>
+            <div class="member-toolbar">
+              <input id="member-filter" type="search" placeholder="Filter members" />
+              <label class="check compact">
+                <input id="show-selected-only" type="checkbox" />
+                Selected only
+              </label>
+            </div>
+            <div id="member-status" class="muted"></div>
+            <div id="member-list" class="type-list"></div>
+            <label>
+              Add member by name
+              <div class="inline-add">
+                <input id="manual-member" type="text" placeholder="Account.Customer_Status__c" />
+                <button type="button" id="btn-add-member" class="secondary">Add</button>
+              </div>
+            </label>
+            <article class="card sidepanel-only" id="compact-package-card">
+              <div class="title">In this package <span id="package-count" class="badge">0</span></div>
+              <div id="selected-package" class="meta">Open the inspector on the right (workbench) or the category view below.</div>
+              <div class="tiny">
+                <button type="button" id="btn-clear-package" class="secondary">Clear package</button>
+              </div>
+            </article>
+            <div class="actions">
+              <button type="button" id="btn-retrieve" class="secondary" data-busy>Retrieve into Review</button>
+              <button type="button" id="btn-deploy-from-pick" class="accent" data-busy>Deploy configuration to target org</button>
+            </div>
+          </div>
+
+          <div id="subview-xml" class="subview">
+            <p class="hint">Edit package.xml directly. Apply writes it back to the picker. Invalid XML is not used for retrieve/deploy.</p>
+            <textarea id="package-xml" class="xml-editor" spellcheck="false"></textarea>
+            <div id="xml-status" class="muted"></div>
+            <div class="row-actions">
+              <button type="button" id="btn-apply-xml" class="primary">Apply XML to picker</button>
+              <button type="button" id="btn-rebuild-xml" class="secondary">Rebuild from picker</button>
+            </div>
+          </div>
+
+          <div id="subview-review" class="subview">
+            <p class="hint">Retrieved configuration files. Open a file to edit XML before it goes to the next org. Closing the panel discards an unsaved retrieve.</p>
+            <div class="row-actions">
+              <button type="button" id="btn-retrieve-review" class="secondary" data-busy>Retrieve selected</button>
+            </div>
+            <div id="file-list" class="file-list"></div>
+            <label id="file-editor-wrap" class="hidden">
+              <span id="file-editor-name">File</span>
+              <textarea id="file-editor" class="xml-editor" spellcheck="false"></textarea>
+              <div class="row-actions">
+                <button type="button" id="btn-save-file" class="primary">Save file edits</button>
+              </div>
+            </label>
+            <div class="actions">
+              <button type="button" id="btn-deploy-review" class="accent" data-busy>Deploy these files to target org</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-setup" class="view">
+          <h2>Salesforce orgs</h2>
+          <p class="hint">Log into the sandbox you configure in and every target org (QA, UAT, prod) in this Chrome profile, then detect them. OrgFlow uses your Salesforce session — no Connected App required.</p>
+          <div class="actions">
+            <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
+          </div>
+          <div id="org-list" class="list"></div>
+
+          <h2>Git versioning</h2>
+          <label class="check switch">
+            <input id="use-git-setup" type="checkbox" />
+            Use a Git repo to maintain metadata versions
+          </label>
+          <p class="hint">Keep this on for a proper release trail (Jira key → v1, v2). Org-to-org deploy still works if you turn it off.</p>
+          <label>
+            Personal access token
+            <input id="gh-token" type="password" placeholder="ghp_…" autocomplete="off" />
+          </label>
+          <p class="hint">Create a token with <code>repo</code> scope. Fine-grained tokens need Contents: Read and write.</p>
+          <div class="actions">
+            <button id="btn-connect-github" class="secondary" data-busy>Connect GitHub</button>
+          </div>
+          <div id="github-user" class="muted"></div>
+          <label>
+            Select a repo
+            <select id="gh-repo"></select>
+          </label>
+          <label>
+            Or paste owner/repo
+            <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
+          </label>
+          <label>
+            Branch
+            <input id="gh-branch" type="text" placeholder="main" />
           </label>
           <div class="actions">
-            <button type="button" id="btn-deploy-review" class="accent" data-busy>Deploy these files to target org</button>
+            <button id="btn-save-repo" class="secondary" data-busy>Use this repo</button>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      <section id="view-setup" class="view">
-        <h2>Salesforce orgs</h2>
-        <p class="hint">Log into the sandbox you configure in and every target org (QA, UAT, prod) in this Chrome profile, then detect them. OrgFlow uses your Salesforce session — no Connected App required.</p>
-        <div class="actions">
-          <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
+      <aside id="selection-inspector" class="inspector" aria-label="Selected metadata">
+        <header class="inspector-head">
+          <div>
+            <strong>Selected package</strong>
+            <span id="inspector-count" class="badge">0</span>
+          </div>
+          <p class="hint">Updates as you tick fields. Use this to confirm the right members before deploy.</p>
+          <div class="inspector-tabs">
+            <button type="button" class="insp-tab active" data-insp="categories">By category</button>
+            <button type="button" class="insp-tab" data-insp="xml">package.xml</button>
+          </div>
+        </header>
+        <input id="inspector-filter" type="search" placeholder="Filter selected members" />
+        <div id="insp-categories" class="inspector-pane">
+          <div id="category-table" class="category-columns"></div>
         </div>
-        <div id="org-list" class="list"></div>
-
-        <h2>GitHub (optional versioning)</h2>
-        <p class="hint">You can deploy configuration without Git. Connect a repo if you want each Jira to be a reusable version for later orgs.</p>
-        <label>
-          Personal access token
-          <input id="gh-token" type="password" placeholder="ghp_…" autocomplete="off" />
-        </label>
-        <p class="hint">Create a token with <code>repo</code> scope. Fine-grained tokens need Contents: Read and write.</p>
-        <div class="actions">
-          <button id="btn-connect-github" class="secondary" data-busy>Connect GitHub</button>
+        <div id="insp-xml" class="inspector-pane hidden">
+          <pre id="inspector-xml" class="xml-preview"></pre>
         </div>
-        <div id="github-user" class="muted"></div>
-        <label>
-          Select a repo
-          <select id="gh-repo"></select>
-        </label>
-        <label>
-          Or paste owner/repo
-          <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
-        </label>
-        <label>
-          Branch
-          <input id="gh-branch" type="text" placeholder="main" />
-        </label>
-        <div class="actions">
-          <button id="btn-save-repo" class="secondary" data-busy>Use this repo</button>
+        <div class="inspector-foot">
+          <div id="inspector-git" class="muted"></div>
+          <div id="inspector-tests" class="muted"></div>
+          <button type="button" id="btn-clear-package-inspector" class="secondary">Clear package</button>
         </div>
-      </section>
-    </main>
+      </aside>
+    </div>
 
     <section class="log-panel">
       <div class="log-head">Activity</div>

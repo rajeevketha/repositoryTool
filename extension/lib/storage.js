@@ -28,6 +28,8 @@ const DEFAULTS = {
   lastTargetOrgId: "",
   testLevel: "NoTestRun",
   checkOnly: false,
+  useGit: true,
+  specifiedTests: [],
   apiVersion: "61.0",
   packageTypes: []
 };
@@ -55,7 +57,9 @@ export function mergeSettings(input = {}) {
       ? input.metadataTypes
       : DEFAULT_METADATA_TYPES,
     savedOrgs: Array.isArray(input.savedOrgs) ? input.savedOrgs : [],
-    packageTypes: Array.isArray(input.packageTypes) ? input.packageTypes : []
+    packageTypes: Array.isArray(input.packageTypes) ? input.packageTypes : [],
+    specifiedTests: Array.isArray(input.specifiedTests) ? input.specifiedTests : [],
+    useGit: input.useGit !== false
   };
 }
 

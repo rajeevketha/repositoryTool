@@ -47,6 +47,13 @@ describe("package.xml", () => {
     assert.match(body, />QUJD</);
   });
 
+  it("emits RunSpecifiedTests and runTests for the test runner", () => {
+    const body = deployBody("QUJD", { testLevel: "NoTestRun", runTests: ["AccountServiceTest", "LeadHandlerTest"] });
+    assert.match(body, /<urn:testLevel>RunSpecifiedTests<\/urn:testLevel>/);
+    assert.match(body, /<urn:runTests>AccountServiceTest<\/urn:runTests>/);
+    assert.match(body, /<urn:runTests>LeadHandlerTest<\/urn:runTests>/);
+  });
+
   it("round-trips specific members in package.xml", () => {
     const xml = buildPackageXmlFromTypes(
       [

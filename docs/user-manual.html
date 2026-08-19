@@ -179,7 +179,7 @@
         <div class="step">Step 3 · Deploy</div>
         <h2>Push to the other org</h2>
         <p>Choose source = sandbox, target = QA/UAT/prod. Add the Jira number and a short comment.</p>
-        <p class="note">Use Validate only first if you want a dry run. Config-only packages can skip tests.</p>
+        <p class="note">Open Workbench if the side panel is too small. Confirm selected fields in the category pane. Pick test classes when Apex is in the package.</p>
       </div>
       <div class="panel">
         <div class="ph"><div class="dot"></div><div><strong>OrgFlow</strong><span>Deploy</span></div></div>
@@ -197,10 +197,10 @@
 
     <section class="slide" data-ms="10000">
       <div class="copy">
-        <div class="step">Optional · Version</div>
+        <div class="step">Git versioning</div>
         <h2>Save it as PROJ-123-v1</h2>
-        <p>If more orgs need the same change later, Save version to Git. Then Deploy a saved Jira version — no re-picking.</p>
-        <p class="note">You can deploy without Git. Git is only for reuse.</p>
+        <p>Keep Use Git repo for versioning on. Save Git version &amp; deploy so QA and prod take the same snapshot.</p>
+        <p class="note">Turn Git off only for a one-off org-to-org deploy with no version history.</p>
         <div class="big-flow">
           <div class="org">Sandbox<br/>v1</div>
           <div class="arrow">→</div>

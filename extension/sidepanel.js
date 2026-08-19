@@ -28,7 +28,6 @@ import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
 import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata } from "./lib/metadata.js";
 import {
   buildPackageXmlFromTypes,
-  parsePackageXml,
   assertPackageXml,
   memberCount,
   packageSummary,
@@ -36,10 +35,26 @@ import {
   setTypeMembers,
   normalizePackageTypes
 } from "./lib/packageXml.js";
+import {
+  categoryColumns,
+  filterCategoryColumns,
+  suggestedTestClasses,
+  packageHasApex,
+  isTestClassName,
+  normalizeTestNames
+} from "./lib/packageView.js";
 import { isEditablePath, decodeUtf8Base64, withEditedText } from "./lib/files.js";
 
 const $ = (id) => document.getElementById(id);
 const MAX_MEMBERS = 400;
+const WORKBENCH_MEMBERS = 800;
+
+if (new URLSearchParams(location.search).get("layout") === "workbench") {
+  document.body.dataset.layout = "workbench";
+  document.title = "OrgFlow workbench";
+}
+
+const isWorkbench = () => document.body.dataset.layout === "workbench";
 
 const state = {
   settings: null,
@@ -55,7 +70,10 @@ const state = {
   availableTypes: [],
   membersCache: {},
   stagedFiles: null,
-  activeFilePath: ""
+  activeFilePath: "",
+  specifiedTests: [],
+  testClassCache: null,
+  inspectorView: "categories"
 };
 
 function escapeHtml(value) {
@@ -111,9 +129,13 @@ function invalidateStaged() {
   renderFileList();
 }
 
+function useGitEnabled() {
+  return Boolean($("use-git")?.checked);
+}
+
 async function persistPackage() {
   state.packageTypes = normalizePackageTypes(state.packageTypes);
-  await saveSettings({ packageTypes: state.packageTypes });
+  await saveSettings({ packageTypes: state.packageTypes, specifiedTests: state.specifiedTests });
   state.settings = await loadSettings();
   if (!state.xmlDirty) $("package-xml").value = currentXml();
   renderPackageUi();
@@ -127,12 +149,76 @@ function renderPackageUi() {
     : "Nothing selected yet — pick fields, layouts, flows, permission sets… on Components.";
   $("package-count").textContent = String(count);
   $("selected-package").textContent = count
-    ? state.packageTypes
-        .map((t) => `${t.name}\n  ${t.members.join("\n  ")}`)
-        .join("\n")
+    ? "See the live selected package beside this list (category columns or package.xml)."
     : "Nothing selected.";
   $("xml-status").textContent = state.xmlDirty ? "XML edited — click Apply to use it." : "XML matches the picker.";
   renderMembers();
+  renderInspector();
+  renderTestRunner();
+  renderGitUi();
+}
+
+function renderInspector() {
+  const count = memberCount(state.packageTypes);
+  $("inspector-count").textContent = String(count);
+  const query = $("inspector-filter")?.value || "";
+  const columns = filterCategoryColumns(categoryColumns(state.packageTypes), query);
+  const table = $("category-table");
+  if (!count) {
+    table.innerHTML = `<div class="empty">Tick members on the left. They appear here immediately, grouped by type (and by object for fields).</div>`;
+  } else if (!columns.length) {
+    table.innerHTML = `<div class="empty">No selected members match that filter.</div>`;
+  } else {
+    table.innerHTML = columns
+      .map((col) => {
+        const groups = col.groups
+          .map((group) => {
+            const heading = group.label !== col.type ? `<h4>${escapeHtml(group.label)} (${group.count})</h4>` : "";
+            const items = group.members.map((m) => `<li>${escapeHtml(m)}</li>`).join("");
+            return `<div class="cat-group">${heading}<ul>${items}</ul></div>`;
+          })
+          .join("");
+        return `<section class="cat-col"><h3><span>${escapeHtml(col.type)}</span><span class="badge">${col.count}</span></h3>${groups}</section>`;
+      })
+      .join("");
+  }
+  $("inspector-xml").textContent = currentXml();
+  document.querySelectorAll(".insp-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.insp === state.inspectorView);
+  });
+  $("insp-categories").classList.toggle("hidden", state.inspectorView !== "categories");
+  $("insp-xml").classList.toggle("hidden", state.inspectorView !== "xml");
+  const gitOn = useGitEnabled();
+  const repo = isGithubConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
+  $("inspector-git").textContent = gitOn ? `Git versioning on · ${repo}` : "Git versioning off · direct org-to-org deploy";
+  const tests = state.specifiedTests;
+  $("inspector-tests").textContent = tests.length
+    ? `${tests.length} specified test${tests.length === 1 ? "" : "s"}: ${tests.slice(0, 8).join(", ")}${tests.length > 8 ? "…" : ""}`
+    : packageHasApex(state.packageTypes)
+      ? "Apex is in this package — pick test classes on Deploy."
+      : "No specified tests (config-only is fine).";
+}
+
+function renderGitUi() {
+  const on = useGitEnabled();
+  const connected = isGithubConfigured(state.settings);
+  $("git-actions")?.classList.toggle("hidden", !on);
+  $("versions-hint").textContent = on
+    ? connected
+      ? `Versions are stored in ${repoLabel(state.settings)}.`
+      : "Git is on — connect a repo in Setup so versions can be saved."
+    : "Git is off. Direct org-to-org deploy still works. Turn Git on to keep Jira versions.";
+  $("git-status").textContent = on
+    ? connected
+      ? `Saving versions to ${repoLabel(state.settings)}.`
+      : "Connect a GitHub repo in Setup. Deploy without Git still works until then."
+    : "One-off deploy: nothing is written to Git.";
+  $("git-hint").textContent = on
+    ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod can take the same snapshot."
+    : "Git is off. Use this only when you do not need a reusable version.";
+  if ($("use-git-setup") && $("use-git-setup").checked !== on) {
+    $("use-git-setup").checked = on;
+  }
 }
 
 function typesForPicker() {
@@ -212,12 +298,16 @@ function renderMembers() {
 
   let items = cache.items || [];
   if (filter) items = items.filter((i) => i.fullName.toLowerCase().includes(filter));
+  if ($("show-selected-only")?.checked) {
+    items = items.filter((i) => selected.has("*") || selected.has(i.fullName));
+  }
   const extraSelected = [...selected].filter((name) => name !== "*" && !items.some((i) => i.fullName === name));
   const combined = [
     ...extraSelected.map((fullName) => ({ fullName, extra: true })),
     ...items
   ];
-  const shown = combined.slice(0, MAX_MEMBERS);
+  const cap = isWorkbench() ? WORKBENCH_MEMBERS : MAX_MEMBERS;
+  const shown = combined.slice(0, cap);
   if (!shown.length) {
     list.innerHTML = `<div class="empty">No members match the filter.</div>`;
     return;
@@ -230,8 +320,8 @@ function renderMembers() {
         return `<label><input type="checkbox" data-member="${escapeHtml(item.fullName)}" ${checked} /> ${escapeHtml(item.fullName)}${mark}</label>`;
       })
       .join("") +
-    (combined.length > MAX_MEMBERS
-      ? `<div class="muted">Showing ${MAX_MEMBERS} of ${combined.length}. Filter to find the rest.</div>`
+    (combined.length > cap
+      ? `<div class="muted">Showing ${cap} of ${combined.length}. Filter or tick Selected only to find the rest.</div>`
       : "");
 }
 
@@ -369,7 +459,7 @@ function updateHeaderStatus() {
     setStatus(`${n} org${n === 1 ? "" : "s"} ready · pick configuration on Components, then deploy.`);
     return;
   }
-  const git = isGithubConfigured(state.settings) ? ` · ${repoLabel(state.settings)}` : "";
+  const git = useGitEnabled() && isGithubConfigured(state.settings) ? ` · ${repoLabel(state.settings)}` : useGitEnabled() ? " · Git on (connect a repo)" : "";
   setStatus(`${n} org${n === 1 ? "" : "s"} · ${pack} component${pack === 1 ? "" : "s"} ready to deploy${git}`, "ok");
 }
 
@@ -384,6 +474,9 @@ async function refreshAll() {
   state.availableTypes = fallbackTypeRecords();
   $("test-level").value = state.settings.testLevel || "NoTestRun";
   $("check-only").checked = Boolean(state.settings.checkOnly);
+  $("use-git").checked = state.settings.useGit !== false;
+  if ($("use-git-setup")) $("use-git-setup").checked = $("use-git").checked;
+  state.specifiedTests = normalizeTestNames(state.settings.specifiedTests);
   $("package-xml").value = currentXml();
   state.xmlDirty = false;
   renderTypeSelect();
@@ -452,10 +545,17 @@ async function persistShipOptions() {
   await saveSettings({
     testLevel: $("test-level").value,
     checkOnly: $("check-only").checked,
+    useGit: useGitEnabled(),
+    specifiedTests: state.specifiedTests,
     lastSourceOrgId: $("source-org").value,
     lastTargetOrgId: $("target-org").value
   });
   state.settings = await loadSettings();
+}
+
+function requireGithub() {
+  if (!useGitEnabled()) throw new Error("Turn on Use Git repo for versioning first.");
+  if (!isGithubConfigured(state.settings)) throw new Error("Connect a GitHub repo in Setup first.");
 }
 
 function requirePackage() {
@@ -469,8 +569,114 @@ async function ensurePackage() {
   return requirePackage();
 }
 
-function requireGithub() {
-  if (!isGithubConfigured(state.settings)) throw new Error("Connect a GitHub repo in Setup first.");
+function specifiedTests() {
+  return normalizeTestNames(state.specifiedTests);
+}
+
+function renderTestRunner() {
+  const tests = specifiedTests();
+  $("test-count").textContent = String(tests.length);
+  const hints = suggestedTestClasses(state.packageTypes);
+  const suggest = $("suggested-tests");
+  const chips = [];
+  if (hints.wildcard) {
+    chips.push(`<div class="muted">This package includes all Apex classes (*). Scan the org and pick the tests you need.</div>`);
+  }
+  for (const name of hints.inPackage) {
+    const on = tests.includes(name);
+    chips.push(`<button type="button" class="suggest-chip" data-test-toggle="${escapeHtml(name)}">${on ? "✓ " : "+ "}${escapeHtml(name)} (in package)</button>`);
+  }
+  for (const name of hints.suggested) {
+    const on = tests.includes(name);
+    chips.push(`<button type="button" class="suggest-chip" data-test-toggle="${escapeHtml(name)}">${on ? "✓ " : "+ "}${escapeHtml(name)} (suggested)</button>`);
+  }
+  suggest.innerHTML = chips.length ? `<div class="suggest-row">${chips.join("")}</div>` : "";
+
+  const filter = ($("test-filter")?.value || "").trim().toLowerCase();
+  const cache = state.testClassCache;
+  const list = $("test-class-list");
+  const status = $("test-runner-status");
+  if (packageHasApex(state.packageTypes) && !tests.length) {
+    status.textContent = "Apex is in this package. Pick tests here, or Salesforce will require tests on production deploys.";
+  } else if (!cache) {
+    status.textContent = tests.length
+      ? `${tests.length} test class${tests.length === 1 ? "" : "es"} selected.`
+      : "Optional for config-only packages. Scan the source org to pick *Test classes.";
+  } else if (cache.error) {
+    status.textContent = cache.error;
+  } else {
+    status.textContent = `${cache.items.length} *Test classes in org · ${tests.length} selected to run`;
+  }
+
+  const selectedItems = tests.map((fullName) => ({ fullName, extra: true }));
+  const orgItems = (cache?.items || []).filter((i) => !tests.includes(i.fullName));
+  let combined = [...selectedItems, ...orgItems];
+  if (filter) combined = combined.filter((i) => i.fullName.toLowerCase().includes(filter));
+  if (!combined.length) {
+    list.innerHTML = tests.length
+      ? `<div class="empty">No test classes match that filter.</div>`
+      : `<div class="empty">No test classes listed yet.</div>`;
+    return;
+  }
+  const cap = isWorkbench() ? WORKBENCH_MEMBERS : MAX_MEMBERS;
+  const shown = combined.slice(0, cap);
+  list.innerHTML =
+    shown
+      .map((item) => {
+        const checked = tests.includes(item.fullName) ? "checked" : "";
+        return `<label><input type="checkbox" data-test="${escapeHtml(item.fullName)}" ${checked} /> ${escapeHtml(item.fullName)}</label>`;
+      })
+      .join("") +
+    (combined.length > cap ? `<div class="muted">Showing ${cap} of ${combined.length}. Filter to find the rest.</div>` : "");
+}
+
+async function setSpecifiedTest(name, selected) {
+  const set = new Set(specifiedTests());
+  if (selected) set.add(name);
+  else set.delete(name);
+  state.specifiedTests = normalizeTestNames([...set]);
+  if (state.specifiedTests.length && $("test-level").value === "NoTestRun") {
+    $("test-level").value = "RunSpecifiedTests";
+  }
+  if (!state.specifiedTests.length && $("test-level").value === "RunSpecifiedTests") {
+    $("test-level").value = packageHasApex(state.packageTypes) ? "RunLocalTests" : "NoTestRun";
+  }
+  await persistShipOptions();
+  renderTestRunner();
+  renderInspector();
+}
+
+async function scanOrgTests() {
+  const source = selectedOrg("source-org");
+  if (!source) throw new Error("Select a source org on the Deploy tab first.");
+  log(`Listing Apex classes in ${source.label} to find test classes…`);
+  const items = await listMetadataType({
+    instanceUrl: source.instanceUrl,
+    sid: source.sid,
+    typeName: "ApexClass",
+    apiVersion: apiVersion(),
+    onProgress: (m) => log(m)
+  });
+  const tests = items.filter((i) => isTestClassName(i.fullName));
+  state.testClassCache = { items: tests, error: "" };
+  log(`Found ${tests.length} test class${tests.length === 1 ? "" : "es"} (name ends with Test).`);
+  renderTestRunner();
+}
+
+function openWorkbench() {
+  const url = chrome.runtime.getURL("sidepanel.html") + "?layout=workbench";
+  if (chrome.tabs?.create) chrome.tabs.create({ url });
+  else window.open(url, "orgflow-workbench");
+}
+
+async function persistGitToggle(on) {
+  $("use-git").checked = on;
+  if ($("use-git-setup")) $("use-git-setup").checked = on;
+  await saveSettings({ useGit: on });
+  state.settings = await loadSettings();
+  renderGitUi();
+  renderInspector();
+  updateHeaderStatus();
 }
 
 function resolveTicket(store) {
@@ -514,9 +720,15 @@ async function filesForDeploy() {
 }
 
 function deployOptions() {
+  const runTests = specifiedTests();
+  const selectedLevel = $("test-level").value;
+  if (selectedLevel === "RunSpecifiedTests" && !runTests.length) {
+    throw new Error("Pick at least one test class in the Test class runner, or choose a different Tests option.");
+  }
   return {
-    testLevel: $("test-level").value,
-    checkOnly: $("check-only").checked
+    testLevel: runTests.length ? "RunSpecifiedTests" : selectedLevel,
+    checkOnly: $("check-only").checked,
+    runTests
   };
 }
 
@@ -527,7 +739,8 @@ async function deploySelected() {
   const files = await filesForDeploy();
   const zipBase64 = await zipFromFiles(files);
   const options = deployOptions();
-  log(`Deploying ${files.length} file(s) to ${target.label}…`);
+  if (options.runTests.length) log(`Running specified tests: ${options.runTests.join(", ")}`);
+  log(`Deploying ${files.length} file(s) to ${target.label} (${options.testLevel})…`);
   const result = await deployMetadata({
     instanceUrl: target.instanceUrl,
     sid: target.sid,
@@ -611,7 +824,8 @@ async function deployVersion(explicitId) {
   if (!files.length) throw new Error(`No files found at ${version.path}.`);
   const zipBase64 = await zipFromFiles(files);
   const options = deployOptions();
-  log(`Deploying ${version.id} to ${target.label}…`);
+  if (options.runTests.length) log(`Running specified tests: ${options.runTests.join(", ")}`);
+  log(`Deploying ${version.id} to ${target.label} (${options.testLevel})…`);
   const result = await deployMetadata({
     instanceUrl: target.instanceUrl,
     sid: target.sid,
@@ -686,6 +900,7 @@ function applyXmlToPicker() {
   state.xmlDirty = false;
   invalidateStaged();
   $("package-xml").value = buildPackageXmlFromTypes(state.packageTypes, parsed.version || apiVersion());
+  maybeTrackApexTests("ApexClass", suggestedTestClasses(state.packageTypes).inPackage);
   return persistPackage();
 }
 
@@ -693,6 +908,16 @@ function rebuildXmlFromPicker() {
   state.xmlDirty = false;
   $("package-xml").value = currentXml();
   $("xml-status").textContent = "XML rebuilt from the picker.";
+  renderInspector();
+}
+
+function maybeTrackApexTests(typeName, names) {
+  if (typeName !== "ApexClass") return;
+  const set = new Set(state.specifiedTests);
+  for (const name of names || []) {
+    if (isTestClassName(name)) set.add(name);
+  }
+  state.specifiedTests = normalizeTestNames([...set]);
 }
 
 function openFile(path) {
@@ -749,6 +974,9 @@ document.querySelectorAll(".subtab").forEach((tab) => {
 });
 
 $("goto-components").addEventListener("click", () => switchTab("components"));
+$("goto-workbench")?.addEventListener("click", openWorkbench);
+$("open-workbench")?.addEventListener("click", openWorkbench);
+$("open-workbench-banner")?.addEventListener("click", openWorkbench);
 $("btn-connect-github").addEventListener("click", () => run(connectGithub));
 $("btn-save-repo").addEventListener("click", () => run(saveRepo));
 $("btn-refresh-orgs").addEventListener("click", () => run(refreshOrgs));
@@ -769,12 +997,14 @@ $("btn-load-types").addEventListener("click", () => run(loadOrgTypes));
 $("btn-apply-xml").addEventListener("click", () => run(applyXmlToPicker));
 $("btn-rebuild-xml").addEventListener("click", rebuildXmlFromPicker);
 $("btn-save-file").addEventListener("click", () => run(saveFileEdits));
-$("btn-clear-package").addEventListener("click", () => run(async () => {
+const clearPackage = () => run(async () => {
   state.packageTypes = [];
   state.xmlDirty = false;
   invalidateStaged();
   await persistPackage();
-}));
+});
+$("btn-clear-package")?.addEventListener("click", clearPackage);
+$("btn-clear-package-inspector")?.addEventListener("click", clearPackage);
 $("btn-clear-type").addEventListener("click", () => run(async () => {
   state.packageTypes = setTypeMembers(state.packageTypes, state.activeType, []);
   invalidateStaged();
@@ -788,6 +1018,7 @@ $("btn-select-visible").addEventListener("click", () => run(async () => {
   const current = selectedMembersFor(typeName);
   names.forEach((n) => current.add(n));
   state.packageTypes = setTypeMembers(state.packageTypes, typeName, [...current]);
+  maybeTrackApexTests(typeName, names);
   invalidateStaged();
   await persistPackage();
 }));
@@ -796,6 +1027,7 @@ $("btn-add-member").addEventListener("click", () => run(async () => {
   if (!name) throw new Error("Enter a metadata member name.");
   const typeName = state.activeType;
   state.packageTypes = toggleMember(state.packageTypes, typeName, name, true);
+  maybeTrackApexTests(typeName, [name]);
   $("manual-member").value = "";
   invalidateStaged();
   await persistPackage();
@@ -811,6 +1043,7 @@ $("type-picker").addEventListener("click", (event) => {
   renderMembers();
 });
 $("member-filter").addEventListener("input", renderMembers);
+$("show-selected-only")?.addEventListener("change", renderMembers);
 $("member-list").addEventListener("change", (event) => {
   const box = event.target.closest("input[data-member]");
   if (!box) return;
@@ -818,6 +1051,7 @@ $("member-list").addEventListener("change", (event) => {
     const typeName = state.activeType;
     const listed = (state.membersCache[typeName]?.items || []).map((i) => i.fullName);
     state.packageTypes = toggleMember(state.packageTypes, typeName, box.dataset.member, box.checked, listed);
+    if (box.checked) maybeTrackApexTests(typeName, [box.dataset.member]);
     invalidateStaged();
     await persistPackage();
   });
@@ -844,5 +1078,44 @@ $("version-list").addEventListener("click", (event) => {
     run(() => deployVersion(deployId));
   }
 });
+$("use-git")?.addEventListener("change", () => run(() => persistGitToggle($("use-git").checked)));
+$("use-git-setup")?.addEventListener("change", () => run(() => persistGitToggle($("use-git-setup").checked)));
+$("inspector-filter")?.addEventListener("input", renderInspector);
+document.querySelectorAll(".insp-tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    state.inspectorView = btn.dataset.insp;
+    renderInspector();
+  });
+});
+$("btn-scan-tests")?.addEventListener("click", () => run(scanOrgTests));
+$("btn-clear-tests")?.addEventListener("click", () => run(async () => {
+  state.specifiedTests = [];
+  if ($("test-level").value === "RunSpecifiedTests") {
+    $("test-level").value = packageHasApex(state.packageTypes) ? "RunLocalTests" : "NoTestRun";
+  }
+  await persistShipOptions();
+  renderTestRunner();
+  renderInspector();
+}));
+$("btn-add-test")?.addEventListener("click", () => run(async () => {
+  const name = $("manual-test").value.trim();
+  if (!name) throw new Error("Enter a test class name.");
+  $("manual-test").value = "";
+  await setSpecifiedTest(name, true);
+}));
+$("test-filter")?.addEventListener("input", renderTestRunner);
+$("test-class-list")?.addEventListener("change", (event) => {
+  const box = event.target.closest("input[data-test]");
+  if (!box) return;
+  run(() => setSpecifiedTest(box.dataset.test, box.checked));
+});
+$("suggested-tests")?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-test-toggle]");
+  if (!btn) return;
+  const name = btn.dataset.testToggle;
+  const on = !specifiedTests().includes(name);
+  run(() => setSpecifiedTest(name, on));
+});
+$("test-level")?.addEventListener("change", () => run(persistShipOptions));
 
 refreshAll();

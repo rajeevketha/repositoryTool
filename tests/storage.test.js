@@ -12,6 +12,14 @@ describe("settings", () => {
     assert.deepEqual(merged.metadataTypes, DEFAULT_METADATA_TYPES);
     assert.equal(isGithubConfigured(merged), true);
     assert.equal(repoLabel(merged), "acme/sf@main");
+    assert.equal(merged.useGit, true);
+    assert.deepEqual(merged.specifiedTests, []);
+  });
+
+  it("keeps Git versioning off when the toggle is cleared", () => {
+    const merged = mergeSettings({ useGit: false, specifiedTests: ["FooTest"] });
+    assert.equal(merged.useGit, false);
+    assert.deepEqual(merged.specifiedTests, ["FooTest"]);
   });
 
   it("keeps an empty component package", () => {

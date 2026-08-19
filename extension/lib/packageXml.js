@@ -224,9 +224,11 @@ export function checkRetrieveBody(asyncId, includeZip) {
 }
 
 export function deployBody(zipBase64, options = {}) {
-  const testLevel = options.testLevel || "NoTestRun";
+  const runTests = [...new Set((options.runTests || []).map((t) => String(t).trim()).filter(Boolean))];
+  const testLevel = runTests.length ? "RunSpecifiedTests" : (options.testLevel || "NoTestRun");
   const checkOnly = options.checkOnly ? "true" : "false";
   const rollbackOnError = options.rollbackOnError === false ? "false" : "true";
+  const runTestsXml = runTests.map((t) => `        <urn:runTests>${escapeXml(t)}</urn:runTests>`).join("\n");
   return `    <urn:deploy xmlns:urn="http://soap.sforce.com/2006/04/metadata">
       <urn:zipFile>${zipBase64}</urn:zipFile>
       <urn:deployOptions>
@@ -239,7 +241,7 @@ export function deployBody(zipBase64, options = {}) {
         <urn:rollbackOnError>${rollbackOnError}</urn:rollbackOnError>
         <urn:singlePackage>true</urn:singlePackage>
         <urn:testLevel>${escapeXml(testLevel)}</urn:testLevel>
-      </urn:deployOptions>
+${runTestsXml ? `${runTestsXml}\n` : ""}      </urn:deployOptions>
     </urn:deploy>`;
 }
 

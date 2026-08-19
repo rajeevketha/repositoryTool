@@ -360,6 +360,8 @@ button:disabled {
   background: #e8f4ff;
   outline: 2px solid var(--blue);
 }
+
+.inline-add {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 6px;
@@ -483,4 +485,230 @@ button:disabled {
   color: var(--muted);
   padding: 16px 8px;
   text-align: center;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ghost-text {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.ghost-text:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.switch {
+  margin-top: 0;
+  font-weight: 700;
+}
+
+.member-toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.check.compact {
+  margin-top: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workbench-banner {
+  background: #fff7ea;
+  border: 1px solid #f3d5aa;
+  color: #5c3b08;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+button.linkish {
+  display: inline;
+  background: none;
+  color: var(--blue);
+  padding: 0;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.git-card .hint {
+  margin-top: 6px;
+}
+
+.inspector {
+  background: #fff;
+  border-top: 1px solid var(--line);
+  padding: 12px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 220px;
+}
+
+.inspector-head strong {
+  color: var(--navy);
+}
+
+.inspector-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: #eef3f8;
+  padding: 4px;
+  border-radius: 10px;
+  margin-top: 8px;
+}
+
+.insp-tab {
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 6px;
+  font-size: 12px;
+}
+
+.insp-tab.active {
+  background: #fff;
+  color: var(--navy);
+  box-shadow: 0 1px 2px rgba(3, 45, 96, 0.12);
+}
+
+.inspector-pane {
+  min-height: 120px;
+}
+
+.category-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.cat-col {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.cat-col h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--navy);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cat-group h4 {
+  margin: 8px 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.cat-col ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.xml-preview {
+  margin: 0;
+  padding: 10px;
+  background: #0f2744;
+  color: #d7e6f5;
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 360px;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+}
+
+.inspector-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.suggest-chip {
+  background: #e8f4ff;
+  color: var(--navy);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+body[data-layout="workbench"] {
+  min-width: 1100px;
+}
+
+body[data-layout="workbench"] .app-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(380px, 42%);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body[data-layout="workbench"] main {
+  overflow: auto;
+}
+
+body[data-layout="workbench"] .inspector {
+  border-top: 0;
+  border-left: 1px solid var(--line);
+  overflow: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+body[data-layout="workbench"] .category-columns {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+body[data-layout="workbench"] .type-picker,
+body[data-layout="workbench"] .type-list,
+body[data-layout="workbench"] .file-list {
+  max-height: min(52vh, 560px);
+}
+
+body[data-layout="workbench"] .xml-preview {
+  max-height: calc(100vh - 320px);
+}
+
+body[data-layout="workbench"] .sidepanel-only,
+body[data-layout="workbench"] #open-workbench,
+body[data-layout="workbench"] #workbench-banner,
+body[data-layout="workbench"] #goto-workbench {
+  display: none !important;
+}
+
+body[data-layout="workbench"] #compact-package-card {
+  display: none;
 }
