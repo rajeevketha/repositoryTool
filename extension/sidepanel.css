@@ -853,6 +853,7 @@ body[data-layout="workbench"][data-step="versions"] .app-body {
 .outcome-item.err .outcome-kicker { color: var(--danger); }
 .outcome-item.ok .outcome-kicker { color: var(--ok); }
 .outcome-item p { margin: 6px 0 0; }
+.outcome-item a { color: #f0ebe3; font-weight: 700; }
 .outcome-item strong { color: #fff; word-break: break-word; }
 .deploy-manifest {
   display: flex;

@@ -408,7 +408,13 @@ export function formatDeployOutcome(result) {
       const n = result.numberComponentsDeployed;
       items.push({ kind: "info", text: n ? `${n} component(s) deployed.` : "Deploy succeeded. Salesforce reported no component errors." });
     }
-    return { ok: true, title: result.status || "Succeeded", items };
+    items.push(...gitRecordItems(result.gitRecord));
+    const gitFail = result.gitRecord && result.gitRecord.ok === false;
+    return {
+      ok: true,
+      title: gitFail ? `${result.status || "Succeeded"} · Git not updated` : (result.status || "Succeeded"),
+      items
+    };
   }
   const items = [];
   if (result.errorMessage) items.push({ kind: "error", text: result.errorMessage });
@@ -437,6 +443,24 @@ export function formatDeployOutcome(result) {
     ? (errN ? `${result.status} · ${errN} error(s)` : result.status)
     : `Failed · ${result.numberComponentErrors || errN || items.length} error(s)`;
   return { ok: false, title, items };
+}
+
+function gitRecordItems(gitRecord) {
+  if (!gitRecord) return [];
+  if (gitRecord.ok) {
+    return [{
+      kind: "info",
+      kicker: "Team repo",
+      text: `Snapshot ${gitRecord.versionId} is in ${gitRecord.repo} on branch ${gitRecord.branch}. Files are under ${gitRecord.path} — not the repo root.`,
+      url: gitRecord.url || "",
+      linkLabel: "Open snapshot folder"
+    }];
+  }
+  return [{
+    kind: "error",
+    kicker: "Team repo",
+    text: `Salesforce succeeded, but the snapshot was not written to Git: ${gitRecord.error}`
+  }];
 }
 
 export function formatLocalOutcome(result) {

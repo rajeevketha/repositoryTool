@@ -28,6 +28,7 @@ import {
   fetchReleaseFiles,
   encodeUtf8Base64,
   getRef,
+  browseFolderUrl,
   tokenUrl
 } from "./lib/gitHost.js";
 import {
@@ -834,6 +835,16 @@ function syncOutcomePanel() {
   $("outcome-panel")?.classList.toggle("hidden", !show);
 }
 
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
 function outcomeItemHtml(item) {
   if (item.kind === "component") {
     return `<article class="outcome-item err">
@@ -859,6 +870,7 @@ function outcomeItemHtml(item) {
   return `<article class="outcome-item ${item.kind === "info" ? "info" : "err"}">
       ${item.kicker ? `<div class="outcome-kicker">${escapeHtml(item.kicker)}</div>` : ""}
       <p>${escapeHtml(item.text)}</p>
+      ${safeHttpUrl(item.url) ? `<p><a href="${escapeHtml(safeHttpUrl(item.url))}" target="_blank" rel="noreferrer">${escapeHtml(item.linkLabel || "Open in Git")}</a></p>` : ""}
     </article>`;
 }
 
@@ -883,7 +895,15 @@ function showOutcome(result) {
   }
   if ($("outcome-sub")) {
     $("outcome-sub").textContent = formatted.ok === true
-      ? (result?.operation === "retrieve" ? "Files are ready. Use Next to open Deploy, or Back to add members." : result?.operation === "save" ? "Snapshot is in the team repo." : "Salesforce accepted this package.")
+      ? (result?.operation === "retrieve"
+        ? "Files are ready. Use Next to open Deploy, or Back to add members."
+        : result?.gitRecord?.ok === false
+          ? "Salesforce accepted the package. The snapshot was not written to Git — see Team repo below."
+          : result?.gitRecord?.ok
+            ? "Salesforce accepted this package. Snapshot files are under .orgflow/releases/… — not the repo root."
+            : result?.operation === "save"
+              ? "Snapshot is in the team repo under .orgflow/releases/…"
+              : "Salesforce accepted this package.")
       : formatted.ok === null
         ? "Salesforce is still working. The button stays off until this finishes."
         : result?.local
@@ -958,7 +978,7 @@ function renderGitUi() {
   const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   if ($("git-ship-hint")) {
-    $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version. Jira is optional.`;
+    $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version. Jira is optional. Snapshots go to .orgflow/releases/… in the repo, not the root.`;
   }
   fillGitHostUi();
   renderPipelines();
@@ -1876,6 +1896,7 @@ async function saveRepo() {
   const fromInput = parseRepoInput(provider, $("gh-repo-input").value);
   const parsed = fromInput || fromSelect;
   const selectedRepo = state.repos.find((r) => r.fullName === $("gh-repo").value);
+  if (selectedRepo?.defaultBranch) $("gh-branch").value = selectedRepo.defaultBranch;
   const branch = $("gh-branch").value.trim() || selectedRepo?.defaultBranch || "main";
   if (!token) throw new Error(`${meta.label} token is required.`);
   if (!parsed?.repo) throw new Error(provider === "azuredevops" ? "Choose or paste org/project/repo." : "Choose or paste a repository (owner/name).");
@@ -2153,6 +2174,18 @@ function deployOptions() {
   };
 }
 
+function gitSnapshotRecord(version) {
+  const creds = hostCreds(state.settings);
+  return {
+    ok: true,
+    versionId: version?.id || "",
+    path: version?.path || ".orgflow/releases",
+    repo: repoLabel(state.settings),
+    branch: creds.branch || "main",
+    url: browseFolderUrl(state.settings, version?.path || "")
+  };
+}
+
 async function deploySelected() {
   const target = selectedOrg("target-org");
   if (!target) throw new Error("Select a target org. Log into it in Chrome first.");
@@ -2197,9 +2230,16 @@ async function deploySelected() {
     setStatus(`Deployed package → ${target.label}`, "ok");
     if (useGitEnabled()) {
       try {
-        await recordSuccessfulGitDeploy(target, result, options);
+        const version = await recordSuccessfulGitDeploy(target, result, options);
+        const gitRecord = gitSnapshotRecord(version);
+        showOutcome({ ...result, operation: "deploy", gitRecord });
+        log(`Snapshot ${version.id} is in ${gitRecord.path} on ${gitRecord.branch} (${gitRecord.repo}).`);
+        setStatus(`Deployed to ${target.label} · snapshot in ${gitRecord.path}`, "ok");
       } catch (gitErr) {
-        log(`Salesforce deploy succeeded, but ${providerMeta(providerId(state.settings)).label} could not record it: ${gitErr.message || gitErr}`, "error");
+        const gitRecord = { ok: false, error: gitErr.message || String(gitErr) };
+        showOutcome({ ...result, operation: "deploy", gitRecord });
+        log(`Salesforce deploy succeeded, but ${providerMeta(providerId(state.settings)).label} could not record it: ${gitRecord.error}`, "error");
+        setStatus(`Deployed to Salesforce, but Git was not updated`, "error");
       }
     }
     return result;
@@ -2304,8 +2344,18 @@ async function saveVersion() {
   state.lastSaved = { id: record.id, fingerprint: stagedFilesFingerprint() };
   renderVersions();
   $("jira").value = record.jira;
-  log(`Saved ${record.id} (${files.length} files, commit ${commit.sha.slice(0, 7)}).`);
-  setStatus(`Saved ${record.id} to ${repoLabel(state.settings)}`, "ok");
+  log(`Saved ${record.id} (${files.length} files, commit ${commit.sha.slice(0, 7)}) under ${record.path}.`);
+  setStatus(`Saved ${record.id} to ${record.path} on ${gitCreds().branch}`, "ok");
+  const folderUrl = browseFolderUrl(state.settings, record.path);
+  if (folderUrl) log(`Open snapshot folder: ${folderUrl}`);
+  if (state.deployFinished !== "running") {
+    showOutcome({
+      success: true,
+      status: "Saved",
+      operation: "save",
+      gitRecord: gitSnapshotRecord(record)
+    });
+  }
   return record;
 }
 
@@ -2356,10 +2406,20 @@ async function deployVersion(explicitId) {
     setStatus(`Deploy failed — see the result panel`, "error");
     return version;
   }
-  const updated = await recordSuccessfulGitDeploy(target, result, options, version);
-  log(`Deployed ${version.id} to ${target.label} (${result.status || "Succeeded"}).`);
-  setStatus(`Deployed ${version.id} → ${target.label}`, "ok");
-  return updated;
+  try {
+    const updated = await recordSuccessfulGitDeploy(target, result, options, version);
+    const gitRecord = useGitEnabled() ? gitSnapshotRecord(updated) : null;
+    showOutcome({ ...result, operation: "deploy", gitRecord });
+    log(`Deployed ${version.id} to ${target.label} (${result.status || "Succeeded"}).`);
+    if (gitRecord) log(`Snapshot ${updated.id} is in ${gitRecord.path} on ${gitRecord.branch}.`);
+    setStatus(`Deployed ${version.id} → ${target.label}`, "ok");
+    return updated;
+  } catch (gitErr) {
+    if (useGitEnabled()) {
+      showOutcome({ ...result, operation: "deploy", gitRecord: { ok: false, error: gitErr.message || String(gitErr) } });
+    }
+    throw gitErr;
+  }
 }
 
 async function loadOrgTypes() {
@@ -2565,6 +2625,8 @@ $("git-org")?.addEventListener("input", fillGitHostUi);
 $("git-base-url")?.addEventListener("input", fillGitHostUi);
 $("btn-save-repo").addEventListener("click", () => run(saveRepo));
 $("gh-repo")?.addEventListener("change", () => {
+  const selectedRepo = state.repos.find((r) => r.fullName === $("gh-repo").value);
+  if (selectedRepo?.defaultBranch) $("gh-branch").value = selectedRepo.defaultBranch;
   if ($("gh-token")?.value.trim() || hostCreds(state.settings).token) run(saveRepo);
 });
 $("gh-repo-input")?.addEventListener("change", () => {

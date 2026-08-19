@@ -214,3 +214,44 @@ export function encodeUtf8Base64(text) {
 export function decodeBase64(b64) {
   return github.decodeBase64(b64);
 }
+
+function encodePathSegments(path) {
+  return String(path || "")
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+/** Browser URL for a folder on the connected branch (where OrgFlow snapshots live). */
+export function browseFolderUrl(settings, folderPath = "") {
+  const c = hostCreds(settings);
+  if (!c.owner || !c.repo) return "";
+  const path = encodePathSegments(folderPath);
+  const branch = encodeURIComponent(c.branch || "main");
+  if (c.provider === "github") {
+    const base = `https://github.com/${c.owner}/${c.repo}`;
+    return path ? `${base}/tree/${branch}/${path}` : `${base}/tree/${branch}`;
+  }
+  if (c.provider === "gitlab") {
+    let origin = "https://gitlab.com";
+    try {
+      origin = new URL(c.baseUrl || "https://gitlab.com").origin;
+    } catch {
+      origin = "https://gitlab.com";
+    }
+    const project = `${c.owner}/${c.repo}`;
+    return path
+      ? `${origin}/${project}/-/tree/${branch}/${path}`
+      : `${origin}/${project}/-/tree/${branch}`;
+  }
+  if (c.provider === "azuredevops" && c.project) {
+    const params = new URLSearchParams({
+      path: `/${String(folderPath || "").replace(/^\/+/, "")}`,
+      version: `GB${c.branch || "main"}`
+    });
+    return `https://dev.azure.com/${c.owner}/${c.project}/_git/${c.repo}?${params}`;
+  }
+  return "";
+}

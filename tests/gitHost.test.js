@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseRepoInput, providerMeta, providerId, tokenUrl } from "../extension/lib/gitHost.js";
+import { parseRepoInput, providerMeta, providerId, tokenUrl, browseFolderUrl } from "../extension/lib/gitHost.js";
 import { mergeSettings, isGitConfigured, repoLabel } from "../extension/lib/storage.js";
 
 describe("git hosts", () => {
@@ -81,6 +81,23 @@ describe("git hosts", () => {
     assert.equal(
       tokenUrl("azuredevops", { owner: "acme" }),
       "https://dev.azure.com/acme/_usersSettings/tokens"
+    );
+  });
+
+  it("builds a browser URL for the .orgflow snapshot folder", () => {
+    const github = mergeSettings({
+      gitHost: { provider: "github", token: "t", owner: "acme", repo: "sf", branch: "main" }
+    });
+    assert.equal(
+      browseFolderUrl(github, ".orgflow/releases/PROJ-123/v1"),
+      "https://github.com/acme/sf/tree/main/.orgflow/releases/PROJ-123/v1"
+    );
+    const gitlab = mergeSettings({
+      gitHost: { provider: "gitlab", token: "t", owner: "acme/team", repo: "sf", branch: "develop", baseUrl: "https://gitlab.com" }
+    });
+    assert.equal(
+      browseFolderUrl(gitlab, ".orgflow/releases/CHANGE-1/v1"),
+      "https://gitlab.com/acme/team/sf/-/tree/develop/.orgflow/releases/CHANGE-1/v1"
     );
   });
 });

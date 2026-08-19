@@ -183,6 +183,32 @@ describe("soap result parsing", () => {
     assert.equal(fromMessage.items[0].text, "Enter a commit message.");
   });
 
+  it("tells the user where Git files landed after a Salesforce success", () => {
+    const withGit = formatDeployOutcome({
+      success: true,
+      status: "Succeeded",
+      gitRecord: {
+        ok: true,
+        versionId: "PROJ-123-v1",
+        repo: "acme/sf@main (GitHub)",
+        branch: "main",
+        path: ".orgflow/releases/PROJ-123/v1",
+        url: "https://github.com/acme/sf/tree/main/.orgflow/releases/PROJ-123/v1"
+      }
+    });
+    assert.equal(withGit.ok, true);
+    const repoItem = withGit.items.find((i) => i.kicker === "Team repo");
+    assert.match(repoItem.text, /\.orgflow\/releases/);
+    assert.match(repoItem.text, /not the repo root/);
+    const gitFail = formatDeployOutcome({
+      success: true,
+      status: "Succeeded",
+      gitRecord: { ok: false, error: "Bad credentials" }
+    });
+    assert.match(gitFail.title, /Git not updated/);
+    assert.match(gitFail.items.find((i) => i.kicker === "Team repo").text, /Bad credentials/);
+  });
+
   it("parses listMetadata members", () => {
     const xml = `<listMetadataResponse>
       <result><fullName>Hello</fullName><type>ApexClass</type></result>
