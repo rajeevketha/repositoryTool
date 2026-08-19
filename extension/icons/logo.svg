@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
   <rect width="32" height="32" rx="9" fill="#0E1118"/>
-  <!-- Paper plane: kite body + crease (send / deploy) -->
+  <!-- Paper plane: kite body + dark ink crease (send / deploy) -->
   <g transform="translate(2.4 2.4) scale(1.133)">
     <path
       fill="#FFF6E8"
@@ -8,8 +8,8 @@
     />
     <path
       d="M21.854 2.147 10.75 13"
-      stroke="#C5BBA8"
-      stroke-width="2.1"
+      stroke="#141820"
+      stroke-width="2.55"
       stroke-linecap="round"
     />
   </g>
