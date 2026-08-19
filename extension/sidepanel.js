@@ -112,14 +112,97 @@ function setStatus(text, kind = "") {
 
 function setBusy(busy) {
   state.busy = busy;
-  document.querySelectorAll("[data-busy]").forEach((btn) => {
-    btn.disabled = busy;
-  });
+  updateActionState();
 }
 
 function selectedOrg(selectId) {
-  const value = $(selectId).value;
+  const el = $(selectId);
+  if (!el) return null;
+  const value = el.value;
+  if (!value) return null;
   return state.orgs.find((o) => orgKey(o) === value) || null;
+}
+
+function orgKind(org) {
+  if (!org) return "";
+  if (/sandbox/i.test(org.label) || /\.sandbox\./i.test(org.instanceUrl || "")) return "Sandbox";
+  if (/scratch/i.test(org.instanceUrl || "")) return "Scratch";
+  return "Production";
+}
+
+function deployBlockReason() {
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  const pack = memberCount(state.packageTypes);
+  if (!state.orgs.length) return "Detect logged-in Salesforce orgs on Start, then choose From and To.";
+  if (!source) return "Select a source org in the path bar (From).";
+  if (!target) return "Select a target org in the path bar (To). Deploy stays disabled until then.";
+  if (orgKey(source) === orgKey(target)) return "From and To are the same org. Pick a different target (for example Dev → QA).";
+  if (!pack) return `Path is ${source.label} → ${target.label}. Pick configuration before deploy.`;
+  return "";
+}
+
+function updateActionState() {
+  const reason = deployBlockReason();
+  document.querySelectorAll("[data-busy]").forEach((btn) => {
+    if (state.busy) {
+      btn.disabled = true;
+      return;
+    }
+    const needs = (btn.dataset.needs || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const source = selectedOrg("source-org");
+    const target = selectedOrg("target-org");
+    const pack = memberCount(state.packageTypes);
+    const same = source && target && orgKey(source) === orgKey(target);
+    let disabled = false;
+    if (needs.includes("source") && !source) disabled = true;
+    if (needs.includes("target") && !target) disabled = true;
+    if (needs.includes("package") && !pack) disabled = true;
+    if (needs.includes("distinct") && same) disabled = true;
+    if (needs.includes("git") && (!useGitEnabled() || !isGithubConfigured(state.settings))) disabled = true;
+    btn.disabled = disabled;
+  });
+  const callout = $("deploy-reason");
+  if (callout) {
+    const blocking = reason && (reason.includes("target") || reason.includes("same org") || reason.includes("Detect"));
+    callout.textContent = reason || `Ready to deploy ${selectedOrg("source-org")?.label} → ${selectedOrg("target-org")?.label}.`;
+    callout.className = `callout ${reason ? "warn" : "ok"}`;
+    callout.classList.toggle("hidden", !reason && !selectedOrg("target-org"));
+  }
+  renderOrgPath();
+}
+
+function renderOrgPath() {
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  const caption = $("path-caption");
+  const sub = $("path-sub");
+  const bar = $("org-path");
+  if ($("source-org-meta")) {
+    $("source-org-meta").textContent = source
+      ? `${orgKind(source)} · ${source.username || source.instanceUrl}`
+      : "Where you built the change";
+  }
+  if ($("target-org-meta")) {
+    $("target-org-meta").textContent = target
+      ? `${orgKind(target)} · ${target.username || target.instanceUrl}`
+      : "Where it should go (QA, UAT, prod)";
+  }
+  const ready = Boolean(source && target && orgKey(source) !== orgKey(target));
+  bar?.classList.toggle("incomplete", !ready);
+  bar?.classList.toggle("ready", ready);
+  if (caption) {
+    caption.textContent = ready
+      ? `${source.label} → ${target.label}`
+      : source && target
+        ? "Source and target must be different orgs"
+        : "Select source and target orgs";
+  }
+  if (sub) {
+    sub.textContent = ready
+      ? `Simple path: configuration moves ${orgKind(source)} → ${orgKind(target)}.`
+      : "Deploy stays off until From and To are different Salesforce orgs.";
+  }
 }
 
 function apiVersion() {
@@ -168,6 +251,7 @@ function renderPackageUi() {
   renderInspector();
   renderTestRunner();
   renderGitUi();
+  updateActionState();
 }
 
 function renderInspector() {
@@ -407,18 +491,34 @@ function renderFileList() {
 }
 
 function fillOrgSelects() {
-  const html = state.orgs.length
+  const options = state.orgs.length
     ? state.orgs.map((o) => `<option value="${escapeHtml(orgKey(o))}">${escapeHtml(o.label)} — ${escapeHtml(o.username || o.instanceUrl)}</option>`).join("")
-    : `<option value="">No orgs detected — log in, then Detect orgs on Start</option>`;
+    : "";
   const prevSource = state.settings.lastSourceOrgId;
   const prevTarget = state.settings.lastTargetOrgId;
-  for (const id of ["source-org", "target-org", "pipeline-source", "pipeline-target"]) {
+  const sourceBlank = `<option value="">Select source org</option>`;
+  const targetBlank = `<option value="">Select target org</option>`;
+  const sourceEl = $("source-org");
+  const targetEl = $("target-org");
+  if (sourceEl) sourceEl.innerHTML = sourceBlank + options;
+  if (targetEl) targetEl.innerHTML = targetBlank + options;
+  if (sourceEl && prevSource && state.orgs.some((o) => orgKey(o) === prevSource)) sourceEl.value = prevSource;
+  if (targetEl && prevTarget && prevTarget !== sourceEl?.value && state.orgs.some((o) => orgKey(o) === prevTarget)) {
+    targetEl.value = prevTarget;
+  }
+  if (sourceEl?.value && !targetEl?.value && state.orgs.length === 2) {
+    const other = state.orgs.find((o) => orgKey(o) !== sourceEl.value);
+    if (other) targetEl.value = orgKey(other);
+  }
+  for (const id of ["pipeline-source", "pipeline-target"]) {
     const el = $(id);
     if (!el) continue;
-    el.innerHTML = html;
-    if (id.includes("source") && prevSource) el.value = prevSource;
-    if (id.includes("target") && prevTarget) el.value = prevTarget;
+    const blank = id.includes("target") ? targetBlank : sourceBlank;
+    el.innerHTML = blank + options;
+    if (id.includes("source") && sourceEl?.value) el.value = sourceEl.value;
+    if (id.includes("target") && targetEl?.value) el.value = targetEl.value;
   }
+  updateActionState();
 }
 
 function renderPipelines() {
@@ -855,6 +955,7 @@ async function persistGitToggle(on) {
   renderGitUi();
   renderInspector();
   updateHeaderStatus();
+  updateActionState();
 }
 
 function resolveTicket(store) {
@@ -1293,6 +1394,22 @@ $("version-list").addEventListener("click", (event) => {
   }
 });
 $("use-git")?.addEventListener("change", () => run(() => persistGitToggle($("use-git").checked)));
+$("source-org")?.addEventListener("change", () => run(async () => {
+  await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
+  state.settings = await loadSettings();
+  if ($("pipeline-source") && $("source-org").value) $("pipeline-source").value = $("source-org").value;
+  if ($("source-org").value && !$("target-org").value && state.orgs.length === 2) {
+    const other = state.orgs.find((o) => orgKey(o) !== $("source-org").value);
+    if (other) $("target-org").value = orgKey(other);
+  }
+  updateActionState();
+}));
+$("target-org")?.addEventListener("change", () => run(async () => {
+  await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
+  state.settings = await loadSettings();
+  if ($("pipeline-target") && $("target-org").value) $("pipeline-target").value = $("target-org").value;
+  updateActionState();
+}));
 $("inspector-filter")?.addEventListener("input", renderInspector);
 document.querySelectorAll(".insp-tab").forEach((btn) => {
   btn.addEventListener("click", () => {

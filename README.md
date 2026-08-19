@@ -18,7 +18,7 @@ Typical configuration you can pick by name: **CustomField** (`Account.Status__c`
 
 Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minute). Open [docs/user-manual.html](docs/user-manual.html) in a browser to replay the same slides.
 
-The flow is: detect orgs → pick components → confirm the live selected package → deploy. Git versioning stays on unless you turn it off for a one-off org-to-org push.
+The **From → To path bar** at the top of every screen is the live route (for example Dev sandbox → QA). Deploy stays disabled until those two orgs are selected and different.
 
 ## Install (unpacked Chrome extension)
 

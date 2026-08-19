@@ -1,18 +1,22 @@
 :root {
   --navy: #032d60;
+  --navy-2: #014486;
   --blue: #0176d3;
   --blue-hover: #0b5cab;
   --teal: #0b7056;
   --teal-hover: #0a5c47;
   --amber: #fe9339;
-  --bg: #f4f6f9;
+  --bg: #e9eef5;
+  --bg-2: #dbe4ef;
   --card: #ffffff;
-  --line: #e5eaf0;
+  --line: #cfd8e4;
   --text: #181818;
-  --muted: #5c6a77;
+  --muted: #54698d;
   --danger: #ba0517;
   --ok: #2e844a;
-  --radius: 10px;
+  --radius: 12px;
+  --shadow: 0 8px 24px rgba(3, 45, 96, 0.08);
+  --shadow-sm: 0 2px 8px rgba(3, 45, 96, 0.06);
 }
 
 * {
@@ -23,7 +27,10 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(1200px 400px at 0% -10%, rgba(1, 118, 211, 0.12), transparent 55%),
+    radial-gradient(900px 320px at 100% 0%, rgba(11, 112, 86, 0.08), transparent 50%),
+    var(--bg);
   color: var(--text);
   font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
   min-width: 360px;
@@ -40,9 +47,10 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 14px;
-  background: linear-gradient(135deg, var(--navy), #014486);
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--navy), var(--navy-2) 55%, #0b5cab);
   color: #fff;
+  box-shadow: 0 8px 20px rgba(3, 45, 96, 0.28);
 }
 
 .brand {
@@ -263,7 +271,8 @@ button.subtab.active {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 10px;
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
 }
 
 .card .title {
@@ -800,4 +809,179 @@ body[data-layout="workbench"] #compact-package-card {
   font-weight: 700;
   text-transform: uppercase;
   color: var(--blue);
+}
+
+.org-path {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  background: linear-gradient(180deg, #032d60, #014486);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(3, 45, 96, 0.22);
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+.org-path.ready {
+  background: linear-gradient(180deg, #032d60, #0b7056);
+}
+
+.path-kicker {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.72;
+  font-weight: 700;
+}
+
+#path-caption {
+  display: block;
+  font-size: 15px;
+  margin: 2px 0 2px;
+}
+
+.path-sub {
+  display: block;
+  font-size: 12px;
+  opacity: 0.82;
+}
+
+.path-flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.path-node {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  padding: 8px;
+  color: #fff;
+  gap: 4px;
+}
+
+.path-node select {
+  background: #fff;
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.path-role {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.path-meta {
+  font-size: 11px;
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+.path-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+}
+
+.path-arrow span {
+  display: block;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 12px solid rgba(255, 255, 255, 0.45);
+}
+
+.org-path.ready .path-arrow span {
+  border-left-color: #90e0c0;
+}
+
+.callout {
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.callout.warn {
+  background: #fff4e5;
+  color: #8c4b02;
+  border: 1px solid #f3d5aa;
+}
+
+.callout.ok {
+  background: #eaf6ed;
+  color: var(--ok);
+  border: 1px solid #b7e0c2;
+}
+
+.inspector {
+  background: #f7fbff;
+  border-top: 1px solid var(--line);
+  padding: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 220px;
+  box-shadow: inset 0 8px 16px rgba(3, 45, 96, 0.03);
+}
+
+.inspector-head {
+  background: linear-gradient(135deg, #014486, #0176d3);
+  color: #fff;
+  padding: 12px 14px 10px;
+}
+
+.inspector-head strong,
+.inspector-head .hint {
+  color: #fff;
+}
+
+.inspector-head .hint {
+  opacity: 0.85;
+}
+
+.inspector-tabs {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.insp-tab {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.insp-tab.active {
+  background: #fff;
+  color: var(--navy);
+}
+
+.inspector-pane,
+.inspector-foot,
+.inspector > input {
+  margin: 0 12px;
+}
+
+.mode-card {
+  box-shadow: var(--shadow-sm);
+}
+
+.mode-card.selected {
+  box-shadow: 0 0 0 2px var(--blue), var(--shadow);
+}
+
+.type-chip {
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+body[data-layout="workbench"] .org-path {
+  position: relative;
 }

@@ -30,6 +30,29 @@
       <button class="tab" data-tab="versions" type="button">Versions</button>
     </nav>
 
+    <section id="org-path" class="org-path incomplete" aria-label="Deployment path">
+      <div class="path-copy">
+        <span class="path-kicker">Deployment path</span>
+        <strong id="path-caption">Select source and target orgs</strong>
+        <span id="path-sub" class="path-sub">Deploy stays off until From and To are different Salesforce orgs.</span>
+      </div>
+      <div class="path-flow">
+        <label class="path-node source">
+          <span class="path-role">From</span>
+          <select id="source-org"></select>
+          <span id="source-org-meta" class="path-meta">Source org</span>
+        </label>
+        <div class="path-arrow" id="path-arrow" aria-hidden="true">
+          <span></span>
+        </div>
+        <label class="path-node target">
+          <span class="path-role">To</span>
+          <select id="target-org"></select>
+          <span id="target-org-meta" class="path-meta">Target org</span>
+        </label>
+      </div>
+    </section>
+
     <div class="app-body">
       <main>
         <section id="view-start" class="view active">
@@ -49,7 +72,7 @@
           <div id="mode-status" class="muted">Choose Simple deploy or Git version control to continue.</div>
 
           <h2>1. Salesforce orgs</h2>
-          <p class="hint">Log into the sandbox you configure in and every target org (QA, UAT, prod) in this Chrome profile, then detect them. OrgFlow uses your Salesforce session — no Connected App required.</p>
+          <p class="hint">Log into both orgs in Chrome, detect them, then set <strong>From</strong> and <strong>To</strong> in the blue path bar above — for example Dev → QA. That path stays visible on every tab.</p>
           <div class="actions">
             <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
           </div>
@@ -141,10 +164,10 @@
             </div>
           </article>
           <label id="deploy-pipeline-wrap">
-            Pipeline
+            Saved Git pipeline
             <select id="deploy-pipeline"></select>
           </label>
-          <p class="hint">Log into the sandbox where you built the change and the org you want to update. On Start you chose Simple deploy or Git version control.</p>
+          <p class="hint">The path bar at the top is the live From → To route. Change it there if this deploy should go to a different org.</p>
           <label>
             Jira ticket
             <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
@@ -154,16 +177,6 @@
             Comment
             <textarea id="comment" rows="3" placeholder="What changed in this version?"></textarea>
           </label>
-          <div class="row">
-            <label>
-              Source org
-              <select id="source-org"></select>
-            </label>
-            <label>
-              Target org
-              <select id="target-org"></select>
-            </label>
-          </div>
 
           <article class="card git-card">
             <label class="check switch">
@@ -195,7 +208,7 @@
             <p class="hint">If this package includes Apex, pick the test classes that cover it. Selected tests deploy with <code>RunSpecifiedTests</code>.</p>
             <div id="suggested-tests"></div>
             <div class="row-actions">
-              <button type="button" id="btn-scan-tests" class="secondary" data-busy>Find *Test classes in source org</button>
+              <button type="button" id="btn-scan-tests" class="secondary" data-busy data-needs="source">Find *Test classes in source org</button>
               <button type="button" id="btn-clear-tests" class="secondary">Clear tests</button>
             </div>
             <input id="test-filter" type="search" placeholder="Filter test classes" />
@@ -210,12 +223,13 @@
             </label>
           </article>
 
+          <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
           <div class="actions">
-            <button id="btn-deploy-selected" class="accent" data-busy>Deploy configuration to target org</button>
+            <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct">Deploy configuration to target org</button>
             <div id="git-actions" class="actions">
-              <button id="btn-both" class="primary" data-busy>Save Git version &amp; deploy</button>
-              <button id="btn-save" class="secondary" data-busy>Save version to Git</button>
-              <button id="btn-deploy" class="secondary" data-busy>Deploy a saved Jira version</button>
+              <button id="btn-both" class="primary" data-busy data-needs="source,target,package,distinct,git">Save Git version &amp; deploy</button>
+              <button id="btn-save" class="secondary" data-busy data-needs="source,package,git">Save version to Git</button>
+              <button id="btn-deploy" class="secondary" data-busy data-needs="target,git">Deploy a saved Jira version</button>
             </div>
           </div>
         </section>
@@ -241,7 +255,7 @@
             <div id="type-browse">
               <input id="type-search" type="search" placeholder="Search types: field, object, flow, layout, permission…" />
               <div class="row-actions">
-                <button type="button" id="btn-load-types" class="secondary" data-busy>Load all types from source org</button>
+                <button type="button" id="btn-load-types" class="secondary" data-busy data-needs="source">Load all types from source org</button>
               </div>
               <div id="type-count" class="muted"></div>
               <div id="type-picker" class="type-picker"></div>
@@ -256,7 +270,7 @@
             <div id="member-panel" class="hidden">
               <p class="hint" id="member-help">Members for this type appear below. Tick what belongs on this Jira. Standard objects such as Account and Contact are included when you pick Objects.</p>
               <div class="row-actions">
-                <button type="button" id="btn-load-members" class="secondary" data-busy>Reload members from source org</button>
+                <button type="button" id="btn-load-members" class="secondary" data-busy data-needs="source">Reload members from source org</button>
                 <button type="button" id="btn-select-visible" class="secondary">Select visible</button>
                 <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
               </div>
@@ -291,8 +305,8 @@
               </div>
             </article>
             <div class="actions">
-              <button type="button" id="btn-retrieve" class="secondary" data-busy>Retrieve into Review</button>
-              <button type="button" id="btn-deploy-from-pick" class="accent" data-busy>Deploy configuration to target org</button>
+              <button type="button" id="btn-retrieve" class="secondary" data-busy data-needs="source,package">Retrieve into Review</button>
+              <button type="button" id="btn-deploy-from-pick" class="accent" data-busy data-needs="source,target,package,distinct">Deploy configuration to target org</button>
             </div>
           </div>
 
@@ -309,7 +323,7 @@
           <div id="subview-review" class="subview">
             <p class="hint">Retrieved configuration files. Open a file to edit XML before it goes to the next org. Closing the panel discards an unsaved retrieve.</p>
             <div class="row-actions">
-              <button type="button" id="btn-retrieve-review" class="secondary" data-busy>Retrieve selected</button>
+              <button type="button" id="btn-retrieve-review" class="secondary" data-busy data-needs="source,package">Retrieve selected</button>
             </div>
             <div id="file-list" class="file-list"></div>
             <label id="file-editor-wrap" class="hidden">
@@ -320,11 +334,9 @@
               </div>
             </label>
             <div class="actions">
-              <button type="button" id="btn-deploy-review" class="accent" data-busy>Deploy these files to target org</button>
+              <button type="button" id="btn-deploy-review" class="accent" data-busy data-needs="source,target,package,distinct">Deploy these files to target org</button>
             </div>
           </div>
-        </section>
-
         </section>
       </main>
 
