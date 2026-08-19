@@ -255,7 +255,7 @@
         <section id="view-components" class="view">
           <p class="step-kicker" id="pick-kicker">Pick configuration</p>
           <h2 class="page-title" id="pick-heading">Choose a configuration type</h2>
-          <p class="hint" id="pick-lead">One type at a time. After you tap a type, Next takes you to its members.</p>
+          <p class="hint" id="pick-lead">Search, use the picklist, or tap a type. Members open only after you choose one.</p>
           <nav class="subtabs" role="tablist">
             <button type="button" class="subtab active" data-subtab="pick">Pick</button>
             <button type="button" class="subtab" data-subtab="xml">package.xml</button>
@@ -267,7 +267,6 @@
               The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> — this side panel will close.
             </div>
             <div id="type-browse">
-              <p class="hint">Search, use the picklist, or tap a common type. All three do the same thing.</p>
               <div class="type-find">
                 <label class="grow">Search types
                   <input id="type-search" type="search" placeholder="field, object, flow, layout, permission…" autocomplete="off" />
@@ -352,10 +351,10 @@
           </div>
 
           <div id="subview-review" class="subview">
-            <p class="hint">Retrieve only — this screen does not change members. Use Back to tick more, then retrieve again.</p>
             <div class="row-actions">
               <button type="button" id="btn-retrieve-review" class="accent" data-busy data-needs="source,package">Retrieve from From org</button>
             </div>
+            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Next retrieves automatically. Use this button after you change the package.</p>
             <div id="file-list" class="file-list"></div>
             <label id="file-editor-wrap" class="hidden">
               <span id="file-editor-name">File</span>

@@ -95,7 +95,7 @@ const state = {
   busy: false,
   packageTypes: [],
   xmlDirty: false,
-  activeType: "CustomField",
+  activeType: "",
   typeFilter: "",
   availableTypes: [],
   membersCache: {},
@@ -148,6 +148,12 @@ function setStatus(text, kind = "") {
 function setBusy(busy) {
   state.busy = busy;
   updateActionState();
+}
+
+function highlightedType() {
+  if (!state.typeChosen || !state.activeType) return "";
+  if (currentStepId() === "type") return "";
+  return state.activeType;
 }
 
 function selectedOrg(selectId) {
@@ -236,7 +242,7 @@ function applyRetrieveLockUi() {
 function unlockSelection() {
   state.selectionFrozen = false;
   applyRetrieveLockUi();
-  setStatus("From org and members are unlocked. If you change them, retrieve again before deploy.", "ok");
+  setStatus("From org and members are unlocked. Change them to retrieve again before deploy.", "ok");
 }
 
 function alreadyDeployedToCurrentTarget() {
@@ -288,6 +294,9 @@ function updateActionState() {
     if (needs.includes("distinct") && same) disabled = true;
     if (needs.includes("retrieve") && !hasFreshRetrieve()) disabled = true;
     if (needs.includes("git") && (!useGitEnabled() || !isGitConfigured(state.settings))) disabled = true;
+    if ((btn.id === "btn-retrieve" || btn.id === "btn-retrieve-review") && hasFreshRetrieve() && state.retrieveOk) {
+      disabled = true;
+    }
     btn.disabled = disabled;
   });
   const deployBtn = $("btn-deploy-selected");
@@ -313,6 +322,36 @@ function updateActionState() {
       }
     }
     deployBtn.title = stateEl?.textContent || "";
+  }
+  const retrieveFresh = hasFreshRetrieve() && state.retrieveOk;
+  for (const id of ["btn-retrieve", "btn-retrieve-review"]) {
+    const btn = $(id);
+    if (!btn) continue;
+    if (state.busy && currentStepId() === "review" && !retrieveFresh) {
+      btn.textContent = "Retrieving…";
+      continue;
+    }
+    if (id === "btn-retrieve-review") {
+      btn.textContent = retrieveFresh ? "Already retrieved" : (state.retrieveSnapshot ? "Retrieve again" : "Retrieve from From org");
+    } else {
+      btn.textContent = retrieveFresh ? "Already retrieved" : (state.retrieveSnapshot ? "Retrieve again" : "Retrieve");
+    }
+    btn.title = retrieveFresh
+      ? "Change members, type, or the From org to retrieve again."
+      : "";
+  }
+  const retrieveHint = $("retrieve-btn-hint");
+  if (retrieveHint) {
+    if (retrieveFresh) {
+      retrieveHint.textContent = "Snapshot matches this package and From org. Unlock and change members or From org to retrieve again.";
+      retrieveHint.dataset.state = "done";
+    } else if (state.retrieveSnapshot) {
+      retrieveHint.textContent = "Members, type, or From org changed — retrieve again before deploy.";
+      retrieveHint.dataset.state = "off";
+    } else {
+      retrieveHint.textContent = "Next retrieves automatically. Use this button after you change the package.";
+      retrieveHint.dataset.state = "off";
+    }
   }
   const saveBtn = $("btn-save");
   if (saveBtn && useGitEnabled() && !state.busy && !gitCommitMessage()) {
@@ -425,7 +464,7 @@ function updatePickCopy() {
   if (stepId === "type") {
     if ($("pick-heading")) $("pick-heading").textContent = "Choose a configuration type";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Search, use the picklist, or tap a common type. That opens the member list for only that type.";
+      $("pick-lead").textContent = "Search, use the picklist, or tap a type. Members open only after you choose one.";
     }
   } else if (stepId === "members") {
     if ($("pick-heading")) $("pick-heading").textContent = type ? `Tick ${type.label} members` : "Tick members";
@@ -435,7 +474,7 @@ function updatePickCopy() {
   } else if (stepId === "review") {
     if ($("pick-heading")) $("pick-heading").textContent = "Retrieve from the From org";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "This step only retrieves files. Next stays off until retrieve succeeds. Use Back to add members.";
+      $("pick-lead").textContent = "Files for this package. Retrieve again only if members, type, or the From org change.";
     }
   }
   if ($("header-sub")) {
@@ -896,7 +935,7 @@ function renderTypePicklist() {
   if (!sel) return;
   const types = typesForPicker();
   const groups = catalogGroupsFromTypes(types, "");
-  const current = state.activeType;
+  const current = highlightedType();
   sel.innerHTML = `<option value="">Pick a type…</option>` +
     groups
       .map((group) => {
@@ -906,7 +945,7 @@ function renderTypePicklist() {
         return `<optgroup label="${escapeHtml(group.label)}">${opts}</optgroup>`;
       })
       .join("");
-  if (types.some((t) => t.name === current)) sel.value = current;
+  sel.value = types.some((t) => t.name === current) ? current : "";
 }
 
 function renderTypeShortcuts() {
@@ -917,7 +956,7 @@ function renderTypeShortcuts() {
     .map((name) => {
       const t = types.find((x) => x.name === name);
       if (!t) return "";
-      const active = name === state.activeType ? "active" : "";
+      const active = name === highlightedType() ? "active" : "";
       return `<button type="button" class="obj-chip ${active}" data-type="${escapeHtml(name)}">${escapeHtml(t.label)}</button>`;
     })
     .join("");
@@ -961,7 +1000,7 @@ function renderTypePicker() {
         : "";
       const chips = items
         .map((t) => {
-          const active = t.name === state.activeType ? "active" : "";
+          const active = t.name === highlightedType() ? "active" : "";
           return `<button type="button" class="type-chip ${active}" data-type="${escapeHtml(t.name)}">
             <span>${escapeHtml(t.label)}</span>
             <span class="api">${escapeHtml(t.name)}</span>
@@ -978,7 +1017,7 @@ function renderTypePicker() {
     ? `${types.length} metadata types from the source org. Search or use the picklist.`
     : `${types.length} metadata types ready. Search, pick from the list, or tap a shortcut.`;
   const active = types.find((t) => t.name === state.activeType);
-  if (active) {
+  if (active && state.typeChosen) {
     $("active-type-title").textContent = `Selected type: ${active.label}`;
     $("active-type-meta").textContent = active.name;
     const hint = memberHint(state.activeType);
@@ -1955,6 +1994,11 @@ function resolveTicket(store) {
 async function retrieveIntoReview() {
   const source = selectedOrg("source-org");
   if (!source) throw new Error("Select a source org. Log into it in Chrome first.");
+  if (hasFreshRetrieve() && state.retrieveOk) {
+    log("Already retrieved this package from the From org. Change members, type, or From org to retrieve again.");
+    setStatus("Already retrieved — Next to deploy, or Back to change members", "ok");
+    return state.stagedFiles;
+  }
   showOutcome({ running: true, operation: "retrieve" });
   try {
     const types = await ensurePackage();

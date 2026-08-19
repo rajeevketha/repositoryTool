@@ -832,6 +832,7 @@ body[data-layout="workbench"][data-step="versions"] .app-body {
 }
 #btn-deploy-selected:disabled { opacity: 1; }
 #btn-retrieve-review { width: 100%; min-height: 44px; }
+#btn-retrieve-review:disabled { opacity: 0.65; }
 
 body[data-layout="workbench"] .outcome-panel {
   overflow: auto;
