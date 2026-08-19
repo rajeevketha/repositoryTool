@@ -199,7 +199,8 @@ describe("soap result parsing", () => {
     assert.equal(withGit.ok, true);
     const repoItem = withGit.items.find((i) => i.kicker === "Team repo");
     assert.match(repoItem.text, /\.orgflow\/releases/);
-    assert.match(repoItem.text, /not the repo root/);
+    assert.match(repoItem.text, /not dumped at the repo root/);
+    assert.equal(repoItem.linkLabel, "Open this folder in Git");
     const gitFail = formatDeployOutcome({
       success: true,
       status: "Succeeded",

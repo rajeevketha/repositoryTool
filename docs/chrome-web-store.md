@@ -1,4 +1,4 @@
-# Chrome Web Store submission (OrgFlow 1.11.4)
+# Chrome Web Store submission (OrgFlow 1.11.5)
 
 Use this tomorrow morning after you smoke-test in Chrome. Upload **`files/orgflow-chrome-web-store.zip`** — `manifest.json` is at the zip root (required). Do **not** upload `orgflow-extension.zip`; that nested `orgflow/` folder is only for Load unpacked.
 
@@ -32,7 +32,8 @@ Versioning is always on. Snapshots are keyed by Jira (PROJ-123-v1). Keep them in
 With a team repo you can:
 
 - Save pipelines (From, To, test level) to .orgflow/pipelines.json
-- Save each retrieve as v1, v2, … with a required commit message
+- Save each retrieve as v1, v2, … with a required commit message, under .orgflow/releases with Salesforce metadata folders (classes, objects, layouts, lwc)
+- Detect an existing force-app project so OrgFlow never overwrites it; optionally create DX folders on an empty repo
 - Compare a retrieve with a previous version before you deploy (metadata XML and Apex diffs)
 - Revert selected files into the current retrieve
 - Deploy a saved version to the next org

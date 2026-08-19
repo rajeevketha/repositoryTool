@@ -858,6 +858,18 @@ body[data-layout="workbench"][data-step="versions"] .app-body {
 .outcome-item p { margin: 6px 0 0; }
 .outcome-item a { color: #f0ebe3; font-weight: 700; }
 .outcome-item strong { color: #fff; word-break: break-word; }
+.git-tree {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: #12151c;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #d7d2c8;
+  white-space: pre-wrap;
+  overflow: auto;
+  max-height: 180px;
+}
 .deploy-manifest {
   display: flex;
   flex-direction: column;

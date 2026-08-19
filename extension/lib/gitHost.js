@@ -221,6 +221,18 @@ export async function commitFiles(creds) {
   throw wrapGitWriteError(lastErr);
 }
 
+export async function listRootEntries(creds) {
+  if (creds.provider === "github") {
+    return github.listRootEntries({
+      token: creds.token,
+      owner: creds.owner,
+      repo: creds.repo,
+      branch: creds.branch
+    });
+  }
+  return adapter(creds.provider).listRootEntries(creds);
+}
+
 export async function fetchReleaseFiles(creds) {
   if (creds.provider === "github") {
     return github.fetchReleaseFiles({

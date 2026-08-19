@@ -451,9 +451,10 @@ function gitRecordItems(gitRecord) {
     return [{
       kind: "info",
       kicker: "Team repo",
-      text: `Snapshot ${gitRecord.versionId} is in ${gitRecord.repo} on branch ${gitRecord.branch}. Files are under ${gitRecord.path} — not the repo root.`,
+      text: `Open ${gitRecord.path} in ${gitRecord.repo} (branch ${gitRecord.branch}). Files are grouped like Salesforce metadata (classes, objects, layouts, lwc, …) — not dumped at the repo root.`,
+      detail: gitRecord.tree || "",
       url: gitRecord.url || "",
-      linkLabel: "Open snapshot folder"
+      linkLabel: "Open this folder in Git"
     }];
   }
   return [{

@@ -79,7 +79,7 @@
 
           <div id="git-setup-block" class="hidden">
             <h2>Connect the team repo</h2>
-            <p class="hint">OrgFlow writes snapshots to <code>.orgflow/</code> in the repo you pick. The token stays in this browser.</p>
+            <p class="hint">OrgFlow stores each Jira version under <code>.orgflow/releases/</code> using Salesforce metadata folders (<code>classes</code>, <code>objects</code>, <code>layouts</code>, …). After you pick a repo, OrgFlow checks whether it already has <code>force-app</code> so we never overwrite a DX project.</p>
             <label>Host
               <select id="git-provider">
                 <option value="github">GitHub</option>
@@ -119,6 +119,17 @@
             <div class="actions">
               <button id="btn-save-repo" class="secondary" data-busy>Use this repo</button>
             </div>
+
+            <article class="card hidden" id="git-layout-card">
+              <div class="title" id="git-layout-title">Salesforce files in Git</div>
+              <p class="hint" id="git-layout-copy"></p>
+              <pre id="git-layout-tree" class="git-tree hidden"></pre>
+              <div class="row-actions">
+                <button type="button" id="btn-view-git-files" class="primary">Open files in Git</button>
+                <button type="button" id="btn-create-sf-layout" class="secondary hidden">Create Salesforce folders</button>
+              </div>
+              <p id="git-layout-status" class="muted"></p>
+            </article>
 
             <h2>Pipeline</h2>
             <p class="hint">Optional. Remembers From, To, and test level in <code>.orgflow/pipelines.json</code> on the <strong>Branch</strong> above. Reopen OrgFlow, connect the same repo, then pick it from Saved pipelines.</p>

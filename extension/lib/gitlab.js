@@ -162,6 +162,24 @@ export async function commitFiles(creds) {
   return { sha: data.id, url: data.web_url || "" };
 }
 
+export async function listRootEntries(creds) {
+  try {
+    const { data } = await gl(
+      creds,
+      `/projects/${projectId(creds)}/repository/tree?ref=${encodeURIComponent(creds.branch || "main")}&per_page=100`
+    );
+    const items = Array.isArray(data) ? data : [];
+    return items.map((item) => ({
+      name: item.name,
+      path: item.path || item.name,
+      type: item.type === "tree" ? "dir" : "file"
+    }));
+  } catch (err) {
+    if (err.status === 404) return [];
+    throw err;
+  }
+}
+
 export async function fetchReleaseFiles(creds) {
   const prefix = String(creds.prefix || "").replace(/\/+$/, "");
   const items = [];

@@ -27,7 +27,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Submission kit (listing copy, privacy URL, permission justifications, screenshots): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** `files/orgflow-extension.zip` (unzip to an `orgflow/` folder)
-- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.4**)
+- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.5**)
 - **Privacy policy:** [docs/privacy.html](docs/privacy.html)
 
 ## Install (unpacked Chrome extension)
@@ -119,8 +119,16 @@ It is **not** a full Copado/Gearset replacement: no dependency graph, no data (r
 .orgflow/versions.json
 .orgflow/releases/PROJ-123/v1/package.xml
 .orgflow/releases/PROJ-123/v1/classes/...
+.orgflow/releases/PROJ-123/v1/objects/...
 .orgflow/releases/PROJ-123/v2/...
 ```
+
+Those inner folders are the same Metadata API names as `force-app/main/default` in VS Code (`classes`, `lwc`, `layouts`, `objects`, …). **Open files in Git** on Start jumps to that tree.
+
+When you connect a repo, OrgFlow inspects the root:
+
+- If it already has `force-app` / `sfdx-project.json` (a DIGICERT-style DX project), OrgFlow **does not overwrite it**. Snapshots stay under `.orgflow/releases/`.
+- If the repo is empty, you can **Create Salesforce folders** (`force-app/main/default/classes`, `objects`, …) so the warehouse looks like a normal Salesforce project. Each Jira version is still a separate snapshot so v1 is never replaced by v2.
 
 `versions.json` keeps increment history, comments, source org, Git commit SHA, and deployment audit entries. A second save of the same Jira key creates `v2` so `v1` stays deployable.
 

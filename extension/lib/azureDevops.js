@@ -156,6 +156,28 @@ export async function commitFiles(creds) {
   return { sha, url: data?.commits?.[0]?.url || "" };
 }
 
+export async function listRootEntries(creds) {
+  try {
+    const data = await az(
+      `${repoRoot(creds)}/items?recursionLevel=OneLevel&versionDescriptor.version=${encodeURIComponent(creds.branch || "main")}&versionDescriptor.versionType=branch`,
+      creds.token
+    );
+    const items = data?.value || [];
+    return items
+      .map((item) => {
+        const path = String(item.path || "").replace(/^\/+/, "");
+        if (!path) return null;
+        const name = path.split("/").pop();
+        const isDir = item.isFolder || item.gitObjectType === "tree";
+        return { name, path, type: isDir ? "dir" : "file" };
+      })
+      .filter(Boolean);
+  } catch (err) {
+    if (err.status === 404) return [];
+    throw err;
+  }
+}
+
 export async function fetchReleaseFiles(creds) {
   const prefix = azurePath(creds.prefix || "");
   let data;

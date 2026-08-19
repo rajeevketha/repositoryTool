@@ -172,6 +172,24 @@ export async function commitFiles({ token, owner, repo, branch, files, message }
   return { sha: commit.sha, url: commit.html_url };
 }
 
+export async function listRootEntries({ token, owner, repo, branch }) {
+  try {
+    const data = await gh(
+      token,
+      `/repos/${owner}/${repo}/contents/?ref=${encodeURIComponent(branch || "main")}`
+    );
+    const items = Array.isArray(data) ? data : [];
+    return items.map((item) => ({
+      name: item.name,
+      path: item.path || item.name,
+      type: item.type === "dir" ? "dir" : "file"
+    }));
+  } catch (err) {
+    if (err.status === 404 || err.status === 409) return [];
+    throw err;
+  }
+}
+
 export async function listTreeFiles(token, owner, repo, commitSha, prefix) {
   const commit = await gh(token, `/repos/${owner}/${repo}/git/commits/${commitSha}`);
   const tree = await gh(token, `/repos/${owner}/${repo}/git/trees/${commit.tree.sha}?recursive=1`);

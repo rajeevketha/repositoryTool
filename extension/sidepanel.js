@@ -29,7 +29,8 @@ import {
   encodeUtf8Base64,
   getRef,
   browseFolderUrl,
-  tokenUrl
+  tokenUrl,
+  listRootEntries
 } from "./lib/gitHost.js";
 import {
   pipelinesFilePath,
@@ -61,6 +62,7 @@ import {
   isTestClassName,
   normalizeTestNames
 } from "./lib/packageView.js";
+import { inspectRepoLayout, layoutCopy, snapshotTreeText, scaffoldProjectFiles } from "./lib/projectLayout.js";
 import {
   loadLocalVersionStore,
   saveLocalVersionStore,
@@ -124,7 +126,8 @@ const state = {
   compareActivePath: "",
   lastSaved: null,
   gitShipWarned: false,
-  versionsReturnStep: 3
+  versionsReturnStep: 3,
+  gitLayout: null
 };
 
 function escapeHtml(value) {
@@ -925,6 +928,7 @@ function outcomeItemHtml(item) {
   return `<article class="outcome-item ${item.kind === "info" ? "info" : "err"}">
       ${item.kicker ? `<div class="outcome-kicker">${escapeHtml(item.kicker)}</div>` : ""}
       <p>${escapeHtml(item.text)}</p>
+      ${item.detail ? `<pre class="git-tree">${escapeHtml(item.detail)}</pre>` : ""}
       ${safeHttpUrl(item.url) ? `<p><a href="${escapeHtml(safeHttpUrl(item.url))}" target="_blank" rel="noreferrer">${escapeHtml(item.linkLabel || "Open in Git")}</a></p>` : ""}
     </article>`;
 }
@@ -1033,10 +1037,11 @@ function renderGitUi() {
   const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   if ($("git-ship-hint")) {
-    $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version. Jira is optional. Snapshots go to .orgflow/releases/… in the repo, not the root.`;
+    $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version. Jira is optional. Open files in Git under .orgflow/releases/<Jira>/vN/ (classes, objects, layouts, …).`;
   }
   fillGitHostUi();
   renderPipelines();
+  renderGitLayoutCard();
   if ($("repo-pick-hint")) $("repo-pick-hint").classList.toggle("hidden", connected);
 }
 
@@ -1909,6 +1914,9 @@ async function refreshAll() {
   updateHeaderStatus();
   goStep(0, { force: true });
   updateHeaderStatus();
+  if (isGitConfigured(state.settings) && useGitEnabled()) {
+    inspectGitLayout().catch((err) => log(`Could not inspect repo folders: ${err.message}`, "error"));
+  }
 }
 
 async function connectGithub() {
@@ -1998,6 +2006,99 @@ async function saveRepo() {
   log(`Using ${repoLabel(state.settings)}`);
   setStatus(`Team repo: ${repoLabel(state.settings)}`, "ok");
   renderGitUi();
+  await inspectGitLayout();
+}
+
+function gitLayoutViewUrl() {
+  const copy = layoutCopy(state.gitLayout, { repoLabel: repoLabel(state.settings) });
+  return browseFolderUrl(state.settings, copy.viewPath || "");
+}
+
+function renderGitLayoutCard() {
+  const card = $("git-layout-card");
+  if (!card) return;
+  const connected = isGitConfigured(state.settings) && useGitEnabled();
+  card.classList.toggle("hidden", !connected);
+  if (!connected) return;
+  const copy = layoutCopy(state.gitLayout, { repoLabel: repoLabel(state.settings) });
+  if ($("git-layout-title")) $("git-layout-title").textContent = copy.title;
+  if ($("git-layout-copy")) $("git-layout-copy").textContent = copy.body;
+  $("btn-create-sf-layout")?.classList.toggle("hidden", !copy.canScaffold);
+  const tree = $("git-layout-tree");
+  if (tree) {
+    const sample = [
+      ".orgflow/releases/PROJ-123/v1/",
+      "  classes/",
+      "  objects/",
+      "  layouts/",
+      "  lwc/",
+      "  package.xml"
+    ].join("\n");
+    tree.textContent = sample;
+    tree.classList.remove("hidden");
+  }
+  if ($("git-layout-status")) {
+    $("git-layout-status").textContent = copy.canScaffold
+      ? "Create folders only if this repo should look like a Salesforce DX project. Existing force-app is never overwritten."
+      : "Use Open files in Git to browse the connected branch.";
+  }
+}
+
+async function inspectGitLayout() {
+  if (!isGitConfigured(state.settings) || !useGitEnabled()) {
+    state.gitLayout = null;
+    renderGitLayoutCard();
+    return;
+  }
+  try {
+    const entries = await listRootEntries(gitCreds());
+    state.gitLayout = inspectRepoLayout(entries);
+    log(`Repo layout: ${state.gitLayout.kind}${state.gitLayout.hasForceApp ? " (force-app present)" : ""}.`);
+  } catch (err) {
+    state.gitLayout = null;
+    log(`Could not inspect repo folders: ${err.message || err}`, "error");
+  }
+  renderGitLayoutCard();
+}
+
+function openGitFiles() {
+  const url = gitLayoutViewUrl();
+  if (!url) throw new Error("Connect a repo first, then Open files in Git.");
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+async function createSalesforceLayout() {
+  requireGithub();
+  const inspect = state.gitLayout || inspectRepoLayout([]);
+  if (inspect.kind === "sfdx" || inspect.hasForceApp) {
+    throw new Error("This repo already has force-app. OrgFlow will not overwrite it. Snapshots go to .orgflow/releases/.");
+  }
+  const files = scaffoldProjectFiles({
+    apiVersion: apiVersion(),
+    repoName: gitCreds().repo || "orgflow"
+  });
+  const creds = gitCreds();
+  const toWrite = [];
+  for (const file of files) {
+    const existing = await getFileContent(creds, file.path, creds.branch);
+    if (existing !== null) continue;
+    toWrite.push({ path: file.path, base64: encodeUtf8Base64(file.text) });
+  }
+  if (!toWrite.length) {
+    setStatus("Salesforce folders already exist in this repo.", "ok");
+    log("No new Salesforce folders to create.");
+    await inspectGitLayout();
+    return;
+  }
+  log(`Creating Salesforce DX folders (${toWrite.length} files)…`);
+  await commitFiles({
+    ...creds,
+    files: toWrite,
+    message: "chore: add Salesforce DX folders for OrgFlow"
+  });
+  await inspectGitLayout();
+  log("Created force-app/main/default/{classes,objects,layouts,…} plus .orgflow/README.md. Snapshots still land under .orgflow/releases/.");
+  setStatus("Salesforce folders created. Open files in Git to browse them.", "ok");
 }
 
 async function persistShipOptions() {
@@ -2240,7 +2341,7 @@ function deployOptions() {
   };
 }
 
-function gitSnapshotRecord(version) {
+function gitSnapshotRecord(version, files) {
   const creds = hostCreds(state.settings);
   return {
     ok: true,
@@ -2248,7 +2349,8 @@ function gitSnapshotRecord(version) {
     path: version?.path || ".orgflow/releases",
     repo: repoLabel(state.settings),
     branch: creds.branch || "main",
-    url: browseFolderUrl(state.settings, version?.path || "")
+    url: browseFolderUrl(state.settings, version?.path || ".orgflow/releases"),
+    tree: files?.length ? snapshotTreeText(files, version?.path || ".orgflow/releases") : ""
   };
 }
 
@@ -2297,7 +2399,7 @@ async function deploySelected() {
     if (useGitEnabled()) {
       try {
         const version = await recordSuccessfulGitDeploy(target, result, options);
-        const gitRecord = gitSnapshotRecord(version);
+        const gitRecord = gitSnapshotRecord(version, state.stagedFiles);
         showOutcome({ ...result, operation: "deploy", gitRecord });
         log(`Snapshot ${version.id} is in ${gitRecord.path} on ${gitRecord.branch} (${gitRecord.repo}).`);
         setStatus(`Deployed to ${target.label} · snapshot in ${gitRecord.path}`, "ok");
@@ -2416,7 +2518,7 @@ async function saveVersion(options = {}) {
       success: true,
       status: "Saved",
       operation: "save",
-      gitRecord: gitSnapshotRecord(record)
+      gitRecord: gitSnapshotRecord(record, files)
     });
   }
   return record;
@@ -2471,7 +2573,7 @@ async function deployVersion(explicitId) {
   }
   try {
     const updated = await recordSuccessfulGitDeploy(target, result, options, version);
-    const gitRecord = useGitEnabled() ? gitSnapshotRecord(updated) : null;
+    const gitRecord = useGitEnabled() ? gitSnapshotRecord(updated, files) : null;
     showOutcome({ ...result, operation: "deploy", gitRecord });
     log(`Deployed ${version.id} to ${target.label} (${result.status || "Succeeded"}).`);
     if (gitRecord) log(`Snapshot ${updated.id} is in ${gitRecord.path} on ${gitRecord.branch}.`);
@@ -2683,6 +2785,14 @@ $("git-provider")?.addEventListener("change", () => {
 $("git-org")?.addEventListener("input", fillGitHostUi);
 $("git-base-url")?.addEventListener("input", fillGitHostUi);
 $("btn-save-repo").addEventListener("click", () => run(saveRepo));
+$("btn-view-git-files")?.addEventListener("click", () => {
+  try {
+    openGitFiles();
+  } catch (err) {
+    setStatus(err.message || String(err), "error");
+  }
+});
+$("btn-create-sf-layout")?.addEventListener("click", () => run(createSalesforceLayout));
 $("gh-repo")?.addEventListener("change", () => {
   const selectedRepo = state.repos.find((r) => r.fullName === $("gh-repo").value);
   if (selectedRepo?.defaultBranch && !$("gh-branch").value.trim()) {
