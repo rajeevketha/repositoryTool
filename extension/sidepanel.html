@@ -16,7 +16,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <button id="open-versions" class="ghost-text" type="button" title="Compare and restore saved versions">Versions</button>
+        <button id="open-versions" class="ghost-text" type="button" title="Compare snapshots and revert selected files">Compare / revert</button>
         <button id="open-workbench" class="ghost-text" type="button" title="Open a wide tab and close this side panel">Workbench</button>
         <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
       </div>
@@ -121,7 +121,7 @@
             </div>
 
             <h2>Pipeline</h2>
-            <p class="hint">Optional. Remembers From, To, and test level in <code>.orgflow/pipelines.json</code>. It does not replace <strong>Use this repo</strong>.</p>
+            <p class="hint">Optional. Remembers From, To, and test level in <code>.orgflow/pipelines.json</code> on the <strong>Branch</strong> above. Reopen OrgFlow, connect the same repo, then pick it from Saved pipelines.</p>
             <div id="pipeline-welcome" class="card hidden">
               <div class="title">Welcome back</div>
               <div class="meta" id="pipeline-welcome-body"></div>
@@ -173,13 +173,14 @@
           <div class="actions">
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
             <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
+            <button type="button" id="btn-open-versions-deploy" class="secondary">Compare versions / revert files</button>
           </div>
         </section>
 
         <section id="view-versions" class="view">
           <p class="step-kicker">Saved snapshots</p>
           <h2 class="page-title">Versions</h2>
-          <p class="hint" id="versions-hint">Compare a retrieve or a saved version with an older one (latest first). Revert restores selected files into the current retrieve so you can deploy them.</p>
+          <p class="hint" id="versions-hint">This is where you compare a retrieve with a saved snapshot and revert selected files. Open it from <strong>Compare / revert</strong> in the header, or from Deploy after a success.</p>
           <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
 
           <article class="card" id="version-compare-card">

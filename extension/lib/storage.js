@@ -50,6 +50,30 @@ const DEFAULTS = {
 
 export { DEFAULT_METADATA_TYPES, DEFAULTS };
 
+export function pipelineCacheKey(settings) {
+  const h = settings?.gitHost || {};
+  const gh = settings?.github || {};
+  const provider = h.provider || "github";
+  const owner = h.owner || gh.owner || "";
+  const repo = h.repo || gh.repo || "";
+  const project = h.project || "";
+  const branch = h.branch || gh.branch || "main";
+  return `${provider}:${owner}/${project}/${repo}@${branch}`;
+}
+
+export async function savePipelineCache(settings, store) {
+  await chrome.storage.local.set({
+    pipelineCache: { key: pipelineCacheKey(settings), store }
+  });
+}
+
+export async function loadPipelineCache(settings) {
+  const stored = await chrome.storage.local.get("pipelineCache");
+  const cache = stored.pipelineCache;
+  if (!cache || cache.key !== pipelineCacheKey(settings) || !cache.store) return null;
+  return cache.store;
+}
+
 export async function loadSettings() {
   const stored = await chrome.storage.local.get("settings");
   return mergeSettings(stored.settings);

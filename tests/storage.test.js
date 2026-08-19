@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mergeSettings, isGithubConfigured, repoLabel, DEFAULT_METADATA_TYPES } from "../extension/lib/storage.js";
+import { mergeSettings, isGithubConfigured, repoLabel, DEFAULT_METADATA_TYPES, pipelineCacheKey } from "../extension/lib/storage.js";
 
 describe("settings", () => {
   it("fills defaults and keeps a connected repo", () => {
@@ -31,5 +31,12 @@ describe("settings", () => {
   it("treats a missing repo as disconnected", () => {
     assert.equal(isGithubConfigured(mergeSettings({})), false);
     assert.equal(repoLabel(mergeSettings({})), "No repo connected");
+  });
+
+  it("keys pipeline cache by host, repo, and branch", () => {
+    const a = pipelineCacheKey({ gitHost: { provider: "github", owner: "acme", repo: "sf", branch: "main" } });
+    const b = pipelineCacheKey({ gitHost: { provider: "github", owner: "acme", repo: "sf", branch: "develop" } });
+    assert.equal(a, "github:acme//sf@main");
+    assert.notEqual(a, b);
   });
 });

@@ -1,4 +1,4 @@
-import { loadSettings, saveSettings, isGitConfigured, repoLabel } from "./lib/storage.js";
+import { loadSettings, saveSettings, isGitConfigured, repoLabel, savePipelineCache, loadPipelineCache } from "./lib/storage.js";
 import { catalogGroupsFromTypes, memberHint, fallbackTypeRecords, mergeDescribedTypes, withStandardObjectMembers, objectFilterOptions, memberObjectKey, OBJECT_FILTER_TYPES, isStandardObject, COMMON_CONFIG_TYPES } from "./lib/metadataTypes.js";
 import {
   parseTicketInput,
@@ -540,8 +540,10 @@ function updateWizardNav() {
   if (last && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
     back.disabled = false;
     back.textContent = "New package";
-    next.classList.add("hidden");
-    hint.textContent = "This package is already on the To org. New package starts a fresh retrieve.";
+    next.classList.remove("hidden");
+    next.disabled = false;
+    next.textContent = "Compare versions";
+    hint.textContent = "New package starts over from Start. Compare versions diffs snapshots or reverts files.";
     return;
   }
   back.disabled = state.stepIndex === 0;
@@ -624,9 +626,7 @@ function wizardBack() {
     return;
   }
   if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
-    resetForNewPackage();
-    goStep(2, { force: true });
-    updateHeaderStatus();
+    run(resetForNewPackage);
     return;
   }
   if (state.stepIndex === 0) return;
@@ -648,6 +648,12 @@ function wizardNext() {
 function showVersions() {
   state.showingVersions = true;
   applyStepUi();
+}
+
+async function openVersionsPanel() {
+  await loadVersionStore();
+  renderVersions();
+  showVersions();
 }
 
 function apiVersion() {
@@ -680,7 +686,13 @@ function invalidateStaged() {
   }
 }
 
-function resetForNewPackage() {
+async function resetForNewPackage() {
+  state.packageTypes = [];
+  state.typeChosen = false;
+  state.activeType = "";
+  state.xmlDirty = false;
+  state.membersCache = {};
+  state.specifiedTests = [];
   state.stagedFiles = null;
   state.activeFilePath = "";
   state.selectionFrozen = false;
@@ -690,15 +702,23 @@ function resetForNewPackage() {
   state.lastDeploy = null;
   state.autoRetrieveAttempted = false;
   state.lastSaved = null;
+  state.gitShipWarned = false;
+  state.reviewSeen = false;
   $("file-editor-wrap")?.classList.add("hidden");
+  if ($("comment")) $("comment").value = "";
+  if ($("jira")) $("jira").value = "";
+  if ($("package-xml")) $("package-xml").value = "";
+  await persistPackage();
   renderFileList();
   if ($("outcome-badge")) $("outcome-badge").textContent = "—";
   if ($("outcome-title")) $("outcome-title").textContent = "Result";
   if ($("outcome-body")) $("outcome-body").innerHTML = `<p class="muted">No result yet.</p>`;
   $("outcome-head")?.classList.remove("ok", "err", "wait");
   applyRetrieveLockUi();
-  updateActionState();
-  updateHeaderStatus();
+  renderPackageUi();
+  renderTypePicker();
+  goStep(0, { force: true });
+  setStatus("New package. From and To stay set. Pick a type when you are ready.", "ok");
 }
 
 function useGitEnabled() {
@@ -1363,13 +1383,28 @@ function renderPipelines() {
 }
 
 async function loadPipelines() {
-  if (!isGitConfigured(state.settings) || !useGitEnabled()) {
+  if (!isGitConfigured(state.settings)) {
     state.pipelines = emptyPipelineStore();
     return;
   }
   const creds = gitCreds();
-  const raw = await getFileContent(creds, pipelinesFilePath(), creds.branch);
-  state.pipelines = parsePipelineStore(raw);
+  try {
+    const raw = await getFileContent(creds, pipelinesFilePath(), creds.branch);
+    if (raw) {
+      state.pipelines = parsePipelineStore(raw);
+      await savePipelineCache(state.settings, state.pipelines);
+      return;
+    }
+  } catch (err) {
+    log(`Could not read ${pipelinesFilePath()} on ${creds.branch}: ${err.message || err}`, "error");
+  }
+  const cached = await loadPipelineCache(state.settings);
+  state.pipelines = cached ? parsePipelineStore(cached) : emptyPipelineStore();
+  if (!state.pipelines.pipelines.length) {
+    log(`No pipelines on branch ${creds.branch}. They are stored in ${pipelinesFilePath()}.`);
+  } else {
+    log(`Loaded ${state.pipelines.pipelines.length} pipeline(s) from this browser cache for ${creds.branch}.`);
+  }
 }
 
 function applyPipeline(record) {
@@ -1428,11 +1463,13 @@ async function saveCurrentPipeline() {
     message: `chore: save pipeline ${record.name}`
   });
   state.pipelines = next;
+  await savePipelineCache(state.settings, next);
   await saveSettings({
     lastPipelineId: record.id,
     lastSourceOrgId: orgKey(source),
     lastTargetOrgId: orgKey(target),
-    setupComplete: true
+    setupComplete: true,
+    useGit: true
   });
   state.settings = await loadSettings();
   applyPipeline(record);
@@ -1812,7 +1849,7 @@ async function refreshAll() {
   state.availableTypes = fallbackTypeRecords();
   $("test-level").value = state.settings.testLevel || "NoTestRun";
   $("check-only").checked = Boolean(state.settings.checkOnly);
-  $("use-git").checked = Boolean(state.settings.useGit);
+  $("use-git").checked = Boolean(state.settings.useGit) || isGitConfigured(state.settings);
   state.specifiedTests = normalizeTestNames(state.settings.specifiedTests);
   $("package-xml").value = currentXml();
   state.xmlDirty = false;
@@ -1896,7 +1933,9 @@ async function saveRepo() {
   const fromInput = parseRepoInput(provider, $("gh-repo-input").value);
   const parsed = fromInput || fromSelect;
   const selectedRepo = state.repos.find((r) => r.fullName === $("gh-repo").value);
-  if (selectedRepo?.defaultBranch) $("gh-branch").value = selectedRepo.defaultBranch;
+  if (selectedRepo?.defaultBranch && !$("gh-branch").value.trim()) {
+    $("gh-branch").value = selectedRepo.defaultBranch;
+  }
   const branch = $("gh-branch").value.trim() || selectedRepo?.defaultBranch || "main";
   if (!token) throw new Error(`${meta.label} token is required.`);
   if (!parsed?.repo) throw new Error(provider === "azuredevops" ? "Choose or paste org/project/repo." : "Choose or paste a repository (owner/name).");
@@ -1917,10 +1956,12 @@ async function saveRepo() {
   };
   await saveSettings({
     gitHost,
+    useGit: true,
     github: provider === "github"
       ? { token, owner, repo: parsed.repo, branch: gitHost.branch }
       : state.settings.github
   });
+  $("use-git").checked = true;
   state.settings = await loadSettings();
   $("gh-repo-input").value = provider === "azuredevops" ? `${owner}/${project}/${parsed.repo}` : `${owner}/${parsed.repo}`;
   $("gh-branch").value = gitHost.branch;
@@ -2572,6 +2613,10 @@ $("stepper")?.addEventListener("click", (event) => {
 $("btn-back")?.addEventListener("click", wizardBack);
 $("btn-next")?.addEventListener("click", async () => {
   if (state.busy) return;
+  if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
+    run(openVersionsPanel);
+    return;
+  }
   if (state.stepIndex === 0) {
     await run(async () => {
       await saveSettings({ setupComplete: true, useGit: useGitEnabled() });
@@ -2580,14 +2625,9 @@ $("btn-next")?.addEventListener("click", async () => {
   }
   wizardNext();
 });
-$("btn-goto-versions")?.addEventListener("click", showVersions);
-$("open-versions")?.addEventListener("click", () => {
-  run(async () => {
-    await loadVersionStore();
-    renderVersions();
-    showVersions();
-  });
-});
+$("btn-goto-versions")?.addEventListener("click", () => run(openVersionsPanel));
+$("open-versions")?.addEventListener("click", () => run(openVersionsPanel));
+$("btn-open-versions-deploy")?.addEventListener("click", () => run(openVersionsPanel));
 $("btn-compare-versions")?.addEventListener("click", () => run(runCompareVersions));
 $("btn-load-revert-files")?.addEventListener("click", () => run(loadRevertFileList));
 $("btn-revert-select-changed")?.addEventListener("click", selectChangedRevertFiles);
@@ -2626,7 +2666,9 @@ $("git-base-url")?.addEventListener("input", fillGitHostUi);
 $("btn-save-repo").addEventListener("click", () => run(saveRepo));
 $("gh-repo")?.addEventListener("change", () => {
   const selectedRepo = state.repos.find((r) => r.fullName === $("gh-repo").value);
-  if (selectedRepo?.defaultBranch) $("gh-branch").value = selectedRepo.defaultBranch;
+  if (selectedRepo?.defaultBranch && !$("gh-branch").value.trim()) {
+    $("gh-branch").value = selectedRepo.defaultBranch;
+  }
   if ($("gh-token")?.value.trim() || hostCreds(state.settings).token) run(saveRepo);
 });
 $("gh-repo-input")?.addEventListener("change", () => {
