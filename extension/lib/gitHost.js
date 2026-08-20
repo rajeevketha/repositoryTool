@@ -16,7 +16,7 @@ export const PROVIDERS = [
     steps: [
       "Open github.com/settings/tokens while signed into GitHub.",
       "Generate a token. Classic tokens need the repo scope. Fine-grained tokens need Contents: Read and write on the repo you will use.",
-      "Paste the token, click Connect GitHub, pick owner/repo (or paste a github.com URL). OrgFlow saves that pick as the team repo. You can also click Use this repo."
+      "Paste the token, click Connect GitHub, pick owner/repo (or paste a github.com URL). OrgFlow saves that pick as the release repo. You can also click Use this repo."
     ]
   },
   {
@@ -33,7 +33,7 @@ export const PROVIDERS = [
       "In GitLab open Preferences → Access tokens (or the token link above). On a company GitLab the same page lives under that host.",
       "Create a token with api, or at least read_repository and write_repository. Copy it (it starts with glpat-).",
       "If you use gitlab.com, leave the instance URL as https://gitlab.com. For a company GitLab, paste that host (Chrome will ask for permission).",
-      "Click Connect GitLab, then pick group/project (nested groups like acme/team/sf are fine). That pick is saved as the team repo."
+      "Click Connect GitLab, then pick group/project (nested groups like acme/team/sf are fine). That pick is saved as the release repo."
     ]
   },
   {
@@ -50,7 +50,7 @@ export const PROVIDERS = [
       "Enter your Azure DevOps organization name (the part after dev.azure.com/), then open the token link above — or User settings → Personal access tokens.",
       "Create a token with Code: Read & write. Copy it.",
       "Paste the token, then Connect Azure DevOps.",
-      "Pick org/project/repo (or paste a dev.azure.com/_git/… URL) and set the branch. That pick is saved as the team repo."
+      "Pick org/project/repo (or paste a dev.azure.com/_git/… URL) and set the branch. That pick is saved as the release repo."
     ]
   }
 ];

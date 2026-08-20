@@ -394,6 +394,23 @@ main { padding: 14px; flex: 1; }
   color: var(--muted);
 }
 
+.promotion-path {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-radius: 8px;
+  border: 1px solid #4a4034;
+  background: #1a1713;
+}
+
+.path-line {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: #ead9c0;
+  word-break: break-word;
+}
+
 .hint-actions {
   display: flex;
   flex-wrap: wrap;

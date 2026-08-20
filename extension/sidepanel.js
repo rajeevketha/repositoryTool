@@ -39,7 +39,13 @@ import {
   createPipeline,
   upsertPipeline,
   findPipeline,
-  matchOrg
+  matchOrg,
+  stagesFromPipeline,
+  pipelinePathLabel,
+  findMatchingPipeline,
+  appendStage,
+  nextHopAfter,
+  sameOrg
 } from "./lib/pipelines.js";
 import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
 import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata } from "./lib/metadata.js";
@@ -388,6 +394,7 @@ function updateActionState() {
   updateWizardNav();
   renderStepper();
   syncSetupButtons();
+  renderPromotionPath();
 }
 
 function focusInView(id) {
@@ -424,6 +431,155 @@ function savedRepoFormKey() {
 function repoFormMatchesSaved() {
   const selected = selectedRepoFormKey();
   return Boolean(selected && isGitConfigured(state.settings) && selected === savedRepoFormKey());
+}
+
+function currentPipelineRecord() {
+  const id = state.settings?.lastPipelineId || $("pipeline-select")?.value;
+  return findPipeline(state.pipelines?.pipelines, id);
+}
+
+function renderReleaseRepoHeading() {
+  const connected = isGitConfigured(state.settings) && useGitEnabled();
+  if ($("git-setup-title")) {
+    $("git-setup-title").textContent = connected ? repoLabel(state.settings) : "Release repo";
+  }
+  if ($("release-path-copy")) {
+    $("release-path-copy").textContent = connected
+      ? "This release repo stores Jira versions. From → To is the current hop. Add QA, Staging, and Prod so the same committed files can travel the path."
+      : "This Git repo stores Jira versions. From and To are one hop (DEC → QA). Add Staging and Prod when those orgs are logged in — the same committed files travel the path.";
+  }
+}
+
+function renderPromotionPath() {
+  const wrap = $("promotion-path");
+  const connected = isGitConfigured(state.settings) && useGitEnabled();
+  wrap?.classList.toggle("hidden", !connected);
+  const record = currentPipelineRecord();
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  if ($("promotion-path-line")) {
+    if (record) $("promotion-path-line").textContent = pipelinePathLabel(record);
+    else if (source && target) $("promotion-path-line").textContent = `${source.label} → ${target.label}`;
+    else $("promotion-path-line").textContent = "Set From and To, then Use this repo — OrgFlow saves that hop.";
+  }
+  const addSel = $("add-stage-org");
+  const addBtn = $("btn-add-stage");
+  if (addSel) {
+    const stages = record ? stagesFromPipeline(record) : [];
+    const candidates = state.orgs.filter((org) => !stages.some((stage) => sameOrg(stage, org)));
+    addSel.innerHTML = candidates.length
+      ? candidates.map((org) => `<option value="${escapeHtml(orgKey(org))}">${escapeHtml(org.label)}</option>`).join("")
+      : `<option value="">All detected orgs are on this path</option>`;
+    if (addBtn) addBtn.disabled = !candidates.length || !record;
+  }
+}
+
+async function persistPipelineRecord(record, message) {
+  const next = upsertPipeline(state.pipelines, record);
+  await commitFiles({
+    ...gitCreds(),
+    files: [{ path: pipelinesFilePath(), base64: encodeUtf8Base64(JSON.stringify(next, null, 2) + "\n") }],
+    message
+  });
+  state.pipelines = next;
+  await savePipelineCache(state.settings, next);
+  await saveSettings({
+    lastPipelineId: record.id,
+    lastSourceOrgId: $("source-org")?.value || orgKey(matchOrg(state.orgs, record.source)),
+    lastTargetOrgId: $("target-org")?.value || orgKey(matchOrg(state.orgs, record.target)),
+    setupComplete: true,
+    useGit: true
+  });
+  state.settings = await loadSettings();
+  applyPipeline(record);
+  renderPipelines();
+  updateActionState();
+  return record;
+}
+
+async function ensureReleasePath() {
+  if (!useGitEnabled() || !isGitConfigured(state.settings)) return null;
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  if (!source || !target || orgKey(source) === orgKey(target)) return null;
+  await loadPipelines();
+  let record = findMatchingPipeline(state.pipelines.pipelines, source, target);
+  if (record) {
+    applyPipeline(record, { keepHop: true });
+    await saveSettings({
+      lastPipelineId: record.id,
+      lastSourceOrgId: orgKey(source),
+      lastTargetOrgId: orgKey(target),
+      useGit: true
+    });
+    state.settings = await loadSettings();
+    renderPipelines();
+    return record;
+  }
+  const current = currentPipelineRecord();
+  if (current) {
+    const stages = stagesFromPipeline(current);
+    const hasSource = stages.some((stage) => sameOrg(stage, source));
+    const hasTarget = stages.some((stage) => sameOrg(stage, target));
+    if (hasSource && !hasTarget) {
+      record = appendStage(current, target);
+      return persistPipelineRecord(record, `chore: add ${target.label} to promotion path`);
+    }
+  }
+  record = createPipeline({
+    source,
+    target,
+    testLevel: $("test-level")?.value || "NoTestRun",
+    useGit: true
+  });
+  return persistPipelineRecord(record, `chore: save promotion path ${record.name}`);
+}
+
+function advancePromotionHop() {
+  const hop = nextHopAfter(currentPipelineRecord(), selectedOrg("target-org"));
+  if (!hop) return false;
+  const nextTarget = matchOrg(state.orgs, hop.target);
+  const nextSource = matchOrg(state.orgs, hop.source);
+  if (!nextTarget || !nextSource) {
+    setStatus(`Next hop is ${hop.source.label} → ${hop.target.label}. Log into ${hop.target.label}, then detect orgs.`, "error");
+    return true;
+  }
+  state.promotingHop = true;
+  $("source-org").value = orgKey(nextSource);
+  $("target-org").value = orgKey(nextTarget);
+  state.deployFinished = "";
+  const record = currentPipelineRecord();
+  if (record) {
+    record.hopIndex = hop.hopIndex;
+    record.source = hop.source;
+    record.target = hop.target;
+  }
+  saveSettings({
+    lastSourceOrgId: orgKey(nextSource),
+    lastTargetOrgId: orgKey(nextTarget),
+    lastPipelineId: record?.id || state.settings.lastPipelineId
+  }).then(async () => {
+    state.settings = await loadSettings();
+    renderPipelines();
+    updateActionState();
+  });
+  setStatus(`Next hop ${nextSource.label} → ${nextTarget.label}. Deploy the same snapshot — do not retrieve again.`, "ok");
+  log(`Promotion hop: ${nextSource.label} → ${nextTarget.label}. Same Jira files travel; retrieve stays frozen.`);
+  updateActionState();
+  return true;
+}
+
+async function addOrgToPromotionPath() {
+  requireGithub();
+  const key = $("add-stage-org")?.value;
+  const org = state.orgs.find((item) => orgKey(item) === key);
+  if (!org) throw new Error("Detect orgs and pick the next environment (QA, Staging, or Prod).");
+  let record = currentPipelineRecord() || await ensureReleasePath();
+  if (!record) throw new Error("Set From and To, then Use this repo so OrgFlow can start the promotion path.");
+  record = appendStage(record, org);
+  await persistPipelineRecord(record, `chore: add ${org.label} to promotion path`);
+  log(`Promotion path is now ${pipelinePathLabel(record)}.`);
+  setStatus(`Path: ${pipelinePathLabel(record)}. Same Jira snapshot can travel each hop.`, "ok");
 }
 
 function pipelineIsInUse() {
@@ -522,11 +678,11 @@ function maybeAdvanceFromStart() {
   if (!pathReady()) return;
   if (useGitEnabled() && !isGitConfigured(state.settings)) {
     $("git-setup-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-    setStatus("From and To are set. Connect a team repo, or switch to This browser, then click Next.", "ok");
+    setStatus("From and To are set. Connect a release repo, or switch to This browser, then click Next.", "ok");
     return;
   }
   $("snapshots-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-  setStatus("From and To are set. Choose This browser or Team repo, then click Next.", "ok");
+  setStatus("From and To are set. Choose This browser or Release repo, then click Next.", "ok");
 }
 
 function renderOrgPath() {
@@ -557,7 +713,7 @@ function renderOrgPath() {
   }
   if (sub) {
     sub.textContent = ready
-      ? "From and To are set. Choose This browser or Team repo on Start, then Next."
+      ? "From and To are set. Choose This browser or Release repo on Start, then Next."
       : "Next stays off until From and To are different Salesforce orgs.";
   }
   updatePipelinePathCopy();
@@ -688,8 +844,19 @@ function updateWizardNav() {
   }
   const last = state.stepIndex >= STEPS.length - 1;
   if (last && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
+    const hop = nextHopAfter(currentPipelineRecord(), selectedOrg("target-org"));
     back.disabled = false;
     back.textContent = "New package";
+    if (hop) {
+      const target = matchOrg(state.orgs, hop.target);
+      next.classList.toggle("hidden", !target);
+      next.disabled = !target || state.busy;
+      next.textContent = target ? `Next hop: ${hop.target.label || target.label}` : "Next";
+      hint.textContent = target
+        ? `Same Jira snapshot can travel ${hop.source.label} → ${hop.target.label}. Deploy again — do not retrieve.`
+        : `Next hop is ${hop.target.label}. Log into that org, then detect orgs.`;
+      return;
+    }
     next.classList.add("hidden");
     next.disabled = true;
     next.textContent = "Next";
@@ -709,7 +876,7 @@ function updateWizardNav() {
     hint.textContent = state.busy ? "Waiting for Salesforce…" : (deployBlockReason() || `Ready to send this package to ${selectedOrg("target-org")?.label || "the To org"}.`);
   } else if (state.stepIndex === 0) {
     hint.textContent = pathReady()
-      ? "Choose This browser or Team repo, then Next."
+      ? "Choose This browser or Release repo, then Next."
       : `Step 1 of 5 · ${currentStep().label}`;
   } else if (state.stepIndex === 2) {
     hint.textContent = "Tick every member you need, then Next. Retrieve runs on the next screen.";
@@ -794,6 +961,9 @@ function wizardBack() {
 
 function wizardNext() {
   if (state.showingVersions) return;
+  if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
+    if (advancePromotionHop()) return;
+  }
   const reason = leaveReason(state.stepIndex);
   if (reason) {
     setStatus(reason, "error");
@@ -1042,7 +1212,7 @@ function renderInspector() {
   const gitOn = useGitEnabled();
   const repo = isGitConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
   $("inspector-git").textContent = gitOn
-    ? `Jira versions in the team repo · ${repo}`
+    ? `Jira versions in the release repo · ${repo}`
     : "Jira versions in this browser · same snapshot for QA then prod";
   const tests = state.specifiedTests;
   $("inspector-tests").textContent = tests.length
@@ -1122,11 +1292,11 @@ function showOutcome(result) {
       ? (result?.operation === "retrieve"
         ? "Files are ready. Compare with a saved version if you need to, then Next to Deploy."
         : result?.gitRecord?.ok === false
-          ? "Salesforce accepted the package. The snapshot was not written to Git — see Team repo below."
+          ? "Salesforce accepted the package. The snapshot was not written to Git — see the release repo below."
           : result?.gitRecord?.ok
             ? "Salesforce accepted this package. Snapshot files are under .orgflow/releases/… — not the repo root."
             : result?.operation === "save"
-              ? "Snapshot is in the team repo under .orgflow/releases/…"
+              ? "Snapshot is in the release repo under .orgflow/releases/…"
               : "Salesforce accepted this package.")
       : formatted.ok === null
         ? "Salesforce is still working. The button stays off until this finishes."
@@ -1177,7 +1347,7 @@ function renderGitUi() {
     ? connected
       ? `Compare this retrieve with a saved snapshot before Deploy. Shared Jira versions are in ${repoLabel(state.settings)}.`
       : `${host} is on — connect a repo on Start so the team can reuse versions. Compare before you deploy.`
-    : "Compare this retrieve with a saved snapshot before Deploy. Jira versions stay on this Chrome profile unless you connect a team repo.";
+    : "Compare this retrieve with a saved snapshot before Deploy. Jira versions stay on this Chrome profile unless you connect a release repo.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
@@ -1187,7 +1357,7 @@ function renderGitUi() {
     : "Saving versions in this browser (no token).";
   $("git-hint").textContent = on
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod get the same snapshot."
-    : "Each Jira save creates v1, v2, … on this computer. A team repo is optional sharing, not the versioning itself.";
+    : "Each Jira save creates v1, v2, … on this computer. A release repo is optional sharing so QA and prod reuse the same snapshot.";
   $("git-setup-block")?.classList.toggle("hidden", !on);
   document.body.classList.toggle("mode-simple", !on);
   document.body.classList.toggle("mode-git", on);
@@ -1196,8 +1366,8 @@ function renderGitUi() {
   });
   $("mode-status").textContent = on
     ? connected
-      ? `Sharing in ${repoLabel(state.settings)}.`
-      : `Sharing is on — ${host}. After Connect, pick a repo and click Use this repo. A pipeline does not do that.`
+      ? `Sharing in ${repoLabel(state.settings)}${currentPipelineRecord() ? ` · ${pipelinePathLabel(currentPipelineRecord())}` : ""}.`
+      : `Sharing is on — ${host}. After Connect, pick a repo and click Use this repo. OrgFlow saves From → To as the promotion path.`
     : "Snapshots stay on this Chrome profile. Detect orgs, set From and To, then Next.";
   const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
@@ -1559,8 +1729,8 @@ function renderPipelines() {
   const items = state.pipelines?.pipelines || [];
   const lastId = state.settings?.lastPipelineId || "";
   const options = items.length
-    ? items.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} — ${escapeHtml(p.source?.label || "")} → ${escapeHtml(p.target?.label || "")}</option>`).join("")
-    : `<option value="">No pipelines yet — create one below</option>`;
+    ? items.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(pipelinePathLabel(p) || p.name)}</option>`).join("")
+    : `<option value="">No paths yet — connecting a repo creates one</option>`;
   for (const id of ["pipeline-select", "deploy-pipeline"]) {
     const el = $(id);
     if (!el) continue;
@@ -1573,16 +1743,18 @@ function renderPipelines() {
   if (welcome) {
     if (last) {
       welcome.classList.remove("hidden");
-      $("pipeline-welcome-body").textContent = `Use “${last.name}” again (${last.source?.label || "source"} → ${last.target?.label || "target"}) or create a new pipeline.`;
+      $("pipeline-welcome-body").textContent = `This release repo’s path is ${pipelinePathLabel(last)}. Same Jira snapshot travels each hop.`;
     } else {
       welcome.classList.add("hidden");
     }
   }
   $("pipeline-status").textContent = items.length
-    ? `${items.length} pipeline${items.length === 1 ? "" : "s"} in the repo (${pipelinesFilePath()}).`
+    ? `${items.length} promotion path${items.length === 1 ? "" : "s"} in ${pipelinesFilePath()}.`
     : useGitEnabled()
-      ? "No pipeline saved yet. Name it, then save — From and To come from the path bar."
+      ? "Use this repo while From and To are set — OrgFlow saves that hop as the promotion path."
       : "";
+  renderReleaseRepoHeading();
+  renderPromotionPath();
 }
 
 async function loadPipelines() {
@@ -1610,17 +1782,32 @@ async function loadPipelines() {
   }
 }
 
-function applyPipeline(record) {
+function applyPipeline(record, { keepHop = false } = {}) {
   if (!record) throw new Error("Select a saved pipeline first.");
-  const source = matchOrg(state.orgs, record.source);
-  const target = matchOrg(state.orgs, record.target);
+  const stages = stagesFromPipeline(record);
+  let hopSource = record.source;
+  let hopTarget = record.target;
+  const currentSource = selectedOrg("source-org");
+  const currentTarget = selectedOrg("target-org");
+  if (keepHop && currentSource && currentTarget) {
+    for (let i = 0; i < stages.length - 1; i += 1) {
+      if (sameOrg(stages[i], currentSource) && sameOrg(stages[i + 1], currentTarget)) {
+        hopSource = stages[i];
+        hopTarget = stages[i + 1];
+        break;
+      }
+    }
+  }
+  const source = matchOrg(state.orgs, hopSource);
+  const target = matchOrg(state.orgs, hopTarget);
   if (source && $("source-org")) $("source-org").value = orgKey(source);
   if (target && $("target-org")) $("target-org").value = orgKey(target);
   if (record.testLevel && $("test-level")) $("test-level").value = record.testLevel;
-  if ($("pipeline-name")) $("pipeline-name").value = record.name;
+  if ($("pipeline-name")) $("pipeline-name").value = record.name || pipelinePathLabel(record);
   if ($("pipeline-select")) $("pipeline-select").value = record.id;
   if ($("deploy-pipeline")) $("deploy-pipeline").value = record.id;
   $("use-git").checked = record.useGit !== false;
+  renderPromotionPath();
 }
 
 async function useSelectedPipeline() {
@@ -2180,7 +2367,13 @@ async function saveRepo() {
   renderPipelines();
   updateHeaderStatus();
   log(`Using ${repoLabel(state.settings)}`);
-  setStatus(`Team repo: ${repoLabel(state.settings)}`, "ok");
+  const path = await ensureReleasePath();
+  setStatus(
+    path
+      ? `Release repo ${repoLabel(state.settings)} · ${pipelinePathLabel(path)}. Same Jira snapshot travels this path.`
+      : `Release repo ${repoLabel(state.settings)}. Set From and To to save the first hop (DEC → QA).`,
+    "ok"
+  );
   renderGitUi();
   await inspectGitLayout();
   maybeAdvanceFromStart();
@@ -2444,7 +2637,7 @@ function resolveTicket(store) {
   const jiraField = $("jira").value.trim();
   const comment = $("comment").value.trim();
   if (useGitEnabled() && !comment) {
-    throw localError("Enter a commit message. Jira is optional — skip it if you do not have a ticket. The commit message is required when a team repo is on.", {
+    throw localError("Enter a commit message. Jira is optional — skip it if you do not have a ticket. The commit message is required when a release repo is on.", {
       focus: "comment",
       operation: "save",
       validationItems: gitShipItems()
@@ -2941,6 +3134,7 @@ $("btn-next")?.addEventListener("click", async () => {
     await run(async () => {
       await saveSettings({ setupComplete: true, useGit: useGitEnabled() });
       state.settings = await loadSettings();
+      if (useGitEnabled() && isGitConfigured(state.settings)) await ensureReleasePath();
     });
   }
   wizardNext();
@@ -2993,7 +3187,10 @@ $("btn-view-git-files")?.addEventListener("click", () => {
   }
 });
 $("btn-create-sf-layout")?.addEventListener("click", () => run(createSalesforceLayout));
-$("pipeline-select")?.addEventListener("change", syncSetupButtons);
+$("pipeline-select")?.addEventListener("change", () => {
+  if ($("pipeline-select")?.value) run(useSelectedPipeline);
+  else syncSetupButtons();
+});
 $("pipeline-name")?.addEventListener("input", syncSetupButtons);
 $("gh-branch")?.addEventListener("input", syncSetupButtons);
 $("gh-token")?.addEventListener("input", syncSetupButtons);
@@ -3106,6 +3303,7 @@ $("btn-start-continue")?.addEventListener("click", () => run(async () => {
 }));
 $("btn-use-pipeline")?.addEventListener("click", () => run(useSelectedPipeline));
 $("btn-save-pipeline")?.addEventListener("click", () => run(saveCurrentPipeline));
+$("btn-add-stage")?.addEventListener("click", () => run(addOrgToPromotionPath));
 $("deploy-pipeline")?.addEventListener("change", () => {
   if ($("pipeline-select") && $("deploy-pipeline").value) $("pipeline-select").value = $("deploy-pipeline").value;
   run(useSelectedPipeline);
@@ -3174,9 +3372,12 @@ $("source-org")?.addEventListener("change", () => run(async () => {
     if (other) $("target-org").value = orgKey(other);
   }
   if (previous && previous !== $("source-org").value) {
-    state.membersCache = {};
-    state.availableTypes = fallbackTypeRecords();
-    invalidateStaged();
+    if (state.promotingHop) state.promotingHop = false;
+    else {
+      state.membersCache = {};
+      state.availableTypes = fallbackTypeRecords();
+      invalidateStaged();
+    }
   }
   updateActionState();
   maybeAdvanceFromStart();

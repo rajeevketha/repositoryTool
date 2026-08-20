@@ -450,7 +450,7 @@ function gitRecordItems(gitRecord) {
   if (gitRecord.ok) {
     return [{
       kind: "info",
-      kicker: "Team repo",
+      kicker: "Release repo",
       text: `Open ${gitRecord.path} in ${gitRecord.repo} (branch ${gitRecord.branch}). Files are grouped like Salesforce metadata (classes, objects, layouts, lwc, …) — not dumped at the repo root.`,
       detail: gitRecord.tree || "",
       url: gitRecord.url || "",
@@ -459,7 +459,7 @@ function gitRecordItems(gitRecord) {
   }
   return [{
     kind: "error",
-    kicker: "Team repo",
+    kicker: "Release repo",
     text: `Salesforce succeeded, but the snapshot was not written to Git: ${gitRecord.error}`
   }];
 }

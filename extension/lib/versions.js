@@ -168,7 +168,7 @@ export function gitShipValidationItems({
   if (!gitConfigured) {
     items.push({
       kind: "error",
-      kicker: "Team repo",
+      kicker: "Release repo",
       text: `Connect a ${hostLabel} repo on the Start tab first.`
     });
   }

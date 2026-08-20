@@ -8,7 +8,12 @@ import {
   upsertPipeline,
   findPipeline,
   matchOrg,
-  pipelineId
+  pipelineId,
+  stagesFromPipeline,
+  pipelinePathLabel,
+  findMatchingPipeline,
+  appendStage,
+  nextHopAfter
 } from "../extension/lib/pipelines.js";
 import {
   STANDARD_OBJECTS,
@@ -41,6 +46,26 @@ describe("pipelines", () => {
     );
     assert.equal(org.label, "Dev");
     assert.match(pipelineId("Sandbox to UAT", 1), /^sandbox-to-uat-/);
+  });
+
+  it("names a promotion path from orgs and can add Staging after QA", () => {
+    const hop = createPipeline({
+      source: { label: "DEC", username: "dec@x.com", instanceUrl: "https://dec.my.salesforce.com" },
+      target: { label: "QA", username: "qa@x.com", instanceUrl: "https://qa.my.salesforce.com" }
+    });
+    assert.equal(hop.name, "DEC → QA");
+    assert.deepEqual(stagesFromPipeline(hop).map((s) => s.label), ["DEC", "QA"]);
+    const longer = appendStage(hop, { label: "Staging", username: "stg@x.com", instanceUrl: "https://stg.my.salesforce.com" });
+    assert.equal(pipelinePathLabel(longer), "DEC → QA → Staging");
+    const next = nextHopAfter(longer, { label: "QA", username: "qa@x.com", instanceUrl: "https://qa.my.salesforce.com" });
+    assert.equal(next.target.label, "Staging");
+    const store = upsertPipeline(emptyPipelineStore(), longer);
+    const found = findMatchingPipeline(
+      store.pipelines,
+      { username: "dec@x.com", instanceUrl: "https://dec.my.salesforce.com" },
+      { username: "qa@x.com", instanceUrl: "https://qa.my.salesforce.com" }
+    );
+    assert.equal(found.id, hop.id);
   });
 });
 

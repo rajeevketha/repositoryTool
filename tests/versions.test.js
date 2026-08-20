@@ -78,7 +78,7 @@ describe("jira / version ids", () => {
     assert.equal(both[0].kicker, "Commit message");
     assert.match(both[0].text, /Jira is optional/i);
     assert.match(both[0].text, /commit message is required/i);
-    assert.equal(both[1].kicker, "Team repo");
+    assert.equal(both[1].kicker, "Release repo");
     assert.match(both[1].text, /GitHub/);
 
     const commitOnly = gitShipValidationItems({

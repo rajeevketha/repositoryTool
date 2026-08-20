@@ -171,14 +171,14 @@ describe("soap result parsing", () => {
       status: "Blocked",
       items: [
         { kind: "error", kicker: "Commit message", text: "Enter a commit message. Jira is optional." },
-        { kind: "error", kicker: "Team repo", text: "Connect a GitHub repo on the Start tab first." }
+        { kind: "error", kicker: "Release repo", text: "Connect a GitHub repo on the Start tab first." }
       ]
     });
     assert.equal(blocked.ok, false);
     assert.equal(blocked.title, "Blocked");
     assert.equal(blocked.items[0].kicker, "Commit message");
     assert.match(blocked.items[0].text, /Jira is optional/);
-    assert.equal(blocked.items[1].kicker, "Team repo");
+    assert.equal(blocked.items[1].kicker, "Release repo");
     const fromMessage = formatLocalOutcome({ local: true, errorMessage: "Enter a commit message." });
     assert.equal(fromMessage.items[0].text, "Enter a commit message.");
   });
@@ -197,7 +197,7 @@ describe("soap result parsing", () => {
       }
     });
     assert.equal(withGit.ok, true);
-    const repoItem = withGit.items.find((i) => i.kicker === "Team repo");
+    const repoItem = withGit.items.find((i) => i.kicker === "Release repo");
     assert.match(repoItem.text, /\.orgflow\/releases/);
     assert.match(repoItem.text, /not dumped at the repo root/);
     assert.equal(repoItem.linkLabel, "Open this folder in Git");
@@ -207,7 +207,7 @@ describe("soap result parsing", () => {
       gitRecord: { ok: false, error: "Bad credentials" }
     });
     assert.match(gitFail.title, /Git not updated/);
-    assert.match(gitFail.items.find((i) => i.kicker === "Team repo").text, /Bad credentials/);
+    assert.match(gitFail.items.find((i) => i.kicker === "Release repo").text, /Bad credentials/);
   });
 
   it("parses listMetadata members", () => {

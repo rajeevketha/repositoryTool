@@ -68,8 +68,8 @@
                 <span>Keep versions on this Chrome profile</span>
               </button>
               <button type="button" class="mode-card" id="mode-git" data-mode="git">
-                <strong>Team repo</strong>
-                <span>Share in GitHub, GitLab, or Azure</span>
+                <strong>Release repo</strong>
+                <span>Same Jira snapshot: Dev → QA → Staging → Prod</span>
               </button>
             </div>
             <div id="mode-status" class="muted">Snapshots stay on this Chrome profile.</div>
@@ -84,7 +84,8 @@
           </div>
 
           <div id="git-setup-block" class="start-block hidden">
-            <h2 class="start-block-title">Team repo</h2>
+            <h2 class="start-block-title" id="git-setup-title">Release repo</h2>
+            <p class="hint" id="release-path-copy">This Git repo stores Jira versions. From and To are one hop (DEC → QA). Add Staging and Prod when those orgs are logged in — the same committed files travel the path.</p>
             <aside class="suggestion" id="git-connect-help">
               <p class="suggestion-kicker" id="git-help-kicker">Help · connecting GitHub</p>
               <ol class="suggestion-steps" id="git-help-preview">
@@ -150,28 +151,39 @@
               <button type="button" id="btn-create-sf-layout" class="linkish hidden" data-busy>Add folders</button>
             </div>
 
+            <div id="promotion-path" class="promotion-path hidden">
+              <p class="suggestion-kicker">Promotion path</p>
+              <p id="promotion-path-line" class="path-line">Set From and To, then Use this repo.</p>
+              <div class="start-fields">
+                <label>Add next org
+                  <select id="add-stage-org"></select>
+                </label>
+              </div>
+              <button type="button" id="btn-add-stage" class="linkish" data-busy>Add to path</button>
+            </div>
+
             <details class="start-fold" id="pipeline-fold">
-              <summary>Optional pipeline</summary>
-              <p class="hint">Remembers From, To, and test level in <code>.orgflow/pipelines.json</code>.</p>
+              <summary>Switch saved path</summary>
+              <p class="hint">Optional. Connecting a repo already saves From → To. Use this only to switch to another path in the same repo.</p>
               <div id="pipeline-welcome" class="card hidden">
                 <div class="title">Welcome back</div>
                 <div class="meta" id="pipeline-welcome-body"></div>
               </div>
               <label>
-                Saved pipelines
+                Saved paths
                 <select id="pipeline-select">
-                  <option value="">No pipelines yet — create one below</option>
+                  <option value="">No paths yet — connecting a repo creates one</option>
                 </select>
               </label>
-              <div class="row-actions">
+              <div class="row-actions hidden">
                 <button type="button" id="btn-use-pipeline" class="primary" data-busy>Use this pipeline</button>
               </div>
-              <label>
+              <label class="hidden">
                 New pipeline name
-                <input id="pipeline-name" type="text" placeholder="Config sandbox → UAT" />
+                <input id="pipeline-name" type="text" placeholder="DEC → QA → Staging → Prod" />
               </label>
               <p class="hint" id="pipeline-path-copy">Uses From and To in the path above.</p>
-              <div class="actions">
+              <div class="actions hidden">
                 <button type="button" id="btn-save-pipeline" class="secondary" data-busy>Save pipeline to repo</button>
               </div>
               <div id="pipeline-status" class="muted"></div>
@@ -398,7 +410,7 @@
         </section>
 
         <section id="git-ship-panel" class="git-ship git-only hidden">
-          <h2>Save to the team repo</h2>
+          <h2>Save to the release repo</h2>
           <p class="hint" id="git-ship-hint">A commit message is required when sharing in GitHub, GitLab, or Azure — for Save, Salesforce deploy, and deploying a saved version. Jira is optional.</p>
           <label>
             <span class="field-title">Jira key <span class="opt-mark">Optional</span></span>

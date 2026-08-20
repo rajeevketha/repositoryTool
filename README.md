@@ -8,7 +8,7 @@ GitHub, GitLab, or Azure DevOps is **optional**. OrgFlow always versions by Jira
 
 Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Retrieve → Deploy) is sequential: you cannot skip ahead.
 
-1. **Start** — Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). Stay on Start and choose **This browser** or **Team repo** (GitHub, GitLab, or Azure). Click **Next** when that choice is done — OrgFlow does not skip ahead. If a team repo: follow the **Help · connecting Git** suggestion, then **Use this repo**. Optionally save a **pipeline** to `.orgflow/pipelines.json`.
+1. **Start** — Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). Stay on Start and choose **This browser** or **Release repo** (GitHub, GitLab, or Azure). Click **Next** when that choice is done. If a release repo: follow **Help · connecting Git**, then **Use this repo**. OrgFlow saves From → To as the promotion path (for example DEC → QA). Add Staging and Prod when those orgs are logged in so the same Jira snapshot can travel Dev → QA → Staging → Prod. Pipelines are optional — connecting the repo is enough.
 2. **Type** — search, use the picklist, or tap a common type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
 3. **Members** — tick every row that belongs in this deploy (orange check = in the package). Stay here until the list is complete. Retrieve does not run yet. The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list. **Next** opens Retrieve.
 4. **Retrieve** — click **Retrieve from From org** when the package is complete. Use **Back** if you still need more members. **Compare with a saved version** is here, before Deploy. Unlock only if you need to change From or members, then retrieve again.
@@ -27,7 +27,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Submission kit (listing copy, privacy URL, permission justifications, screenshots): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** `files/orgflow-extension.zip` (unzip to an `orgflow/` folder)
-- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.9**)
+- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.10**)
 - **Privacy policy:** [docs/privacy.html](docs/privacy.html)
 
 ## Install (unpacked Chrome extension)
@@ -133,7 +133,7 @@ When you connect a repo, OrgFlow inspects the root:
 
 `versions.json` keeps increment history, comments, source org, Git commit SHA, and deployment audit entries. A second save of the same Jira key creates `v2` so `v1` stays deployable.
 
-When a team repo is on:
+When a release repo is on:
 
 - **Compare** — picklist of versions, newest first. Diff metadata XML and Apex against the current retrieve or another version.
 - **Revert selected files** — restore specific files from any version into the current retrieve, then deploy.
