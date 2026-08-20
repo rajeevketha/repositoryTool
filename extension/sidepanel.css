@@ -717,7 +717,19 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
 }
 .member-row input { display: none; }
 .member-tag { margin-left: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--orange-2); }
-.member-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.member-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.member-toolbar input[type="search"] { flex: 1 1 140px; min-width: 0; }
+.member-when {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.deploy-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .check.compact { margin-top: 0; font-size: 12px; white-space: nowrap; }
 .type-list label { flex-direction: row; align-items: center; gap: 8px; font-weight: 500; color: var(--text); }
 
@@ -1109,13 +1121,16 @@ body[data-layout="workbench"][data-step="versions"] .app-body {
   max-height: 180px;
 }
 .deploy-manifest ul { margin: 0; padding-left: 16px; font-size: 12px; word-break: break-word; }
-#btn-deploy-selected {
+#btn-deploy-selected,
+#btn-validate-selected {
   width: 100%;
   min-height: 48px;
   font-size: 15px;
   font-weight: 580;
 }
-#btn-deploy-selected:disabled { opacity: 1; }
+#btn-validate-selected { min-height: 44px; font-size: 14px; }
+#btn-deploy-selected:disabled,
+#btn-validate-selected:disabled { opacity: 1; }
 #btn-retrieve-review { width: 100%; min-height: 44px; }
 #btn-retrieve-review:disabled { opacity: 0.65; }
 

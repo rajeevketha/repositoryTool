@@ -129,6 +129,8 @@ const state = {
   deployFinished: "",
   retrieveOk: false,
   lastDeploy: null,
+  lastValidate: null,
+  shipKind: "",
   autoRetrieveAttempted: false,
   versionFilesCache: {},
   compareRows: [],
@@ -268,6 +270,17 @@ function alreadyDeployedToCurrentTarget() {
     && hasFreshRetrieve();
 }
 
+function lastValidateMatches() {
+  const target = selectedOrg("target-org");
+  return Boolean(
+    state.lastValidate?.ok
+      && target
+      && state.lastValidate.targetKey === orgKey(target)
+      && state.lastValidate.fingerprint === packageFingerprint()
+      && hasFreshRetrieve()
+  );
+}
+
 function deployBlockReason() {
   const source = selectedOrg("source-org");
   const target = selectedOrg("target-org");
@@ -318,16 +331,17 @@ function updateActionState() {
   });
   const deployBtn = $("btn-deploy-selected");
   if (deployBtn) {
-    const deploying = state.deployFinished === "running" || (state.busy && currentStepId() === "deploy" && state.deployFinished !== "failed");
+    const shipping = state.deployFinished === "running" || (state.busy && currentStepId() === "deploy" && state.deployFinished !== "failed");
     const doneOk = state.deployFinished === "success" || alreadyDeployedToCurrentTarget();
     const shipItems = gitShipItems();
-    if (deploying || doneOk) deployBtn.disabled = true;
+    const validated = lastValidateMatches();
+    if (shipping || doneOk) deployBtn.disabled = true;
     else if (shipItems.length) deployBtn.disabled = true;
-    deployBtn.textContent = deploying ? "Deploying…" : doneOk ? "Deployed" : "Deploy";
+    deployBtn.textContent = shipping && state.shipKind === "deploy" ? "Deploying…" : doneOk ? "Deployed" : "Deploy";
     const stateEl = $("deploy-btn-hint");
     if (stateEl) {
-      if (deploying) {
-        stateEl.textContent = "Waiting for Salesforce…";
+      if (shipping) {
+        stateEl.textContent = state.shipKind === "validate" ? "Validating in the To org…" : "Waiting for Salesforce…";
         stateEl.dataset.state = "wait";
       } else if (doneOk) {
         stateEl.textContent = `Already sent to ${selectedOrg("target-org")?.label || "this org"}`;
@@ -335,12 +349,22 @@ function updateActionState() {
       } else if (deployBtn.disabled) {
         stateEl.textContent = shipItems[0]?.text || reason || "Not ready yet";
         stateEl.dataset.state = "off";
+      } else if (validated) {
+        stateEl.textContent = `Validated in ${selectedOrg("target-org")?.label || "To org"} — Deploy when you are ready`;
+        stateEl.dataset.state = "on";
       } else {
-        stateEl.textContent = `Ready — send to ${selectedOrg("target-org")?.label || "To org"}`;
+        stateEl.textContent = `Ready — validate or send to ${selectedOrg("target-org")?.label || "To org"}`;
         stateEl.dataset.state = "on";
       }
     }
     deployBtn.title = stateEl?.textContent || "";
+    const validateBtn = $("btn-validate-selected");
+    if (validateBtn) {
+      if (shipping || doneOk) validateBtn.disabled = true;
+      else if (shipItems.length) validateBtn.disabled = true;
+      else validateBtn.disabled = false;
+      validateBtn.textContent = shipping && state.shipKind === "validate" ? "Validating…" : validated ? "Validated" : "Validate in To org";
+    }
   }
   const commentEl = $("comment");
   if (commentEl) {
@@ -1054,6 +1078,8 @@ function invalidateStaged() {
   state.deployFinished = "";
   state.retrieveOk = false;
   state.lastDeploy = null;
+  state.lastValidate = null;
+  state.shipKind = "";
   state.autoRetrieveAttempted = false;
   state.lastSaved = null;
   $("file-editor-wrap")?.classList.add("hidden");
@@ -1078,6 +1104,8 @@ async function resetForNewPackage() {
   state.retrieveOk = false;
   state.deployFinished = "";
   state.lastDeploy = null;
+  state.lastValidate = null;
+  state.shipKind = "";
   state.autoRetrieveAttempted = false;
   state.lastSaved = null;
   state.gitShipWarned = false;
@@ -1138,11 +1166,10 @@ function localError(message, extra = {}) {
 }
 
 function requireGitShipReady(operation = "deploy") {
-  if (!useGitEnabled()) return gitCommitMessage();
   const items = gitShipItems();
   if (!items.length) return gitCommitMessage();
   state.gitShipWarned = true;
-    throw localError(items.map((item) => item.text).join(" "), {
+  throw localError(items.map((item) => item.text).join(" "), {
     validationItems: items,
     focus: items.some((item) => item.kicker === "Jira key") ? "jira" : (items.some((item) => item.kicker === "Comment") ? "comment" : ""),
     operation
@@ -1307,13 +1334,16 @@ function showOutcome(result) {
   const titles = {
     retrieve: "Retrieve result",
     deploy: "Deploy result",
+    validate: "Validate result",
     save: "Save to repo"
   };
   const operation = titles[result?.operation] || (result?.local ? "Couldn't continue" : "Deploy result");
   const sub = formatted.ok === true
     ? (result?.operation === "retrieve"
       ? "Files are ready. Enter Jira and a comment, then Next to confirm deploy."
-      : result?.gitRecord?.ok === false
+      : result?.operation === "validate"
+        ? "Salesforce accepted a dry run. Nothing was saved in the To org. Deploy when you are ready."
+        : result?.gitRecord?.ok === false
         ? "Salesforce accepted the package. The snapshot was not written to Git — see the release repo below."
         : result?.gitRecord?.ok
           ? "Salesforce accepted this package. Snapshot files are under .orgflow/releases/… — not the repo root."
@@ -1328,7 +1358,7 @@ function showOutcome(result) {
   const html = formatted.items.length
     ? formatted.items.map(outcomeItemHtml).join("")
     : `<p class="muted">No messages from Salesforce.</p>`;
-  const onDeploy = result?.operation === "deploy" || result?.operation === "save";
+  const onDeploy = result?.operation === "deploy" || result?.operation === "save" || result?.operation === "validate";
   if (!onDeploy) {
     const panel = $("outcome-panel");
     panel?.classList.remove("hidden");
@@ -1641,16 +1671,30 @@ function renderObjectFilter() {
   renderObjectChips();
 }
 
+function formatMemberWhen(iso) {
+  const t = Date.parse(iso || "");
+  if (!Number.isFinite(t)) return "";
+  const mins = Math.max(1, Math.round((Date.now() - t) / 60000));
+  if (mins < 90) return `${mins}m`;
+  const hours = Math.round(mins / 60);
+  if (hours < 36) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days}d`;
+  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function memberRowHtml(item, typeName, selected) {
   const checked = selected.has("*") || selected.has(item.fullName);
   const mark = item.extra ? ` <span class="muted">(manual)</span>` : "";
   const std = item.standard || (isStandardObject(item.fullName) && typeName === "CustomObject")
     ? ` <span class="member-tag">standard</span>`
     : "";
+  const when = formatMemberWhen(item.lastModifiedDate);
   return `<label class="member-row">
     <input type="checkbox" data-member="${escapeHtml(item.fullName)}" ${checked ? "checked" : ""} />
     <span class="member-mark" aria-hidden="true">✓</span>
     <span class="member-name">${escapeHtml(item.fullName)}${std}${mark}</span>
+    ${when ? `<span class="member-when" title="${escapeHtml(item.lastModifiedByName || "last changed")}">${escapeHtml(when)}</span>` : ""}
   </label>`;
 }
 
@@ -1687,7 +1731,10 @@ function renderMembers() {
   if (cache.error) {
     status.textContent = cache.error;
   } else {
-    status.textContent = `${cache.items.length} in org · ${selectedCount} selected in this type`;
+    const newestFirst = $("show-newest-first") ? $("show-newest-first").checked : true;
+    status.textContent = newestFirst
+      ? `${cache.items.length} in org · newest first · ${selectedCount} selected in this type`
+      : `${cache.items.length} in org · ${selectedCount} selected in this type`;
   }
 
   let items = cache.items || [];
@@ -1700,6 +1747,15 @@ function renderMembers() {
   if (filter) items = items.filter((i) => i.fullName.toLowerCase().includes(filter));
   if ($("show-selected-only")?.checked) {
     items = items.filter((i) => selected.has("*") || selected.has(i.fullName));
+  }
+  const newestFirst = $("show-newest-first") ? $("show-newest-first").checked : true;
+  if (newestFirst) {
+    items = [...items].sort((a, b) => {
+      const tb = Date.parse(b.lastModifiedDate || "") || 0;
+      const ta = Date.parse(a.lastModifiedDate || "") || 0;
+      if (tb !== ta) return tb - ta;
+      return String(a.fullName).localeCompare(String(b.fullName));
+    });
   }
   const extraSelected = [...selected].filter((name) => name !== "*" && !items.some((i) => i.fullName === name));
   const combined = [
@@ -2183,6 +2239,7 @@ async function revertSelectedFiles() {
   state.selectionFrozen = true;
   state.deployFinished = "";
   state.lastDeploy = null;
+  state.lastValidate = null;
   state.lastSaved = null;
   state.retrieveSnapshot = {
     sourceKey: source ? orgKey(source) : "reverted",
@@ -2736,6 +2793,7 @@ async function retrieveIntoReview() {
     state.retrieveOk = true;
     state.deployFinished = "";
     state.lastDeploy = null;
+    state.lastValidate = null;
     try {
       renderFileList();
     } catch (uiErr) {
@@ -2770,7 +2828,7 @@ async function filesForDeploy() {
   return state.stagedFiles;
 }
 
-function deployOptions() {
+function deployOptions({ checkOnly = false } = {}) {
   const runTests = specifiedTests();
   const selectedLevel = $("test-level").value;
   if (selectedLevel === "RunSpecifiedTests" && !runTests.length) {
@@ -2778,7 +2836,7 @@ function deployOptions() {
   }
   return {
     testLevel: runTests.length ? "RunSpecifiedTests" : selectedLevel,
-    checkOnly: $("check-only").checked,
+    checkOnly: Boolean(checkOnly),
     runTests
   };
 }
@@ -2796,24 +2854,25 @@ function gitSnapshotRecord(version, files) {
   };
 }
 
-async function deploySelected() {
+async function deploySelected({ checkOnly = false } = {}) {
   const target = selectedOrg("target-org");
   if (!target) throw new Error("Select a target org. Log into it in Chrome first.");
   if (!state.retrieveOk || !hasFreshRetrieve()) throw new Error(retrieveBlockReason() || "Retrieve must succeed before deploy.");
-  if (alreadyDeployedToCurrentTarget()) {
+  if (!checkOnly && alreadyDeployedToCurrentTarget()) {
     throw new Error(`Already deployed this package to ${target.label}. Change To, or start a new package.`);
   }
-  if (useGitEnabled()) requireGitShipReady("deploy");
+  requireGitShipReady(checkOnly ? "validate" : "deploy");
+  state.shipKind = checkOnly ? "validate" : "deploy";
   state.deployFinished = "running";
-  showOutcome({ running: true, operation: "deploy" });
+  showOutcome({ running: true, operation: checkOnly ? "validate" : "deploy" });
   updateActionState();
   try {
     await persistShipOptions();
     const files = await filesForDeploy();
     const zipBase64 = await zipFromFiles(files);
-    const options = deployOptions();
+    const options = deployOptions({ checkOnly });
     if (options.runTests.length) log(`Running specified tests: ${options.runTests.join(", ")}`);
-    log(`Deploying ${files.length} file(s) to ${target.label} (${options.testLevel})…`);
+    log(`${checkOnly ? "Validating" : "Deploying"} ${files.length} file(s) to ${target.label} (${options.testLevel})…`);
     const result = await deployMetadata({
       instanceUrl: target.instanceUrl,
       sid: target.sid,
@@ -2822,18 +2881,32 @@ async function deploySelected() {
       apiVersion: apiVersion(),
       onProgress: (m) => log(m)
     });
-    state.deployFinished = result.success ? "success" : "failed";
-    if (result.success) {
-      state.lastDeploy = { targetKey: orgKey(target), fingerprint: packageFingerprint() };
+    const operation = checkOnly ? "validate" : "deploy";
+    if (checkOnly) {
+      state.deployFinished = "";
+      state.lastValidate = result.success
+        ? { ok: true, targetKey: orgKey(target), fingerprint: packageFingerprint() }
+        : null;
+    } else {
+      state.deployFinished = result.success ? "success" : "failed";
+      if (result.success) {
+        state.lastDeploy = { targetKey: orgKey(target), fingerprint: packageFingerprint() };
+      }
     }
-    showOutcome({ ...result, operation: "deploy" });
+    state.shipKind = "";
+    showOutcome({ ...result, operation });
     updateActionState();
     if (!result.success) {
-      const formatted = formatOperationOutcome({ ...result, operation: "deploy" });
+      const formatted = formatOperationOutcome({ ...result, operation });
       const first = formatted.items[0];
       const summary = first?.problem || first?.text || result.status || "Failed";
-      log(`Deploy failed: ${summary}`, "error");
-      setStatus(`Deploy failed — see the result panel`, "error");
+      log(`${checkOnly ? "Validate" : "Deploy"} failed: ${summary}`, "error");
+      setStatus(`${checkOnly ? "Validate" : "Deploy"} failed — see the result on Confirm`, "error");
+      return result;
+    }
+    if (checkOnly) {
+      log(`Validated in ${target.label} — nothing was saved. Deploy when you are ready.`);
+      setStatus(`Validated in ${target.label} — Deploy when you are ready`, "ok");
       return result;
     }
     log(`Deployed selected package to ${target.label} (${result.status || "Succeeded"}).`);
@@ -2855,8 +2928,9 @@ async function deploySelected() {
     return result;
   } catch (err) {
     state.deployFinished = "failed";
-    if (err.local) showLocalFailure(err.operation || "deploy", err);
-    else showOutcome({ success: false, status: "Failed", errorMessage: err.message || String(err), operation: "deploy" });
+    state.shipKind = "";
+    if (err.local) showLocalFailure(err.operation || (checkOnly ? "validate" : "deploy"), err);
+    else showOutcome({ success: false, status: "Failed", errorMessage: err.message || String(err), operation: checkOnly ? "validate" : "deploy" });
     updateActionState();
     throw err;
   }
@@ -3268,7 +3342,8 @@ $("btn-refresh-orgs").addEventListener("click", () => run(refreshOrgs));
 $("refresh-all").addEventListener("click", () => run(refreshAll));
 $("btn-save").addEventListener("click", () => run(saveVersion));
 $("btn-deploy").addEventListener("click", () => run(() => deployVersion()));
-$("btn-deploy-selected").addEventListener("click", () => run(deploySelected));
+$("btn-validate-selected")?.addEventListener("click", () => run(() => deploySelected({ checkOnly: true })));
+$("btn-deploy-selected").addEventListener("click", () => run(() => deploySelected({ checkOnly: false })));
 $("btn-deploy-from-pick").addEventListener("click", () => run(deploySelected));
 $("btn-deploy-review").addEventListener("click", () => run(deploySelected));
 $("btn-retrieve").addEventListener("click", () => run(retrieveIntoReview));
@@ -3361,6 +3436,7 @@ $("deploy-pipeline")?.addEventListener("change", () => {
   run(useSelectedPipeline);
 });
 $("member-filter").addEventListener("input", renderMembers);
+$("show-newest-first")?.addEventListener("change", renderMembers);
 $("show-selected-only")?.addEventListener("change", renderMembers);
 $("member-list").addEventListener("change", (event) => {
   const box = event.target.closest("input[data-member]");

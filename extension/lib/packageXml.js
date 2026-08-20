@@ -396,10 +396,13 @@ export function formatDeployOutcome(result) {
     return { ok: false, title: "No deploy result yet", items: [] };
   }
   if (result.running) {
+    const validating = result.operation === "validate";
     return {
       ok: null,
-      title: "Deploying…",
-      items: [{ kind: "info", text: "Waiting for Salesforce. Deploy stays off until this finishes with success or failure." }]
+      title: validating ? "Validating…" : "Deploying…",
+      items: [{ kind: "info", text: validating
+        ? "Waiting for Salesforce. This is a dry run — nothing is saved in the To org."
+        : "Waiting for Salesforce. Deploy stays off until this finishes with success or failure." }]
     };
   }
   if (result.success) {

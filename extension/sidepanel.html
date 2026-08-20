@@ -209,12 +209,13 @@
           </article>
           <article class="card" id="package-summary-card">
             <div class="title">Going to the To org <span id="package-count-deploy" class="badge">0</span></div>
-            <p class="hint">This is the package Salesforce will receive. Scroll if the list is long.</p>
+            <p class="hint">This is the package Salesforce will receive. Validate first if you want a dry run — nothing is saved in the To org until Deploy.</p>
             <div id="deploy-manifest" class="deploy-manifest" tabindex="0"></div>
             <div id="package-summary-body" class="hidden"></div>
           </article>
           <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
-          <div class="actions">
+          <div class="actions deploy-actions">
+            <button id="btn-validate-selected" class="secondary" data-busy data-needs="source,target,package,distinct,retrieve">Validate in To org</button>
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
             <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
           </div>
@@ -361,6 +362,10 @@
               <div id="object-chips" class="object-chips hidden"></div>
               <div class="member-toolbar">
                 <input id="member-filter" type="search" placeholder="Filter members" />
+                <label class="check compact">
+                  <input id="show-newest-first" type="checkbox" checked />
+                  Newest first
+                </label>
                 <label class="check compact">
                   <input id="show-selected-only" type="checkbox" />
                   Selected only
