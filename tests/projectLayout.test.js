@@ -7,6 +7,7 @@ import {
   scaffoldProjectFiles,
   shouldAutoScaffold,
   canScaffold,
+  hasSalesforceProject,
   SALESFORCE_METADATA_FOLDERS
 } from "../extension/lib/projectLayout.js";
 
@@ -27,13 +28,25 @@ describe("Salesforce project layout", () => {
     assert.equal(copy.viewPath, "force-app/main/default");
   });
 
+  it("does not overwrite an existing mdapi src or manifest tree", () => {
+    const inspect = inspectRepoLayout([
+      { name: "src", type: "dir" },
+      { name: "package.xml", type: "file" }
+    ]);
+    assert.equal(inspect.kind, "mdapi");
+    assert.equal(hasSalesforceProject(inspect), true);
+    assert.equal(canScaffold(inspect), false);
+    assert.equal(shouldAutoScaffold(inspect), false);
+    assert.match(layoutCopy(inspect).body, /will not overwrite/);
+  });
+
   it("treats a README-only repo as empty and auto-creates folders", () => {
     const inspect = inspectRepoLayout([{ name: "README.md", type: "file" }]);
     assert.equal(inspect.kind, "empty");
     const copy = layoutCopy(inspect, { repoLabel: "acme/sf@main (GitHub)" });
     assert.equal(copy.canScaffold, true);
     assert.equal(shouldAutoScaffold(inspect), true);
-    assert.match(copy.body, /does not have force-app yet/);
+    assert.match(copy.body, /Suggested layout/);
   });
 
   it("treats pipelines-only .orgflow as a brand-new warehouse", () => {
@@ -44,7 +57,7 @@ describe("Salesforce project layout", () => {
     assert.equal(inspect.kind, "orgflow");
     assert.equal(canScaffold(inspect), true);
     assert.equal(shouldAutoScaffold(inspect), true);
-    assert.match(layoutCopy(inspect).title, /New Salesforce warehouse/);
+    assert.match(layoutCopy(inspect).body, /Suggested layout/);
   });
 
   it("does not auto-create folders inside the OrgFlow extension repo", () => {

@@ -57,105 +57,113 @@
       <main>
         <section id="view-start" class="view active">
           <p class="step-kicker">Step 1 of 5</p>
-          <h2 class="page-title">Connect From and To</h2>
-          <p class="hint">Choose where snapshots live — this browser, or a shared GitHub / GitLab / Azure repo. Set From and To once in the deployment path above.</p>
-          <div class="mode-grid">
-            <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
-              <strong>This browser</strong>
-              <span>Keep Jira snapshots on this Chrome profile. No token.</span>
-            </button>
-            <button type="button" class="mode-card" id="mode-git" data-mode="git">
-              <strong>GitHub, GitLab, or Azure</strong>
-              <span>Share the same snapshots with the team. Pick the host below.</span>
-            </button>
-          </div>
-          <div id="mode-status" class="muted">Snapshots stay on this Chrome profile.</div>
+          <h2 class="page-title">Start</h2>
 
-          <h2>Salesforce orgs</h2>
-          <div class="actions">
-            <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
+          <div class="start-block">
+            <h2 class="start-block-title">Snapshots</h2>
+            <div class="mode-grid">
+              <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
+                <strong>This browser</strong>
+                <span>This Chrome profile</span>
+              </button>
+              <button type="button" class="mode-card" id="mode-git" data-mode="git">
+                <strong>Team repo</strong>
+                <span>GitHub, GitLab, Azure</span>
+              </button>
+            </div>
+            <div id="mode-status" class="muted">Snapshots stay on this Chrome profile.</div>
           </div>
-          <div id="org-list" class="list"></div>
 
-          <div id="git-setup-block" class="hidden">
-            <h2>Connect the team repo</h2>
-            <p class="hint">Brand-new repos get Salesforce folders automatically (<code>force-app/main/default/classes</code>, <code>objects</code>, …). If the repo already has a DX project, OrgFlow leaves it alone and stores Jira versions under <code>.orgflow/releases/</code>.</p>
-            <label>Host
-              <select id="git-provider">
-                <option value="github">GitHub</option>
-                <option value="gitlab">GitLab</option>
-                <option value="azuredevops">Azure DevOps</option>
-              </select>
-            </label>
-            <details class="card help-card" id="git-help">
-              <summary class="title" id="git-help-title">How to connect GitHub</summary>
+          <div class="start-block">
+            <h2 class="start-block-title">Salesforce orgs</h2>
+            <div class="actions">
+              <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
+            </div>
+            <div id="org-list" class="list org-list-compact"></div>
+          </div>
+
+          <div id="git-setup-block" class="start-block hidden">
+            <h2 class="start-block-title">Team repo</h2>
+            <details class="help-card" id="git-help">
+              <summary id="git-help-title">How to connect GitHub</summary>
               <ol class="help-steps" id="git-help-steps"></ol>
             </details>
+            <div class="start-fields">
+              <label>Host
+                <select id="git-provider">
+                  <option value="github">GitHub</option>
+                  <option value="gitlab">GitLab</option>
+                  <option value="azuredevops">Azure DevOps</option>
+                </select>
+              </label>
+              <label id="git-token-label">Personal access token
+                <input id="gh-token" type="password" placeholder="ghp_… or github_pat_…" autocomplete="off" />
+              </label>
+            </div>
             <label id="git-base-url-wrap" class="hidden">GitLab instance URL
               <input id="git-base-url" type="url" placeholder="https://gitlab.com" />
             </label>
             <label id="git-org-wrap" class="hidden">Azure DevOps organization
               <input id="git-org" type="text" placeholder="mycompany" autocomplete="off" />
             </label>
-            <label id="git-token-label">Personal access token
-              <input id="gh-token" type="password" placeholder="ghp_… or github_pat_…" autocomplete="off" />
-            </label>
             <div class="actions">
               <button id="btn-connect-github" class="secondary" data-busy>Connect GitHub</button>
             </div>
             <div id="github-user" class="muted"></div>
-            <label>
-              Select a repo
-              <select id="gh-repo"></select>
-            </label>
-            <p class="hint" id="repo-pick-hint">Pick a repo, then click <strong>Use this repo</strong>. Choosing it in the list does not connect it yet. A pipeline only remembers From, To, and tests — not the Git repo.</p>
-            <label id="git-repo-paste-label">Or paste owner/repo
-              <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
-            </label>
-            <label>
-              Branch
-              <input id="gh-branch" type="text" placeholder="main" />
-            </label>
+            <div class="start-fields">
+              <label>
+                Select a repo
+                <select id="gh-repo"></select>
+              </label>
+              <label>
+                Branch
+                <input id="gh-branch" type="text" placeholder="main" />
+              </label>
+            </div>
+            <p class="hint hidden" id="repo-pick-hint">Pick a repo, then Use this repo.</p>
+            <details class="start-fold" id="git-repo-paste-fold">
+              <summary>Or paste owner/repo</summary>
+              <label id="git-repo-paste-label">
+                <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
+              </label>
+            </details>
             <div class="actions">
               <button id="btn-save-repo" class="primary" data-busy>Use this repo</button>
             </div>
             <p id="repo-btn-hint" class="btn-state" data-state="off"></p>
+            <p class="hint layout-hint" id="git-layout-copy">Suggested layout: force-app/main/default/{classes, objects, layouts, lwc}. Existing Salesforce folders are never overwritten.</p>
+            <p id="git-layout-status" class="muted hidden"></p>
+            <div id="git-layout-card" class="hint-actions hidden">
+              <button type="button" id="btn-view-git-files" class="linkish">Open in Git</button>
+              <button type="button" id="btn-create-sf-layout" class="linkish hidden" data-busy>Add folders</button>
+            </div>
 
-            <article class="card hidden" id="git-layout-card">
-              <div class="title" id="git-layout-title">Salesforce files in Git</div>
-              <p class="hint" id="git-layout-copy"></p>
-              <pre id="git-layout-tree" class="git-tree hidden"></pre>
-              <div class="row-actions">
-                <button type="button" id="btn-view-git-files" class="secondary">Open files in Git</button>
-                <button type="button" id="btn-create-sf-layout" class="accent" data-busy>Create Salesforce folders</button>
+            <details class="start-fold" id="pipeline-fold">
+              <summary>Optional pipeline</summary>
+              <p class="hint">Remembers From, To, and test level in <code>.orgflow/pipelines.json</code>.</p>
+              <div id="pipeline-welcome" class="card hidden">
+                <div class="title">Welcome back</div>
+                <div class="meta" id="pipeline-welcome-body"></div>
               </div>
-              <p id="git-layout-status" class="muted"></p>
-            </article>
-
-            <h2>Pipeline</h2>
-            <p class="hint">Optional. Remembers From, To, and test level in <code>.orgflow/pipelines.json</code> on the <strong>Branch</strong> above. Reopen OrgFlow, connect the same repo, then pick it from Saved pipelines.</p>
-            <div id="pipeline-welcome" class="card hidden">
-              <div class="title">Welcome back</div>
-              <div class="meta" id="pipeline-welcome-body"></div>
-            </div>
-            <label>
-              Saved pipelines
-              <select id="pipeline-select">
-                <option value="">No pipelines yet — create one below</option>
-              </select>
-            </label>
-            <div class="row-actions">
-              <button type="button" id="btn-use-pipeline" class="primary" data-busy>Use this pipeline</button>
-            </div>
-            <label>
-              New pipeline name
-              <input id="pipeline-name" type="text" placeholder="Config sandbox → UAT" />
-            </label>
-            <p class="hint" id="pipeline-path-copy">Uses From and To in the deployment path above. There is no second org picker on this page.</p>
-            <div class="actions">
-              <button type="button" id="btn-save-pipeline" class="secondary" data-busy>Save pipeline to repo</button>
-            </div>
-            <div id="pipeline-status" class="muted"></div>
+              <label>
+                Saved pipelines
+                <select id="pipeline-select">
+                  <option value="">No pipelines yet — create one below</option>
+                </select>
+              </label>
+              <div class="row-actions">
+                <button type="button" id="btn-use-pipeline" class="primary" data-busy>Use this pipeline</button>
+              </div>
+              <label>
+                New pipeline name
+                <input id="pipeline-name" type="text" placeholder="Config sandbox → UAT" />
+              </label>
+              <p class="hint" id="pipeline-path-copy">Uses From and To in the path above.</p>
+              <div class="actions">
+                <button type="button" id="btn-save-pipeline" class="secondary" data-busy>Save pipeline to repo</button>
+              </div>
+              <div id="pipeline-status" class="muted"></div>
+            </details>
           </div>
 
           <div class="actions hidden">

@@ -62,7 +62,7 @@ import {
   isTestClassName,
   normalizeTestNames
 } from "./lib/packageView.js";
-import { inspectRepoLayout, layoutCopy, snapshotTreeText, scaffoldProjectFiles, shouldAutoScaffold } from "./lib/projectLayout.js";
+import { inspectRepoLayout, layoutCopy, snapshotTreeText, scaffoldProjectFiles, shouldAutoScaffold, hasSalesforceProject, canScaffold } from "./lib/projectLayout.js";
 import {
   loadLocalVersionStore,
   saveLocalVersionStore,
@@ -502,23 +502,18 @@ function syncSetupButtons() {
     canRun: Boolean(token)
   });
   const inspect = state.gitLayout;
-  const foldersReady = Boolean(inspect?.hasForceApp || inspect?.hasSfdxJson);
   const canCreate = Boolean(
     isGitConfigured(state.settings)
-    && !foldersReady
-    && inspect?.kind !== "mdapi"
+    && useGitEnabled()
+    && canScaffold(inspect)
+    && !hasSalesforceProject(inspect)
   );
   const createBtn = $("btn-create-sf-layout");
   if (createBtn) {
-    createBtn.classList.remove("hidden");
-    createBtn.classList.toggle("accent", canCreate);
-    createBtn.classList.toggle("secondary", !canCreate);
-    markActionButton(createBtn, {
-      done: foldersReady,
-      idleLabel: "Create Salesforce folders",
-      doneLabel: "Salesforce folders ready",
-      canRun: canCreate
-    });
+    createBtn.classList.toggle("hidden", !canCreate);
+    createBtn.classList.remove("accent", "secondary", "action-done");
+    createBtn.textContent = "Add folders";
+    if (!state.busy) createBtn.disabled = !canCreate;
   }
 }
 
@@ -1208,11 +1203,6 @@ function fillGitHostUi() {
     const link = `<li>Create a token: <a href="${escapeHtml(linkHref)}" target="_blank" rel="noreferrer">${escapeHtml(linkHref.replace(/^https?:\/\//, ""))}</a></li>`;
     $("git-help-steps").innerHTML = link + meta.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
   }
-  const help = $("git-help");
-  if (help && useGitEnabled() && !isGitConfigured(state.settings) && help.dataset.opened !== "1") {
-    help.open = true;
-    help.dataset.opened = "1";
-  }
   $("git-base-url-wrap")?.classList.toggle("hidden", !meta.needsBaseUrl);
   $("git-org-wrap")?.classList.toggle("hidden", !meta.needsOrg);
   const tokenLabel = $("git-token-label");
@@ -1221,12 +1211,14 @@ function fillGitHostUi() {
     $("gh-token").placeholder = meta.tokenPlaceholder;
   }
   if ($("btn-connect-github")) $("btn-connect-github").textContent = meta.connectLabel;
-  if ($("git-repo-paste-label") && $("gh-repo-input")) {
-    $("git-repo-paste-label").childNodes[0].textContent = provider === "azuredevops"
-      ? "Or paste org/project/repo "
-      : "Or paste owner/repo ";
-    $("gh-repo-input").placeholder = meta.repoPlaceholder;
+  const pasteFold = $("git-repo-paste-fold");
+  const pasteSummary = pasteFold?.querySelector("summary");
+  if (pasteSummary) {
+    pasteSummary.textContent = provider === "azuredevops"
+      ? "Or paste org/project/repo"
+      : "Or paste owner/repo";
   }
+  if ($("gh-repo-input")) $("gh-repo-input").placeholder = meta.repoPlaceholder;
 }
 
 function renderTypePicklist() {
@@ -1686,9 +1678,9 @@ function renderOrgCards() {
   }
   $("org-list").innerHTML = state.orgs
     .map(
-      (o) => `<article class="card">
-        <div class="title">${escapeHtml(o.label)}</div>
-        <div class="meta">${escapeHtml(o.username || "")}<br/>${escapeHtml(o.instanceUrl)}</div>
+      (o) => `<article class="org-row">
+        <strong>${escapeHtml(o.label)}</strong>
+        <span>${escapeHtml(o.username || o.instanceUrl || "")}</span>
       </article>`
     )
     .join("");
@@ -2170,32 +2162,14 @@ function gitLayoutViewUrl() {
 
 function renderGitLayoutCard() {
   const card = $("git-layout-card");
-  if (!card) return;
   const connected = isGitConfigured(state.settings) && useGitEnabled();
-  card.classList.toggle("hidden", !connected);
-  if (!connected) return;
+  if (card) card.classList.toggle("hidden", !connected);
   const copy = layoutCopy(state.gitLayout, { repoLabel: repoLabel(state.settings) });
-  if ($("git-layout-title")) $("git-layout-title").textContent = copy.title;
   if ($("git-layout-copy")) $("git-layout-copy").textContent = copy.body;
-  const tree = $("git-layout-tree");
-  if (tree) {
-    const sample = [
-      "force-app/main/default/",
-      "  classes/",
-      "  objects/",
-      "  layouts/",
-      "  lwc/",
-      "  flows/",
-      ".orgflow/releases/PROJ-123/v1/   ← after Save or Deploy"
-    ].join("\n");
-    tree.textContent = sample;
-    tree.classList.remove("hidden");
-  }
-  if ($("git-layout-status")) {
-    const ready = Boolean(state.gitLayout?.hasForceApp || state.gitLayout?.hasSfdxJson);
-    $("git-layout-status").textContent = ready
-      ? "Salesforce folders are in this repo. Open files in Git to browse them."
-      : "Click Create Salesforce folders — the button highlights until Git has force-app.";
+  const status = $("git-layout-status");
+  if (status && !status.dataset.live) {
+    status.textContent = "";
+    status.classList.add("hidden");
   }
   syncSetupButtons();
 }
@@ -2203,6 +2177,12 @@ function renderGitLayoutCard() {
 async function refreshGitLayoutOnly() {
   if (!isGitConfigured(state.settings) || !useGitEnabled()) {
     state.gitLayout = null;
+    const status = $("git-layout-status");
+    if (status) {
+      delete status.dataset.live;
+      status.textContent = "";
+      status.classList.add("hidden");
+    }
     renderGitLayoutCard();
     return;
   }
@@ -2210,6 +2190,12 @@ async function refreshGitLayoutOnly() {
     const entries = await listRootEntries(gitCreds());
     state.gitLayout = inspectRepoLayout(entries);
     log(`Repo layout: ${state.gitLayout.kind}${state.gitLayout.hasForceApp ? " (force-app present)" : ""}.`);
+    const status = $("git-layout-status");
+    if (status) {
+      delete status.dataset.live;
+      status.textContent = "";
+      status.classList.add("hidden");
+    }
   } catch (err) {
     state.gitLayout = null;
     log(`Could not inspect repo folders: ${err.message || err}`, "error");
@@ -2225,7 +2211,11 @@ async function inspectGitLayout() {
       await createSalesforceLayout();
     } catch (err) {
       log(`Could not create Salesforce folders: ${err.message || err}`, "error");
-      if ($("git-layout-status")) $("git-layout-status").textContent = err.message || String(err);
+      if ($("git-layout-status")) {
+        $("git-layout-status").dataset.live = "1";
+        $("git-layout-status").classList.remove("hidden");
+        $("git-layout-status").textContent = err.message || String(err);
+      }
     }
   }
 }
@@ -2236,26 +2226,42 @@ function openGitFiles() {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+async function salesforceTreeAlreadyInRepo() {
+  await refreshGitLayoutOnly();
+  if (hasSalesforceProject(state.gitLayout)) return true;
+  const creds = gitCreds();
+  const existing = await Promise.all([
+    getFileContent(creds, "sfdx-project.json", creds.branch),
+    getFileContent(creds, "manifest/package.xml", creds.branch),
+    getFileContent(creds, "src/package.xml", creds.branch),
+    getFileContent(creds, "force-app/main/default/classes/.gitkeep", creds.branch)
+  ]);
+  return existing.some(Boolean);
+}
+
 async function createSalesforceLayout() {
   requireGithub();
+  if (await salesforceTreeAlreadyInRepo()) {
+    setStatus("This repo already has Salesforce folders. OrgFlow did not overwrite them.", "ok");
+    return;
+  }
   const inspect = state.gitLayout || inspectRepoLayout([]);
-  if (inspect.hasForceApp || inspect.hasSfdxJson) {
-    setStatus("Salesforce folders already exist in this repo.", "ok");
-    await refreshGitLayoutOnly();
+  if (!canScaffold(inspect)) {
+    setStatus("This repo already has a Salesforce project. Left it as-is.", "ok");
     return;
   }
   const files = scaffoldProjectFiles({
     apiVersion: apiVersion(),
     repoName: gitCreds().repo || "orgflow"
   }).map((file) => ({ path: file.path, base64: encodeUtf8Base64(file.text) }));
-  log(`Creating Salesforce DX folders (${files.length} files) in ${repoLabel(state.settings)}…`);
+  log(`Adding suggested Salesforce folders (${files.length} files) in ${repoLabel(state.settings)}…`);
   const commit = await commitFiles({
     ...gitCreds(),
     files,
     message: "chore: add Salesforce DX folders for OrgFlow"
   });
   log(`Wrote force-app/main/default/{classes,objects,layouts,…} (${String(commit.sha || "").slice(0, 7) || "commit"}).`);
-  setStatus("Salesforce folders created in Git. Open files in Git to browse them.", "ok");
+  setStatus("Suggested Salesforce folders added. Existing project files were not overwritten.", "ok");
   const folderUrl = browseFolderUrl(state.settings, "force-app/main/default");
   if (folderUrl) log(`Open Salesforce folders: ${folderUrl}`);
   await refreshGitLayoutOnly();

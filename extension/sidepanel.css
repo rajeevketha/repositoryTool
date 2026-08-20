@@ -221,6 +221,95 @@ main { padding: 14px; flex: 1; }
 .view, .subview { display: none; flex-direction: column; gap: 10px; }
 .view.active, .subview.active { display: flex; }
 
+#view-start {
+  gap: 12px;
+}
+
+.start-block {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+.start-block-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.start-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+}
+
+.start-fields label {
+  margin: 0;
+}
+
+.org-list-compact {
+  max-height: 148px;
+  overflow: auto;
+  gap: 4px;
+}
+
+.org-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.org-row strong {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.org-row span {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.start-fold {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 2px 10px 6px;
+  background: var(--bg);
+}
+
+.start-fold > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 0;
+}
+
+.layout-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.hint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+}
+
 h2 {
   margin: 8px 0 0;
   font-size: 13px;
@@ -390,19 +479,19 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
 .row-actions button { flex: 1; min-width: 0; padding: 7px 8px; font-size: 12px; }
 
 .subtabs { display: none; }
-.mode-grid { display: grid; gap: 8px; }
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .mode-card {
   text-align: left;
   background: #1b1b1b;
-  border: 2px solid #3a3a3a;
+  border: 1px solid #3a3a3a;
   color: var(--text);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px;
+  gap: 2px;
+  padding: 8px 10px;
 }
-.mode-card strong { color: #fff; font-size: 15px; }
-.mode-card span { font-weight: 500; color: var(--muted); font-size: 12px; }
+.mode-card strong { color: #fff; font-size: 13px; }
+.mode-card span { font-weight: 500; color: var(--muted); font-size: 11px; line-height: 1.35; }
 .mode-card.selected {
   border-color: #c4a574;
   background: #241e16;
@@ -410,11 +499,17 @@ button.linkish { display: inline; background: none; color: var(--orange-2); padd
 }
 .mode-card.selected strong { color: #ead9c0; }
 
+.help-card {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
 .help-card summary {
   cursor: pointer;
   list-style: none;
-  font-weight: 700;
-  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
 }
 .help-card summary::-webkit-details-marker { display: none; }
 .help-card summary::after {
