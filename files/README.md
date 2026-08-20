@@ -15,4 +15,6 @@ Chrome cannot load the `.zip` itself.
 
 ## Chrome Web Store upload
 
-Upload **`orgflow-chrome-web-store.zip`** (same folder). `manifest.json` is at the **root** of that zip. Follow `docs/chrome-web-store.md`.
+https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip
+
+`manifest.json` is at the **root** of that zip. Follow `docs/chrome-web-store.md`.

@@ -2,6 +2,12 @@
 
 Use this tomorrow morning after you smoke-test in Chrome. Upload **`files/orgflow-chrome-web-store.zip`** — `manifest.json` is at the zip root (required). Do **not** upload `orgflow-extension.zip`; that nested `orgflow/` folder is only for Load unpacked.
 
+**Store upload:**  
+https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip
+
+**Load unpacked (unzip → `orgflow/`):**  
+https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip
+
 Privacy policy URL (must stay public):
 
 https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/docs/privacy.html
@@ -75,6 +81,6 @@ OrgFlow retrieves and deploys Salesforce metadata between orgs the user is logge
 
 ## After upload
 
-1. Load unpacked from `extension/` or unzip `files/orgflow-extension.zip` → `orgflow/`.
+1. Load unpacked from `extension/` or unzip [orgflow-extension.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip) → `orgflow/`.
 2. Confirm From/To, retrieve, deploy, and (if you use Git) Save to repo.
 3. Submit for review. First review can take several days.
