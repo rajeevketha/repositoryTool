@@ -188,8 +188,8 @@ Folder names match the Metadata API (the same ones you see under \`force-app/mai
     { path: ".orgflow/README.md", text: readme }
   ];
   for (const folder of SALESFORCE_METADATA_FOLDERS) {
-    files.push({ path: gitkeep(folder), text: "" });
+    files.push({ path: gitkeep(folder), text: "keep\n" });
   }
-  files.push({ path: "manifest/.gitkeep", text: "" });
+  files.push({ path: "manifest/.gitkeep", text: "keep\n" });
   return files;
 }

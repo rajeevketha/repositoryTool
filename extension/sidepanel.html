@@ -117,16 +117,17 @@
               <input id="gh-branch" type="text" placeholder="main" />
             </label>
             <div class="actions">
-              <button id="btn-save-repo" class="secondary" data-busy>Use this repo</button>
+              <button id="btn-save-repo" class="primary" data-busy>Use this repo</button>
             </div>
+            <p id="repo-btn-hint" class="btn-state" data-state="off"></p>
 
             <article class="card hidden" id="git-layout-card">
               <div class="title" id="git-layout-title">Salesforce files in Git</div>
               <p class="hint" id="git-layout-copy"></p>
               <pre id="git-layout-tree" class="git-tree hidden"></pre>
               <div class="row-actions">
-                <button type="button" id="btn-view-git-files" class="primary">Open files in Git</button>
-              <button type="button" id="btn-create-sf-layout" class="secondary hidden">Create Salesforce folders</button>
+                <button type="button" id="btn-view-git-files" class="secondary">Open files in Git</button>
+                <button type="button" id="btn-create-sf-layout" class="accent" data-busy>Create Salesforce folders</button>
               </div>
               <p id="git-layout-status" class="muted"></p>
             </article>
@@ -144,7 +145,7 @@
               </select>
             </label>
             <div class="row-actions">
-              <button type="button" id="btn-use-pipeline" class="primary">Use this pipeline</button>
+              <button type="button" id="btn-use-pipeline" class="primary" data-busy>Use this pipeline</button>
             </div>
             <label>
               New pipeline name

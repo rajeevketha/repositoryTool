@@ -27,7 +27,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Submission kit (listing copy, privacy URL, permission justifications, screenshots): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** `files/orgflow-extension.zip` (unzip to an `orgflow/` folder)
-- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.6**)
+- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.7**)
 - **Privacy policy:** [docs/privacy.html](docs/privacy.html)
 
 ## Install (unpacked Chrome extension)

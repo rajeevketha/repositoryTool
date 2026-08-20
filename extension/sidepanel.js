@@ -387,6 +387,152 @@ function updateActionState() {
   applyRetrieveLockUi();
   updateWizardNav();
   renderStepper();
+  syncSetupButtons();
+}
+
+function focusInView(id) {
+  const el = $(id);
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (typeof el.focus === "function" && !el.disabled) {
+    try {
+      el.focus({ preventScroll: true });
+    } catch {
+      el.focus();
+    }
+  }
+}
+
+function selectedRepoFormKey() {
+  const provider = selectedProvider();
+  const fromSelect = parseRepoInput(provider, $("gh-repo")?.value);
+  const fromInput = parseRepoInput(provider, $("gh-repo-input")?.value.trim());
+  const parsed = fromInput || fromSelect;
+  if (!parsed?.repo) return "";
+  const owner = parsed.owner || $("git-org")?.value.trim() || "";
+  const project = parsed.project || "";
+  const branch = $("gh-branch")?.value.trim() || "main";
+  return `${provider}:${owner}/${project}/${parsed.repo}@${branch}`;
+}
+
+function savedRepoFormKey() {
+  const c = hostCreds(state.settings);
+  if (!c?.repo) return "";
+  return `${c.provider}:${c.owner}/${c.project || ""}/${c.repo}@${c.branch || "main"}`;
+}
+
+function repoFormMatchesSaved() {
+  const selected = selectedRepoFormKey();
+  return Boolean(selected && isGitConfigured(state.settings) && selected === savedRepoFormKey());
+}
+
+function pipelineIsInUse() {
+  const id = $("pipeline-select")?.value;
+  if (!id) return false;
+  if (state.settings?.lastPipelineId !== id) return false;
+  const record = findPipeline(state.pipelines?.pipelines, id);
+  if (!record) return false;
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  if (!source || !target) return false;
+  const matchedSource = matchOrg(state.orgs, record.source);
+  const matchedTarget = matchOrg(state.orgs, record.target);
+  return matchedSource && matchedTarget && orgKey(source) === orgKey(matchedSource) && orgKey(target) === orgKey(matchedTarget);
+}
+
+function pipelineSaveIsDirty() {
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  if (!source || !target) return false;
+  const name = $("pipeline-name")?.value.trim();
+  const id = $("pipeline-select")?.value;
+  const record = findPipeline(state.pipelines?.pipelines, id);
+  if (!record) return true;
+  const matchedSource = matchOrg(state.orgs, record.source);
+  const matchedTarget = matchOrg(state.orgs, record.target);
+  const samePath = matchedSource && matchedTarget
+    && orgKey(source) === orgKey(matchedSource)
+    && orgKey(target) === orgKey(matchedTarget);
+  const sameName = (name || record.name) === record.name;
+  return !(samePath && sameName);
+}
+
+function markActionButton(btn, { done, idleLabel, doneLabel, canRun }) {
+  if (!btn) return;
+  if (!state.busy) btn.disabled = !canRun || done;
+  btn.textContent = done ? doneLabel : idleLabel;
+  btn.classList.toggle("action-done", done);
+}
+
+function syncSetupButtons() {
+  const connected = repoFormMatchesSaved();
+  markActionButton($("btn-save-repo"), {
+    done: connected,
+    idleLabel: "Use this repo",
+    doneLabel: "Repo connected",
+    canRun: Boolean(selectedRepoFormKey())
+  });
+  if ($("repo-btn-hint")) {
+    $("repo-btn-hint").textContent = connected
+      ? "Connected. Change repo or branch to use a different one."
+      : "Pick a repo, then Use this repo.";
+    $("repo-btn-hint").dataset.state = connected ? "done" : "off";
+  }
+  const pipeId = $("pipeline-select")?.value;
+  const inUse = pipelineIsInUse();
+  markActionButton($("btn-use-pipeline"), {
+    done: inUse,
+    idleLabel: "Use this pipeline",
+    doneLabel: "Pipeline in use",
+    canRun: Boolean(pipeId)
+  });
+  const canSavePipe = pipelineSaveIsDirty();
+  markActionButton($("btn-save-pipeline"), {
+    done: Boolean(pipeId) && !canSavePipe && Boolean(selectedOrg("source-org") && selectedOrg("target-org")),
+    idleLabel: "Save pipeline to repo",
+    doneLabel: "Pipeline saved",
+    canRun: canSavePipe
+  });
+  const token = $("gh-token")?.value.trim() || "";
+  const signedIn = Boolean(state.githubUser?.login) && token === (hostCreds(state.settings).token || "");
+  markActionButton($("btn-connect-github"), {
+    done: signedIn && Boolean(state.repos?.length),
+    idleLabel: providerMeta(selectedProvider()).connectLabel,
+    doneLabel: `Connected as ${state.githubUser?.login || ""}`.trim(),
+    canRun: Boolean(token)
+  });
+  const inspect = state.gitLayout;
+  const foldersReady = Boolean(inspect?.hasForceApp || inspect?.hasSfdxJson);
+  const canCreate = Boolean(
+    isGitConfigured(state.settings)
+    && !foldersReady
+    && inspect?.kind !== "mdapi"
+  );
+  const createBtn = $("btn-create-sf-layout");
+  if (createBtn) {
+    createBtn.classList.remove("hidden");
+    createBtn.classList.toggle("accent", canCreate);
+    createBtn.classList.toggle("secondary", !canCreate);
+    markActionButton(createBtn, {
+      done: foldersReady,
+      idleLabel: "Create Salesforce folders",
+      doneLabel: "Salesforce folders ready",
+      canRun: canCreate
+    });
+  }
+}
+
+function maybeAdvanceFromStart() {
+  if (state.stepIndex !== 0 || state.showingVersions) return;
+  if (!pathReady()) return;
+  if (useGitEnabled() && !isGitConfigured(state.settings)) {
+    $("git-setup-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    setStatus("From and To are set. Use this repo next, then pick a configuration type.", "ok");
+    return;
+  }
+  goStep(1, { force: true });
+  queueMicrotask(() => focusInView("type-search"));
+  setStatus("Pick a configuration type (Custom Field, Custom Object, Flow…).", "ok");
 }
 
 function renderOrgPath() {
@@ -1131,6 +1277,7 @@ function chooseType(typeName) {
   if (pick) pick.value = typeName;
   goStep(2, { force: true });
   renderMembers();
+  queueMicrotask(() => focusInView("member-filter"));
   if (selectedOrg("source-org")) run(loadMembers);
 }
 
@@ -1469,6 +1616,8 @@ async function useSelectedPipeline() {
   renderGitUi();
   log(`Using pipeline ${record.name}.`);
   setStatus(`Pipeline: ${record.name}`, "ok");
+  updateActionState();
+  maybeAdvanceFromStart();
 }
 
 async function saveCurrentPipeline() {
@@ -1505,6 +1654,7 @@ async function saveCurrentPipeline() {
   state.settings = await loadSettings();
   applyPipeline(record);
   renderPipelines();
+  updateActionState();
   log(`Saved pipeline “${record.name}” to ${pipelinesFilePath()}.`);
   setStatus(`Saved pipeline ${record.name}`, "ok");
 }
@@ -1957,6 +2107,7 @@ async function connectGithub() {
   state.repos = await listRepos({ ...creds, owner: provider === "azuredevops" ? owner : creds.owner });
   renderRepos();
   log(`${meta.label} connected as ${user.login}. ${state.repos.length} repos available.`);
+  updateActionState();
 }
 
 async function saveRepo() {
@@ -2009,6 +2160,7 @@ async function saveRepo() {
   setStatus(`Team repo: ${repoLabel(state.settings)}`, "ok");
   renderGitUi();
   await inspectGitLayout();
+  maybeAdvanceFromStart();
 }
 
 function gitLayoutViewUrl() {
@@ -2025,7 +2177,6 @@ function renderGitLayoutCard() {
   const copy = layoutCopy(state.gitLayout, { repoLabel: repoLabel(state.settings) });
   if ($("git-layout-title")) $("git-layout-title").textContent = copy.title;
   if ($("git-layout-copy")) $("git-layout-copy").textContent = copy.body;
-  $("btn-create-sf-layout")?.classList.toggle("hidden", !copy.canScaffold);
   const tree = $("git-layout-tree");
   if (tree) {
     const sample = [
@@ -2041,13 +2192,15 @@ function renderGitLayoutCard() {
     tree.classList.remove("hidden");
   }
   if ($("git-layout-status")) {
-    $("git-layout-status").textContent = copy.canScaffold
-      ? "Brand-new repos get these folders automatically. Existing Salesforce projects are never overwritten."
-      : "Use Open files in Git to browse the connected branch.";
+    const ready = Boolean(state.gitLayout?.hasForceApp || state.gitLayout?.hasSfdxJson);
+    $("git-layout-status").textContent = ready
+      ? "Salesforce folders are in this repo. Open files in Git to browse them."
+      : "Click Create Salesforce folders — the button highlights until Git has force-app.";
   }
+  syncSetupButtons();
 }
 
-async function inspectGitLayout() {
+async function refreshGitLayoutOnly() {
   if (!isGitConfigured(state.settings) || !useGitEnabled()) {
     state.gitLayout = null;
     renderGitLayoutCard();
@@ -2062,9 +2215,18 @@ async function inspectGitLayout() {
     log(`Could not inspect repo folders: ${err.message || err}`, "error");
   }
   renderGitLayoutCard();
+}
+
+async function inspectGitLayout() {
+  await refreshGitLayoutOnly();
   if (shouldAutoScaffold(state.gitLayout) && !state.gitAutoScaffoldDone) {
     state.gitAutoScaffoldDone = true;
-    await createSalesforceLayout();
+    try {
+      await createSalesforceLayout();
+    } catch (err) {
+      log(`Could not create Salesforce folders: ${err.message || err}`, "error");
+      if ($("git-layout-status")) $("git-layout-status").textContent = err.message || String(err);
+    }
   }
 }
 
@@ -2077,35 +2239,26 @@ function openGitFiles() {
 async function createSalesforceLayout() {
   requireGithub();
   const inspect = state.gitLayout || inspectRepoLayout([]);
-  if (inspect.kind === "sfdx" || inspect.hasForceApp) {
-    throw new Error("This repo already has force-app. OrgFlow will not overwrite it. Snapshots go to .orgflow/releases/.");
+  if (inspect.hasForceApp || inspect.hasSfdxJson) {
+    setStatus("Salesforce folders already exist in this repo.", "ok");
+    await refreshGitLayoutOnly();
+    return;
   }
   const files = scaffoldProjectFiles({
     apiVersion: apiVersion(),
     repoName: gitCreds().repo || "orgflow"
-  });
-  const creds = gitCreds();
-  const toWrite = [];
-  for (const file of files) {
-    const existing = await getFileContent(creds, file.path, creds.branch);
-    if (existing !== null) continue;
-    toWrite.push({ path: file.path, base64: encodeUtf8Base64(file.text) });
-  }
-  if (!toWrite.length) {
-    setStatus("Salesforce folders already exist in this repo.", "ok");
-    log("No new Salesforce folders to create.");
-    await inspectGitLayout();
-    return;
-  }
-  log(`Creating Salesforce DX folders (${toWrite.length} files)…`);
-  await commitFiles({
-    ...creds,
-    files: toWrite,
+  }).map((file) => ({ path: file.path, base64: encodeUtf8Base64(file.text) }));
+  log(`Creating Salesforce DX folders (${files.length} files) in ${repoLabel(state.settings)}…`);
+  const commit = await commitFiles({
+    ...gitCreds(),
+    files,
     message: "chore: add Salesforce DX folders for OrgFlow"
   });
-  await inspectGitLayout();
-  log("Created force-app/main/default/{classes,objects,layouts,…} plus .orgflow/README.md. Snapshots still land under .orgflow/releases/.");
-  setStatus("Salesforce folders created. Open files in Git to browse them.", "ok");
+  log(`Wrote force-app/main/default/{classes,objects,layouts,…} (${String(commit.sha || "").slice(0, 7) || "commit"}).`);
+  setStatus("Salesforce folders created in Git. Open files in Git to browse them.", "ok");
+  const folderUrl = browseFolderUrl(state.settings, "force-app/main/default");
+  if (folderUrl) log(`Open Salesforce folders: ${folderUrl}`);
+  await refreshGitLayoutOnly();
 }
 
 async function persistShipOptions() {
@@ -2700,7 +2853,10 @@ function switchSubtab(name) {
 }
 
 async function run(action) {
-  if (state.busy) return;
+  if (state.busy) {
+    setStatus("Wait — OrgFlow is still finishing the last action.", "error");
+    return;
+  }
   setBusy(true);
   try {
     await action();
@@ -2800,6 +2956,11 @@ $("btn-view-git-files")?.addEventListener("click", () => {
   }
 });
 $("btn-create-sf-layout")?.addEventListener("click", () => run(createSalesforceLayout));
+$("pipeline-select")?.addEventListener("change", syncSetupButtons);
+$("pipeline-name")?.addEventListener("input", syncSetupButtons);
+$("gh-branch")?.addEventListener("input", syncSetupButtons);
+$("gh-token")?.addEventListener("input", syncSetupButtons);
+$("gh-repo-input")?.addEventListener("input", syncSetupButtons);
 $("gh-repo")?.addEventListener("change", () => {
   const selectedRepo = state.repos.find((r) => r.fullName === $("gh-repo").value);
   if (selectedRepo?.defaultBranch && !$("gh-branch").value.trim()) {
@@ -2981,6 +3142,7 @@ $("source-org")?.addEventListener("change", () => run(async () => {
     invalidateStaged();
   }
   updateActionState();
+  maybeAdvanceFromStart();
 }));
 $("target-org")?.addEventListener("change", () => run(async () => {
   await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
@@ -2988,6 +3150,7 @@ $("target-org")?.addEventListener("change", () => run(async () => {
   if (alreadyDeployedToCurrentTarget()) state.deployFinished = "success";
   else if (state.deployFinished === "success") state.deployFinished = "";
   updateActionState();
+  maybeAdvanceFromStart();
 }));
 $("inspector-filter")?.addEventListener("input", renderInspector);
 document.querySelectorAll(".insp-tab").forEach((btn) => {

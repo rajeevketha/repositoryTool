@@ -334,6 +334,11 @@ button:disabled {
   cursor: not-allowed;
   filter: none;
 }
+button.action-done:disabled {
+  border-color: #6a5d4e !important;
+  color: #c4a574 !important;
+  background: #241e16 !important;
+}
 .primary {
   background: #2a3140;
   color: var(--text);
