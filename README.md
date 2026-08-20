@@ -11,7 +11,7 @@ Use **Back** / **Next** at the bottom. The numbered stepper (Start → Package �
 1. **Start** — Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). Stay on Start and choose **Local snapshots** or **Release repo** (GitHub, GitLab, or Azure). Click **Next** when that choice is done. If a release repo: follow **Help · connecting Git**, then **Use this repo**. OrgFlow saves From → To as the promotion path (for example DEC → QA). Add Staging and Prod when those orgs are logged in so the same Jira snapshot can travel Dev → QA → Staging → Prod. Pipelines are optional — connecting the repo is enough.
 2. **Package** — empty package opens on **What's new?** in the From org (a short list, not the full type grid). Tap to add. **Browse types** is one click away. After you tick something on an object, OrgFlow offers **one** same-object add (for example 2 Account layouts) — never a dump of every layout. Permission sets stay a review step, not auto-add. Pick another type to add more; earlier ticks stay in the package. **Back** from Retrieve returns here so you can add more — nothing is frozen.
 3. **Retrieve** — click **Retrieve from From org** when the package is complete. Then enter a **Jira key** like `PROJ-123` (spaces are OK — OrgFlow turns `Proj 123` into `PROJ-123`) and a **comment**. **Save to repo** stays off until that key looks right. After retrieve, **This retrieve vs saved snapshot** shows moving files on the left and the saved Jira version on the right. **Back** returns to Package. After you add members, retrieve again before Confirm.
-4. **Confirm** — review org names, Jira, comment, and what is going to the To org. **Validate in To org** is a dry run (nothing is saved). **Deploy** sends it. The result stays on this screen. After a successful deploy, **New package** starts over from Start.
+4. **Confirm** — review org names, Jira, comment, and what is going to the To org. If the package includes Apex, **Run Apex tests** is optional: pick classes to run in the To org for a coverage percentage. Test classes do not have to be in the package. Skip tests and Deploy still works in a sandbox. **Validate in To org** is a dry run (nothing is saved). **Deploy** sends it. The result stays on this screen. After a successful deploy, **New package** starts over from Start.
 
 The UI uses a warm charcoal + bronze theme. Accent color is used on the current step and the main action, not on every heading.
 
@@ -26,7 +26,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Submission kit (listing copy, privacy URL, permission justifications, screenshots): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** [files/orgflow-extension.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip) (unzip to an `orgflow/` folder)
-- **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.16**)
+- **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.17**)
 - **Privacy policy:** [docs/privacy.html](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/docs/privacy.html)
 
 ## Install (unpacked Chrome extension)
@@ -92,7 +92,7 @@ Wildcard `*` for a type still works if you want everything of that type. For rea
 | Comment | `Account status field + layout + flow` |
 | Source org | Config sandbox |
 | Target org | UAT |
-| Tests | `No tests` for config-only; **Test class runner** → `RunSpecifiedTests`; `Run local tests` if you prefer the whole org’s local tests |
+| Tests | Optional. If Apex is in the package, Confirm can run specified test classes **without adding them to the package**. Skip tests for sandbox deploys. Coverage % shows after Validate or Deploy when tests ran. |
 
 - **Local snapshots / GitHub, GitLab, or Azure** — versioning is always on. A team repo is optional sharing.
 - **Workbench** — wide window: picker on the left, live selected package on the right (category columns + package.xml). On Retrieve/Deploy the right pane is the Salesforce result panel.
@@ -106,7 +106,7 @@ Use it that way when:
 
 - You select **named components** (not an entire org wildcard) for a ticket
 - You **validate** (`checkOnly`) on the target, then deploy
-- Production deploys use the **Test class runner** (`RunSpecifiedTests`) or **Run local tests**
+- Production deploys can use optional **Run Apex tests** on Confirm (`RunSpecifiedTests`), or your org’s required test level
 - Git is the system of record so QA/UAT/prod get the same `PROJ-123-v2` zip
 
 It is **not** a full Copado/Gearset replacement: no dependency graph, no data (records) deploy, no conflict UI across branches, and Profiles/Experience Cloud/huge static resources are painful. Those limits are the Metadata API’s, not the Chrome shell.
@@ -141,7 +141,7 @@ When a release repo is on:
 
 - Git host tokens and Salesforce session ids stay in the extension’s local storage. They are never committed to this repository.
 - Treat the token like a password. Use a least-privilege PAT and revoke it if the browser is shared.
-- Production deploys should use the **Test class runner** or **Run local tests** (or your org’s required test level).
+- Production deploys can run specified tests from Confirm if your org requires coverage. Sandbox deploys can skip tests.
 
 ## Limits
 

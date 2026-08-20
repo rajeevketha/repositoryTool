@@ -19,7 +19,9 @@ import {
   formatDeployOutcome,
   formatRetrieveOutcome,
   formatOperationOutcome,
-  formatLocalOutcome
+  formatLocalOutcome,
+  parseCoverageFromXml,
+  summarizeCoverage
 } from "../extension/lib/packageXml.js";
 import { parseRepoInput } from "../extension/lib/github.js";
 import { isEditablePath } from "../extension/lib/files.js";
@@ -145,6 +147,33 @@ describe("soap result parsing", () => {
     assert.equal(formatted.items.some((i) => i.kind === "component" && /Invalid type/.test(i.problem)), true);
     assert.equal(formatted.items.some((i) => i.kind === "test" && /Assertion/.test(i.problem)), true);
     assert.match(formatted.items.find((i) => i.kind === "component").where, /line 12/);
+  });
+
+  it("reads Apex coverage percentage from a deploy result", () => {
+    const xml = `<result>
+      <done>true</done><success>true</success><status>Succeeded</status>
+      <numberTestsCompleted>2</numberTestsCompleted>
+      <runTestResult>
+        <codeCoverage>
+          <name>RepoController</name>
+          <numLocations>40</numLocations>
+          <numLocationsNotCovered>10</numLocationsNotCovered>
+          <type>Class</type>
+        </codeCoverage>
+        <codeCoverage>
+          <name>RepoService</name>
+          <numLocations>10</numLocations>
+          <numLocationsNotCovered>0</numLocationsNotCovered>
+        </codeCoverage>
+      </runTestResult>
+    </result>`;
+    const parsed = parseDeployResult(xml);
+    assert.equal(parsed.coverage.length, 2);
+    assert.equal(parsed.coverageSummary.percent, 80);
+    assert.equal(summarizeCoverage(parseCoverageFromXml(xml)).classes, 2);
+    const formatted = formatDeployOutcome(parsed);
+    assert.equal(formatted.items[0].kind, "coverage");
+    assert.match(formatted.items[0].text, /80%/);
   });
 
   it("formats retrieve and deploy waiting/success states", () => {

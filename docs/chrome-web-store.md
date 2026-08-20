@@ -1,4 +1,4 @@
-# Chrome Web Store submission (OrgFlow 1.11.16)
+# Chrome Web Store submission (OrgFlow 1.11.17)
 
 Use this tomorrow morning after you smoke-test in Chrome. Upload **`files/orgflow-chrome-web-store.zip`** — `manifest.json` is at the zip root (required). Do **not** upload `orgflow-extension.zip`; that nested `orgflow/` folder is only for Load unpacked.
 
@@ -31,7 +31,7 @@ Sequential Salesforce metadata deploys with Jira versions in this browser, or in
 
 OrgFlow helps Salesforce configurators move metadata from a sandbox to QA, UAT, or production.
 
-Work in order: Start → Package → Retrieve → Confirm. You cannot skip ahead. Log into both orgs in Chrome, detect them, and set From and To in the path bar (org names, not usernames). Package starts with what just changed in the From org; you can browse types when you need them. After you pick members on an object, OrgFlow can add a small set of matching layouts or record types in one tap. Back from Retrieve returns to Package unlocked so you can add members, then retrieve again. On Retrieve, Jira key (PROJ-123) and comment are required — Save to repo explains if the key is not a ticket id. After retrieve you can compare this package (left) with a saved snapshot (right) on the same screen. Confirm shows what will go to the To org. Validate in To org is a dry run; Deploy sends it; the result stays on that screen.
+Work in order: Start → Package → Retrieve → Confirm. You cannot skip ahead. Log into both orgs in Chrome, detect them, and set From and To in the path bar (org names, not usernames). Package starts with what just changed in the From org; you can browse types when you need them. After you pick members on an object, OrgFlow can add a small set of matching layouts or record types in one tap. Back from Retrieve returns to Package unlocked so you can add members, then retrieve again. On Retrieve, Jira key (PROJ-123) and comment are required — Save to repo explains if the key is not a ticket id. After retrieve you can compare this package (left) with a saved snapshot (right) on the same screen. Confirm shows what will go to the To org. If Apex is in the package, running tests is optional and does not add test classes to the package; coverage appears after Validate or Deploy when tests ran. Validate in To org is a dry run; Deploy sends it; the result stays on that screen.
 
 Versioning is always on. Snapshots are keyed by Jira (PROJ-123-v1). Keep them in this Chrome profile, or share them in GitHub, GitLab, or Azure DevOps so teammates can reuse the same package.
 

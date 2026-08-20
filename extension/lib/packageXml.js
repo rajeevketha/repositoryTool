@@ -338,6 +338,7 @@ export function parseDeployResult(xml) {
       });
     }
   }
+  const coverage = parseCoverageFromXml(xml);
   return {
     done,
     success,
@@ -349,7 +350,43 @@ export function parseDeployResult(xml) {
     numberTestErrors: xmlText(xml, "numberTestErrors"),
     failures: failures.filter((f) => f.problem || f.fullName),
     successes,
-    testFailures
+    testFailures,
+    coverage,
+    coverageSummary: summarizeCoverage(coverage)
+  };
+}
+
+export function parseCoverageFromXml(xml) {
+  const rows = [];
+  const blocks = String(xml || "").split(/<(?:[\w]+:)?codeCoverage>/i).slice(1);
+  for (const block of blocks) {
+    const chunk = block.split(/<\/(?:[\w]+:)?codeCoverage>/i)[0];
+    const name = xmlText(chunk, "name");
+    const numLocations = Number(xmlText(chunk, "numLocations") || 0);
+    const notCovered = Number(xmlText(chunk, "numLocationsNotCovered") || 0);
+    if (!name || !Number.isFinite(numLocations) || numLocations <= 0) continue;
+    const covered = Math.max(0, numLocations - (Number.isFinite(notCovered) ? notCovered : 0));
+    rows.push({
+      name,
+      type: xmlText(chunk, "type") || "Class",
+      numLocations,
+      numLocationsNotCovered: Number.isFinite(notCovered) ? notCovered : 0,
+      percent: Math.round((covered / numLocations) * 100)
+    });
+  }
+  rows.sort((a, b) => a.name.localeCompare(b.name));
+  return rows;
+}
+
+export function summarizeCoverage(rows = []) {
+  const loc = rows.reduce((n, row) => n + Number(row.numLocations || 0), 0);
+  const missed = rows.reduce((n, row) => n + Number(row.numLocationsNotCovered || 0), 0);
+  if (!loc) return null;
+  return {
+    percent: Math.round(((loc - missed) / loc) * 100),
+    classes: rows.length,
+    covered: loc - missed,
+    numLocations: loc
   };
 }
 
@@ -411,6 +448,15 @@ export function formatDeployOutcome(result) {
       const n = result.numberComponentsDeployed;
       items.push({ kind: "info", text: n ? `${n} component(s) deployed.` : "Deploy succeeded. Salesforce reported no component errors." });
     }
+    const coverageItem = coverageOutcomeItem(result);
+    if (coverageItem) items.unshift(coverageItem);
+    else if (Number(result.numberTestsCompleted) > 0) {
+      items.unshift({
+        kind: "info",
+        kicker: "Tests",
+        text: `${result.numberTestsCompleted} test(s) completed${result.numberTestErrors ? ` · ${result.numberTestErrors} failed` : ""}.`
+      });
+    }
     items.push(...gitRecordItems(result.gitRecord));
     const gitFail = result.gitRecord && result.gitRecord.ok === false;
     return {
@@ -446,6 +492,20 @@ export function formatDeployOutcome(result) {
     ? (errN ? `${result.status} · ${errN} error(s)` : result.status)
     : `Failed · ${result.numberComponentErrors || errN || items.length} error(s)`;
   return { ok: false, title, items };
+}
+
+function coverageOutcomeItem(result) {
+  const summary = result.coverageSummary || summarizeCoverage(result.coverage || []);
+  if (!summary) return null;
+  const names = (result.coverage || []).slice(0, 4).map((row) => `${row.name} ${row.percent}%`);
+  const extra = (result.coverage || []).length > 4 ? ` · +${result.coverage.length - 4} more` : "";
+  const tests = result.numberTestsCompleted ? ` · ${result.numberTestsCompleted} tests` : "";
+  return {
+    kind: "coverage",
+    kicker: "Apex coverage",
+    text: `${summary.percent}% across ${summary.classes} class${summary.classes === 1 ? "" : "es"}${tests}.`,
+    detail: names.length ? `${names.join(" · ")}${extra}` : ""
+  };
 }
 
 function gitRecordItems(gitRecord) {

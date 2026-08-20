@@ -1288,7 +1288,28 @@ body[data-layout="workbench"] .mode-grid { grid-template-columns: 1fr 1fr; }
 }
 .inspector-foot { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid #333; }
 .suggest-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.suggest-chip { background: #3a220f; color: #ffd2a8; border-radius: 999px; padding: 4px 8px; font-size: 11px; }
+.suggest-chip {
+  background: #241e16;
+  color: #ead9c0;
+  border: 1px solid #4a4034;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.suggest-chip:hover,
+.suggest-chip:focus-visible { border-color: #c4a574; }
+.test-class-list { max-height: 180px; }
+.outcome-item.coverage {
+  border-color: #5a4a28;
+  background: #1c1810;
+}
+#apex-tests-card .title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .workbench-banner { background: #241f19; border: 1px solid #4a4034; color: var(--muted); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
 .switch { margin-top: 0; font-weight: 700; }
 

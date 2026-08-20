@@ -1010,7 +1010,10 @@ function applyStepUi() {
   }
   if (step.id === "package") setTimeout(() => warmRecentHints(), 0);
   if (step.id === "review") setTimeout(() => maybeRefreshRetrieveCompare(), 0);
-  if (step.id === "deploy") renderDeployManifest();
+  if (step.id === "deploy") {
+    renderDeployManifest();
+    renderTestRunner();
+  }
   renderGitUi();
   updatePickCopy();
   syncTypeChosenUi();
@@ -1339,7 +1342,7 @@ function renderInspector() {
   $("inspector-tests").textContent = tests.length
     ? `${tests.length} specified test${tests.length === 1 ? "" : "s"}: ${tests.slice(0, 8).join(", ")}${tests.length > 8 ? "…" : ""}`
     : packageHasApex(state.packageTypes)
-      ? "Apex is in this package. Salesforce will report test errors in the result panel."
+      ? "Optional tests on Confirm — they do not have to be in this package."
       : "No specified tests (config-only is fine).";
 }
 
@@ -1372,6 +1375,13 @@ function outcomeItemHtml(item) {
       <div class="outcome-kicker">Apex test</div>
       <strong>${escapeHtml(item.name || "Test")}</strong>
       <p>${escapeHtml(item.problem)}</p>
+    </article>`;
+  }
+  if (item.kind === "coverage") {
+    return `<article class="outcome-item coverage">
+      <div class="outcome-kicker">${escapeHtml(item.kicker || "Apex coverage")}</div>
+      <strong>${escapeHtml(item.text)}</strong>
+      ${item.detail ? `<p class="muted">${escapeHtml(item.detail)}</p>` : ""}
     </article>`;
   }
   if (item.kind === "success") {
@@ -3058,33 +3068,39 @@ function specifiedTests() {
 
 function renderTestRunner() {
   const tests = specifiedTests();
-  $("test-count").textContent = String(tests.length);
+  const hasApex = packageHasApex(state.packageTypes);
+  $("apex-tests-card")?.classList.toggle("hidden", currentStepId() !== "deploy" || (!hasApex && !tests.length));
+  if ($("test-count")) $("test-count").textContent = String(tests.length);
   const hints = suggestedTestClasses(state.packageTypes);
   const suggest = $("suggested-tests");
   const chips = [];
   if (hints.wildcard) {
-    chips.push(`<div class="muted">This package includes all Apex classes (*). Scan the org and pick the tests you need.</div>`);
+    chips.push(`<div class="muted">This package includes all Apex classes (*). List tests in the From org if you want to run some.</div>`);
   }
   for (const name of hints.inPackage) {
     const on = tests.includes(name);
-    chips.push(`<button type="button" class="suggest-chip" data-test-toggle="${escapeHtml(name)}">${on ? "✓ " : "+ "}${escapeHtml(name)} (in package)</button>`);
+    chips.push(`<button type="button" class="suggest-chip" data-test-toggle="${escapeHtml(name)}">${on ? "✓ " : ""}${escapeHtml(name)} · in package</button>`);
   }
   for (const name of hints.suggested) {
     const on = tests.includes(name);
-    chips.push(`<button type="button" class="suggest-chip" data-test-toggle="${escapeHtml(name)}">${on ? "✓ " : "+ "}${escapeHtml(name)} (suggested)</button>`);
+    chips.push(`<button type="button" class="suggest-chip" data-test-toggle="${escapeHtml(name)}">${on ? "✓ Run " : "Run "}${escapeHtml(name)}</button>`);
   }
-  suggest.innerHTML = chips.length ? `<div class="suggest-row">${chips.join("")}</div>` : "";
+  if (suggest) suggest.innerHTML = chips.length ? `<div class="suggest-row">${chips.join("")}</div>` : "";
 
   const filter = ($("test-filter")?.value || "").trim().toLowerCase();
   const cache = state.testClassCache;
   const list = $("test-class-list");
   const status = $("test-runner-status");
-  if (packageHasApex(state.packageTypes) && !tests.length) {
-    status.textContent = "Apex is in this package. Pick tests here, or Salesforce will require tests on production deploys.";
+  if (!status || !list) {
+    renderCoverageLine();
+    return;
+  }
+  if (!tests.length) {
+    status.textContent = hasApex
+      ? "Optional. Skip this to deploy without tests. Suggested names run in the To org — they are not added to the package."
+      : "Optional. Scan the From org if you want to run tests.";
   } else if (!cache) {
-    status.textContent = tests.length
-      ? `${tests.length} test class${tests.length === 1 ? "" : "es"} selected.`
-      : "Optional for config-only packages. Scan the source org to pick *Test classes.";
+    status.textContent = `${tests.length} test class${tests.length === 1 ? "" : "es"} will run in the To org. They are not added to the package.`;
   } else if (cache.error) {
     status.textContent = cache.error;
   } else {
@@ -3098,7 +3114,8 @@ function renderTestRunner() {
   if (!combined.length) {
     list.innerHTML = tests.length
       ? `<div class="empty">No test classes match that filter.</div>`
-      : `<div class="empty">No test classes listed yet.</div>`;
+      : `<div class="empty">No list yet. Use a suggested name, or List test classes.</div>`;
+    renderCoverageLine();
     return;
   }
   const cap = isWorkbench() ? WORKBENCH_MEMBERS : MAX_MEMBERS;
@@ -3107,10 +3124,30 @@ function renderTestRunner() {
     shown
       .map((item) => {
         const checked = tests.includes(item.fullName) ? "checked" : "";
-        return `<label><input type="checkbox" data-test="${escapeHtml(item.fullName)}" ${checked} /> ${escapeHtml(item.fullName)}</label>`;
+        return `<label class="member-row"><input type="checkbox" data-test="${escapeHtml(item.fullName)}" ${checked} /><span class="member-mark" aria-hidden="true">✓</span><span class="member-name">${escapeHtml(item.fullName)}</span></label>`;
       })
       .join("") +
     (combined.length > cap ? `<div class="muted">Showing ${cap} of ${combined.length}. Filter to find the rest.</div>` : "");
+  renderCoverageLine();
+}
+
+function renderCoverageLine() {
+  const el = $("apex-coverage-line");
+  if (!el) return;
+  const report = state.lastValidate?.coverageSummary || state.lastDeploy?.coverageSummary;
+  const tests = specifiedTests();
+  if (report?.percent != null) {
+    el.textContent = `${report.percent}% coverage across ${report.classes} class${report.classes === 1 ? "" : "es"} in the To org.`;
+    el.dataset.state = "ok";
+    return;
+  }
+  if (tests.length) {
+    el.textContent = "Validate or Deploy to see coverage for the tests you picked.";
+    el.dataset.state = "empty";
+    return;
+  }
+  el.textContent = "Coverage appears after Validate or Deploy if you ran tests.";
+  el.dataset.state = "empty";
 }
 
 async function setSpecifiedTest(name, selected) {
@@ -3118,12 +3155,8 @@ async function setSpecifiedTest(name, selected) {
   if (selected) set.add(name);
   else set.delete(name);
   state.specifiedTests = normalizeTestNames([...set]);
-  if (state.specifiedTests.length && $("test-level").value === "NoTestRun") {
-    $("test-level").value = "RunSpecifiedTests";
-  }
-  if (!state.specifiedTests.length && $("test-level").value === "RunSpecifiedTests") {
-    $("test-level").value = packageHasApex(state.packageTypes) ? "RunLocalTests" : "NoTestRun";
-  }
+  if (state.specifiedTests.length && $("test-level")) $("test-level").value = "RunSpecifiedTests";
+  if (!state.specifiedTests.length && $("test-level")) $("test-level").value = "NoTestRun";
   await persistShipOptions();
   renderTestRunner();
   renderInspector();
@@ -3246,14 +3279,15 @@ async function filesForDeploy() {
 
 function deployOptions({ checkOnly = false } = {}) {
   const runTests = specifiedTests();
-  const selectedLevel = $("test-level").value;
-  if (selectedLevel === "RunSpecifiedTests" && !runTests.length) {
-    throw new Error("Pick at least one test class in the Test class runner, or choose a different Tests option.");
+  const selectedLevel = $("test-level")?.value || "NoTestRun";
+  if (runTests.length) {
+    return { testLevel: "RunSpecifiedTests", checkOnly: Boolean(checkOnly), runTests };
   }
+  const level = selectedLevel === "RunSpecifiedTests" ? "NoTestRun" : selectedLevel;
   return {
-    testLevel: runTests.length ? "RunSpecifiedTests" : selectedLevel,
+    testLevel: level,
     checkOnly: Boolean(checkOnly),
-    runTests
+    runTests: []
   };
 }
 
@@ -3301,16 +3335,17 @@ async function deploySelected({ checkOnly = false } = {}) {
     if (checkOnly) {
       state.deployFinished = "";
       state.lastValidate = result.success
-        ? { ok: true, targetKey: orgKey(target), fingerprint: packageFingerprint() }
+        ? { ok: true, targetKey: orgKey(target), fingerprint: packageFingerprint(), coverageSummary: result.coverageSummary || null }
         : null;
     } else {
       state.deployFinished = result.success ? "success" : "failed";
       if (result.success) {
-        state.lastDeploy = { targetKey: orgKey(target), fingerprint: packageFingerprint() };
+        state.lastDeploy = { targetKey: orgKey(target), fingerprint: packageFingerprint(), coverageSummary: result.coverageSummary || null };
       }
     }
     state.shipKind = "";
     showOutcome({ ...result, operation });
+    renderCoverageLine();
     updateActionState();
     if (!result.success) {
       const formatted = formatOperationOutcome({ ...result, operation });
@@ -3988,9 +4023,7 @@ document.querySelectorAll(".insp-tab").forEach((btn) => {
 $("btn-scan-tests")?.addEventListener("click", () => run(scanOrgTests));
 $("btn-clear-tests")?.addEventListener("click", () => run(async () => {
   state.specifiedTests = [];
-  if ($("test-level").value === "RunSpecifiedTests") {
-    $("test-level").value = packageHasApex(state.packageTypes) ? "RunLocalTests" : "NoTestRun";
-  }
+  if ($("test-level")) $("test-level").value = "NoTestRun";
   await persistShipOptions();
   renderTestRunner();
   renderInspector();

@@ -213,6 +213,29 @@
             <div id="deploy-manifest" class="deploy-manifest" tabindex="0"></div>
             <div id="package-summary-body" class="hidden"></div>
           </article>
+          <article id="apex-tests-card" class="card hidden">
+            <p class="suggestion-kicker">Optional</p>
+            <div class="title">Run Apex tests <span id="test-count" class="badge">0</span></div>
+            <p class="hint">Test classes do not have to be in this package. Pick classes to run in the To org if you want a coverage percentage. Skip this and Deploy still works in a sandbox.</p>
+            <div id="suggested-tests"></div>
+            <div class="member-toolbar">
+              <input id="test-filter" type="search" placeholder="Filter test classes" autocomplete="off" />
+            </div>
+            <p id="test-runner-status" class="muted"></p>
+            <div id="test-class-list" class="type-list member-list test-class-list"></div>
+            <div class="row-actions">
+              <button type="button" id="btn-scan-tests" class="secondary" data-busy data-needs="source">List test classes in From org</button>
+              <button type="button" id="btn-clear-tests" class="ghost-text">Don't run tests</button>
+            </div>
+            <label>
+              Add a test class name
+              <div class="inline-add">
+                <input id="manual-test" type="text" placeholder="MyClassTest" autocomplete="off" />
+                <button type="button" id="btn-add-test" class="secondary">Run this</button>
+              </div>
+            </label>
+            <p id="apex-coverage-line" class="field-hint" data-state="empty">Coverage appears after Validate or Deploy if you ran tests.</p>
+          </article>
           <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
           <div class="actions deploy-actions">
             <button id="btn-validate-selected" class="secondary" data-busy data-needs="source,target,package,distinct,retrieve">Validate in To org</button>
@@ -307,15 +330,6 @@
               <option value="RunAllTestsInOrg">Run all tests</option>
             </select>
             <input id="check-only" type="checkbox" />
-            <span id="test-count">0</span>
-            <div id="suggested-tests"></div>
-            <input id="test-filter" />
-            <div id="test-runner-status"></div>
-            <div id="test-class-list"></div>
-            <input id="manual-test" />
-            <button type="button" id="btn-scan-tests"></button>
-            <button type="button" id="btn-clear-tests"></button>
-            <button type="button" id="btn-add-test"></button>
           </div>
 
         <section id="view-components" class="view">
