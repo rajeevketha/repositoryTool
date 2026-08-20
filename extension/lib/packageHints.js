@@ -1,14 +1,17 @@
 import { FRIENDLY_LABELS } from "./metadataTypes.js";
 import { memberGroupKey } from "./packageView.js";
 
-/** Small types to scan for “what’s new”. Keep this short so Package stays light. */
+/** Types to scan for “what’s new”. Apex first so a class created today shows before slower field lists. */
 export const RECENT_HINT_TYPES = [
+  "ApexClass",
+  "ApexTrigger",
+  "LightningComponentBundle",
   "Flow",
-  "ValidationRule",
-  "RecordType",
+  "CustomField",
   "Layout",
   "FlexiPage",
-  "CustomField",
+  "ValidationRule",
+  "RecordType",
   "PermissionSet"
 ];
 

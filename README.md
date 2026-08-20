@@ -26,7 +26,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Submission kit (listing copy, privacy URL, permission justifications, screenshots): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** [files/orgflow-extension.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip) (unzip to an `orgflow/` folder)
-- **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.17**)
+- **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.18**)
 - **Privacy policy:** [docs/privacy.html](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/docs/privacy.html)
 
 ## Install (unpacked Chrome extension)
@@ -75,7 +75,7 @@ Each configurator can version **without Git**. Connect a Git host only when the 
 
 ### Pick configuration (Package → Retrieve)
 
-1. **Package** — one screen, not two tabs. An empty package starts with **What's new?** (recent fields, layouts, flows, permission sets). Tap to add, or **Browse types**. After you pick members on an object, a single **Add 2 layouts on Account** (or record types / rules) prompt appears when the matching list is small. Crowded types stay “open the list”. Permission sets are never auto-added. Members list **newest first**. Type a member such as `Account.Customer_Status__c` if you know the name.
+1. **Package** — one screen, not two tabs. An empty package starts with **What's new?** (recent Apex, fields, layouts, flows, permission sets). Tap to add, or **Browse types**. After you pick members on an object, a single **Add 2 layouts on Account** (or record types / rules) prompt appears when the matching list is small. Crowded types stay “open the list”. Permission sets are never auto-added. Members list **newest first**. Type a member such as `Account.Customer_Status__c` if you know the name.
 2. **Selected package** (side of the workbench, or below the picker in the side panel) updates on every tick:
    - **By category** — columns/groups by metadata type, and by object for fields/layouts
    - **package.xml** — the exact manifest Salesforce will retrieve

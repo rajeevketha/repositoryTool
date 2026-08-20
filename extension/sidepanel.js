@@ -1759,7 +1759,7 @@ function renderPackageHints() {
     } else if (state.recentWarming || !source) {
       startList.innerHTML = `<p class="start-wait">${source ? `Looking at what changed in ${escapeHtml(orgName)}` : "Set From in the path bar to see recent changes."}</p>`;
     } else {
-      startList.innerHTML = `<p class="start-empty">Nothing recent among fields, layouts, flows, or permission sets. Search a type instead.</p>`;
+      startList.innerHTML = `<p class="start-empty">Nothing recent among Apex, fields, layouts, or flows. Search a type instead.</p>`;
     }
   }
 

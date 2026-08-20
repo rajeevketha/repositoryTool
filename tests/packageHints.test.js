@@ -7,7 +7,8 @@ import {
   packageHasMember,
   shortTypeLabel,
   memberBelongsToObject,
-  companionOffer
+  companionOffer,
+  RECENT_HINT_TYPES
 } from "../extension/lib/packageHints.js";
 
 describe("package hints", () => {
@@ -46,6 +47,18 @@ describe("package hints", () => {
     assert.deepEqual(items.map((i) => i.fullName), ["Account.New__c", "Account_Status_Flow"]);
     assert.equal(packageHasMember([{ name: "CustomField", members: ["Account.New__c"] }], "CustomField", "Account.New__c"), true);
     assert.equal(packageHasMember([{ name: "CustomField", members: ["Account.New__c"] }], "CustomField", "Account.Old__c"), false);
+  });
+
+  it("includes today's Apex class in the recent list", () => {
+    assert.ok(RECENT_HINT_TYPES.includes("ApexClass"));
+    assert.ok(RECENT_HINT_TYPES.includes("ApexTrigger"));
+    const now = Date.parse("2026-08-20T12:00:00Z");
+    const items = recentHintItems({
+      ApexClass: [{ fullName: "RepoController", lastModifiedDate: "2026-08-20T11:00:00Z" }],
+      CustomField: [{ fullName: "Account.Status__c", lastModifiedDate: "2026-08-19T12:00:00Z" }]
+    }, { now, windowMs: 7 * 24 * 60 * 60 * 1000, limit: 8 });
+    assert.equal(items[0].type, "ApexClass");
+    assert.equal(items[0].fullName, "RepoController");
   });
 
   it("matches layouts, fields, and Lightning pages to an object", () => {
