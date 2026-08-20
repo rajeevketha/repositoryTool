@@ -77,10 +77,12 @@ import {
 import { compareFileSets, revertSelectedInto, unifiedDiff, fileText } from "./lib/diff.js";
 import {
   RECENT_HINT_TYPES,
+  COMPANION_TYPES,
   relatedTypeHints,
   recentHintItems,
   packageHasMember,
-  shortTypeLabel
+  shortTypeLabel,
+  companionOffer
 } from "./lib/packageHints.js";
 
 const $ = (id) => document.getElementById(id);
@@ -147,7 +149,11 @@ const state = {
   versionsReturnStep: 2,
   gitLayout: null,
   gitAutoScaffoldDone: false,
-  recentWarmGen: 0
+  recentWarmGen: 0,
+  recentWarming: false,
+  browseTypes: false,
+  dismissedCompanions: [],
+  pendingCompanion: null
 };
 
 function escapeHtml(value) {
@@ -835,11 +841,20 @@ function updatePickCopy() {
   const total = STEPS.length;
   if ($("pick-kicker")) $("pick-kicker").textContent = `Step ${state.stepIndex + 1} of ${total}`;
   if (stepId === "package") {
-    if ($("pick-heading")) $("pick-heading").textContent = type ? `Package · ${type.label}` : "Build the package";
+    const empty = memberCount(state.packageTypes) === 0;
+    if ($("pick-heading")) {
+      $("pick-heading").textContent = type && !empty
+        ? `Package · ${type.label}`
+        : (empty && !state.browseTypes ? "What's moving?" : "Build the package");
+    }
     if ($("pick-lead")) {
-      $("pick-lead").textContent = type
-        ? "Tick members below. Pick another type above to add more (fields, then layouts, then flows…). Back from Retrieve returns here so you can add more."
-        : "Pick a type (Custom Field, Layout, Flow…), then tick the members for this deploy.";
+      if (empty && !state.browseTypes) {
+        $("pick-lead").textContent = "Start with what just changed in the From org. Search a type if you already know the name.";
+      } else if (type) {
+        $("pick-lead").textContent = "Tick members below. Pick another type above to add more. Back from Retrieve returns here so you can add more.";
+      } else {
+        $("pick-lead").textContent = "Pick a type, then tick the members for this deploy.";
+      }
     }
   } else if (stepId === "review") {
     if ($("pick-heading")) $("pick-heading").textContent = "Retrieve from the From org";
@@ -928,7 +943,9 @@ function updateWizardNav() {
       ? "Choose Local snapshots or Release repo, then Next."
       : `Step 1 of ${STEPS.length} · ${currentStep().label}`;
   } else if (state.stepIndex === stepIndexById("package")) {
-    hint.textContent = "Pick a type or tap something you just changed, then Next.";
+    hint.textContent = memberCount(state.packageTypes)
+      ? "Add related members if you need them, then Next."
+      : "Tap something you just changed, or browse types, then Next.";
   } else if (state.stepIndex === stepIndexById("review")) {
     hint.textContent = hasFreshRetrieve() && state.retrieveOk
       ? "Retrieve succeeded. Enter Jira and a comment, then Next to confirm deploy — or Back to add members."
@@ -1217,6 +1234,9 @@ async function persistPackage() {
   state.settings = await loadSettings();
   if (!state.xmlDirty) $("package-xml").value = currentXml();
   renderPackageUi();
+  if (currentStepId() === "package" && memberCount(state.packageTypes)) {
+    setTimeout(() => warmCompanionTypes(), 0);
+  }
 }
 
 function renderPackageUi() {
@@ -1563,6 +1583,7 @@ function chooseType(typeName, { objectFilter = "", memberQuery = "" } = {}) {
   if (!typeName) return;
   state.activeType = typeName;
   state.typeChosen = true;
+  state.browseTypes = true;
   state.objectFilter = objectFilter || "";
   if (state.activeType === "CustomObject" && !state.membersCache.CustomObject) {
     state.membersCache.CustomObject = { items: withStandardObjectMembers("CustomObject", []), error: "" };
@@ -1628,12 +1649,18 @@ function renderTypePicker() {
 
 function syncTypeChosenUi() {
   const onPackage = currentStepId() === "package";
+  const empty = memberCount(state.packageTypes) === 0;
+  const searching = Boolean($("type-search")?.value.trim());
+  const startMode = onPackage && empty && !state.browseTypes && !searching;
   $("type-browse")?.classList.toggle("hidden", !onPackage);
-  $("type-chosen")?.classList.toggle("hidden", !onPackage || !state.typeChosen);
-  $("member-panel")?.classList.toggle("hidden", !onPackage || !state.typeChosen);
-  $("compact-package-card")?.classList.toggle("hidden", !onPackage);
+  $("type-browse")?.classList.toggle("collapsed", startMode);
+  $("btn-show-recent")?.classList.toggle("hidden", !onPackage || !empty || !state.browseTypes);
+  $("type-chosen")?.classList.toggle("hidden", !onPackage || !state.typeChosen || startMode);
+  $("member-panel")?.classList.toggle("hidden", !onPackage || !state.typeChosen || startMode);
+  $("compact-package-card")?.classList.toggle("hidden", !onPackage || empty);
+  $("package-start")?.classList.toggle("hidden", !startMode);
   const objectScoped = OBJECT_FILTER_TYPES.includes(state.activeType) || state.activeType === "CustomObject";
-  $("object-filter-wrap")?.classList.toggle("hidden", !onPackage || !state.typeChosen || !objectScoped);
+  $("object-filter-wrap")?.classList.toggle("hidden", !onPackage || !state.typeChosen || !objectScoped || startMode);
   if (state.activeType === "CustomObject") {
     $("member-help").textContent = "Tick objects for this deploy. Pick another type above to add fields, layouts, or flows — earlier ticks stay in the package.";
   } else if (OBJECT_FILTER_TYPES.includes(state.activeType)) {
@@ -1654,48 +1681,99 @@ function membersByTypeFromCache() {
 
 function renderPackageHints() {
   const wrap = $("package-hints");
-  const recentWrap = $("recent-hints");
+  const start = $("package-start");
+  const startList = $("package-start-list");
+  const companionWrap = $("companion-hint");
   const relatedWrap = $("related-hints");
-  const recentChips = $("recent-hint-chips");
   const relatedChips = $("related-hint-chips");
-  if (!wrap || !recentWrap || !relatedWrap) return;
+  if (!wrap || !relatedWrap) return;
   const onPackage = currentStepId() === "package";
   if (!onPackage) {
     wrap.classList.add("hidden");
+    start?.classList.add("hidden");
     return;
   }
 
+  const empty = memberCount(state.packageTypes) === 0;
+  const source = selectedOrg("source-org");
+  const orgName = source?.label || "the From org";
+  if ($("package-start-kicker")) $("package-start-kicker").textContent = orgName;
+  if ($("package-start-title")) $("package-start-title").textContent = "What's new?";
+
   const now = Date.now();
-  let recent = recentHintItems(membersByTypeFromCache(), { now, windowMs: 7 * 24 * 60 * 60 * 1000, limit: 6 });
-  if (recent.length < 3) {
-    recent = recentHintItems(membersByTypeFromCache(), { now, windowMs: 30 * 24 * 60 * 60 * 1000, limit: 6 });
+  let recent = recentHintItems(membersByTypeFromCache(), { now, windowMs: 7 * 24 * 60 * 60 * 1000, limit: 8 });
+  if (recent.length < 4) {
+    recent = recentHintItems(membersByTypeFromCache(), { now, windowMs: 30 * 24 * 60 * 60 * 1000, limit: 8 });
   }
-  if (recentChips) {
-    recentChips.innerHTML = recent.map((row) => {
-      const inPack = packageHasMember(state.packageTypes, row.type, row.fullName);
-      const when = formatMemberWhen(row.lastModifiedDate);
-      return `<button type="button" class="hint-chip ${inPack ? "in-package" : ""}" data-hint-add="1" data-type="${escapeHtml(row.type)}" data-member="${escapeHtml(row.fullName)}" title="${inPack ? "Already in this package" : "Add to this package"}">
-        <span class="hint-type">${escapeHtml(shortTypeLabel(row.type))}</span>
-        <span class="hint-name">${escapeHtml(row.fullName)}</span>
-        <span class="hint-meta">${escapeHtml(when)}${inPack ? " · in package" : ""}</span>
+  if (startList) {
+    if (recent.length) {
+      startList.innerHTML = recent.map((row) => {
+        const inPack = packageHasMember(state.packageTypes, row.type, row.fullName);
+        const when = formatMemberWhen(row.lastModifiedDate);
+        return `<button type="button" class="start-row ${inPack ? "in-package" : ""}" data-hint-add="1" data-type="${escapeHtml(row.type)}" data-member="${escapeHtml(row.fullName)}">
+          <span class="start-row-copy">
+            <span class="hint-type">${escapeHtml(shortTypeLabel(row.type))}</span>
+            <span class="hint-name">${escapeHtml(row.fullName)}</span>
+            <span class="hint-meta">${escapeHtml(when)}${row.lastModifiedByName ? ` · ${escapeHtml(row.lastModifiedByName)}` : ""}</span>
+          </span>
+          <span class="start-row-add">${inPack ? "In package" : "Add"}</span>
+        </button>`;
+      }).join("");
+    } else if (state.recentWarming || !source) {
+      startList.innerHTML = `<p class="start-wait">${source ? `Looking at what changed in ${escapeHtml(orgName)}` : "Set From in the path bar to see recent changes."}</p>`;
+    } else {
+      startList.innerHTML = `<p class="start-empty">Nothing recent among fields, layouts, flows, or permission sets. Search a type instead.</p>`;
+    }
+  }
+
+  const offer = companionOffer(state.packageTypes, membersByTypeFromCache(), {
+    activeType: state.activeType,
+    dismissedKeys: state.dismissedCompanions
+  });
+  state.pendingCompanion = offer.add;
+  if (companionWrap && $("companion-title") && $("btn-companion-add")) {
+    if (offer.add && !empty) {
+      $("companion-title").textContent = offer.add.title;
+      if ($("companion-detail")) $("companion-detail").textContent = offer.add.detail;
+      $("btn-companion-add").textContent = offer.add.count === 1 ? "Add it" : `Add ${offer.add.count}`;
+      companionWrap.classList.remove("hidden");
+    } else {
+      companionWrap.classList.add("hidden");
+    }
+  }
+
+  const browse = [];
+  if (offer.browse.length) {
+    for (const row of offer.browse) browse.push(row);
+  } else if (!offer.add && offer.object) {
+    const fallback = relatedTypeHints(state.packageTypes, state.activeType, 2);
+    for (const row of fallback.types) {
+      browse.push({ type: row.type, label: row.label, object: fallback.object, count: 0 });
+    }
+  }
+  if (offer.permissionSets && browse.length < 2) {
+    browse.push({ type: "PermissionSet", label: "permission sets", object: "", count: 0, access: true });
+  }
+  if ($("related-hint-kicker")) {
+    $("related-hint-kicker").textContent = offer.object ? `Also on ${offer.object}` : "Also on this object";
+  }
+  if (relatedChips) {
+    relatedChips.innerHTML = browse.map((row) => {
+      const meta = row.access
+        ? "Review field access"
+        : (row.count ? `${row.count} to review` : "Open list");
+      const name = row.access ? "Permission sets" : row.label;
+      return `<button type="button" class="hint-chip" data-hint-related="1" data-type="${escapeHtml(row.type)}" data-object="${escapeHtml(row.object || "")}">
+        <span class="hint-type">${escapeHtml(row.object || orgName)}</span>
+        <span class="hint-name">${escapeHtml(name)}</span>
+        <span class="hint-meta">${escapeHtml(meta)}</span>
       </button>`;
     }).join("");
   }
-  recentWrap.classList.toggle("hidden", !recent.length);
-
-  const related = relatedTypeHints(state.packageTypes, state.activeType, 4);
-  if ($("related-hint-kicker")) {
-    $("related-hint-kicker").textContent = related.object ? `Also on ${related.object}` : "Also on this object";
-  }
-  if (relatedChips) {
-    relatedChips.innerHTML = related.types.map((row) => `<button type="button" class="hint-chip" data-hint-related="1" data-type="${escapeHtml(row.type)}" data-object="${escapeHtml(related.object)}" title="Show ${escapeHtml(row.label)} for ${escapeHtml(related.object)}">
-        <span class="hint-type">${escapeHtml(related.object)}</span>
-        <span class="hint-name">${escapeHtml(row.label)}</span>
-        <span class="hint-meta">Open list</span>
-      </button>`).join("");
-  }
-  relatedWrap.classList.toggle("hidden", !related.object || !related.types.length);
-  wrap.classList.toggle("hidden", recentWrap.classList.contains("hidden") && relatedWrap.classList.contains("hidden"));
+  relatedWrap.classList.toggle("hidden", empty || !browse.length || Boolean(offer.add));
+  wrap.classList.toggle("hidden", empty || (companionWrap?.classList.contains("hidden") && relatedWrap.classList.contains("hidden")));
+  syncTypeChosenUi();
+  updatePickCopy();
 }
 
 async function prefetchMembers(typeName) {
@@ -1723,10 +1801,22 @@ async function prefetchMembers(typeName) {
 async function warmRecentHints() {
   if (currentStepId() !== "package" || !selectedOrg("source-org")) return;
   const gen = ++state.recentWarmGen;
+  state.recentWarming = true;
+  renderPackageHints();
   for (const typeName of RECENT_HINT_TYPES) {
     if (gen !== state.recentWarmGen || currentStepId() !== "package") return;
     await prefetchMembers(typeName);
     if (gen !== state.recentWarmGen) return;
+    renderPackageHints();
+  }
+  if (gen === state.recentWarmGen) state.recentWarming = false;
+  renderPackageHints();
+}
+
+async function warmCompanionTypes() {
+  if (currentStepId() !== "package" || memberCount(state.packageTypes) === 0) return;
+  for (const row of COMPANION_TYPES) {
+    await prefetchMembers(row.type);
     renderPackageHints();
   }
 }
@@ -1746,11 +1836,38 @@ async function addRecentHint(typeName, fullName) {
     objectFilter: OBJECT_FILTER_TYPES.includes(typeName) || typeName === "CustomObject" ? object : "",
     memberQuery: object && !OBJECT_FILTER_TYPES.includes(typeName) ? object : ""
   });
-  setStatus(`Added ${fullName} · pick more on ${shortTypeLabel(typeName)} if you need them`, "ok");
+  setStatus(`Added ${fullName}`, "ok");
+  setTimeout(() => warmCompanionTypes(), 0);
+}
+
+async function addCompanionMembers() {
+  const offer = state.pendingCompanion;
+  if (!offer?.members?.length) return;
+  let pkg = state.packageTypes;
+  const listed = (state.membersCache[offer.type]?.items || []).map((i) => i.fullName);
+  for (const name of offer.members) {
+    pkg = toggleMember(pkg, offer.type, name, true, listed);
+  }
+  state.packageTypes = pkg;
+  invalidateStaged();
+  await persistPackage();
+  chooseType(offer.type, {
+    objectFilter: OBJECT_FILTER_TYPES.includes(offer.type) || offer.type === "CustomObject" ? offer.object : "",
+    memberQuery: ""
+  });
+  setStatus(`Added ${offer.members.length} on ${offer.object}`, "ok");
+}
+
+function skipCompanion() {
+  const offer = state.pendingCompanion;
+  if (offer?.key) state.dismissedCompanions = [...state.dismissedCompanions, offer.key];
+  state.pendingCompanion = null;
+  renderPackageHints();
 }
 
 function openRelatedHint(typeName, objectName) {
   if (!typeName) return;
+  state.browseTypes = true;
   const objectScoped = OBJECT_FILTER_TYPES.includes(typeName) || typeName === "CustomObject";
   chooseType(typeName, {
     objectFilter: objectScoped ? objectName : "",
@@ -3491,6 +3608,10 @@ $("btn-save-file").addEventListener("click", () => run(saveFileEdits));
 const clearPackage = () => run(async () => {
   state.packageTypes = [];
   state.xmlDirty = false;
+  state.typeChosen = false;
+  state.browseTypes = false;
+  state.dismissedCompanions = [];
+  state.pendingCompanion = null;
   invalidateStaged();
   await persistPackage();
 });
@@ -3524,7 +3645,9 @@ $("btn-add-member").addEventListener("click", () => run(async () => {
   await persistPackage();
 }));
 $("type-search").addEventListener("input", () => {
+  if ($("type-search").value.trim()) state.browseTypes = true;
   renderTypePicker();
+  syncTypeChosenUi();
 });
 $("type-picklist")?.addEventListener("change", () => {
   chooseType($("type-picklist").value);
@@ -3538,14 +3661,28 @@ $("type-picker").addEventListener("click", (event) => {
   if (btn) chooseType(btn.dataset.type);
 });
 $("package-hints")?.addEventListener("click", (event) => {
-  const add = event.target.closest("[data-hint-add]");
-  if (add) {
-    run(() => addRecentHint(add.dataset.type, add.dataset.member));
-    return;
-  }
   const related = event.target.closest("[data-hint-related]");
   if (related) openRelatedHint(related.dataset.type, related.dataset.object || "");
 });
+$("package-start")?.addEventListener("click", (event) => {
+  const add = event.target.closest("[data-hint-add]");
+  if (add) run(() => addRecentHint(add.dataset.type, add.dataset.member));
+});
+$("btn-browse-types")?.addEventListener("click", () => {
+  state.browseTypes = true;
+  syncTypeChosenUi();
+  updatePickCopy();
+  $("type-search")?.focus();
+});
+$("btn-show-recent")?.addEventListener("click", () => {
+  state.browseTypes = false;
+  state.typeChosen = false;
+  syncTypeChosenUi();
+  renderPackageHints();
+  updatePickCopy();
+});
+$("btn-companion-add")?.addEventListener("click", () => run(addCompanionMembers));
+$("btn-companion-skip")?.addEventListener("click", skipCompanion);
 $("btn-change-type")?.addEventListener("click", () => {
   $("type-search")?.focus();
   $("type-browse")?.scrollIntoView({ block: "start", behavior: "smooth" });

@@ -311,7 +311,7 @@
         <section id="view-components" class="view">
           <p class="step-kicker" id="pick-kicker">Step 2 of 4</p>
           <h2 class="page-title" id="pick-heading">Build the package</h2>
-          <p class="hint" id="pick-lead">Pick a type, tick members, then pick another type if you need more. One screen — not two tabs.</p>
+          <p class="hint" id="pick-lead">Start with what just changed in the From org — or search a type if you already know it.</p>
           <nav class="subtabs" role="tablist">
             <button type="button" class="subtab active" data-subtab="pick">Pick</button>
             <button type="button" class="subtab" data-subtab="xml">package.xml</button>
@@ -322,19 +322,31 @@
             <div class="workbench-banner" id="workbench-banner">
               The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> — this side panel will close.
             </div>
+            <article id="package-start" class="package-start hidden">
+              <p class="suggestion-kicker" id="package-start-kicker">From org</p>
+              <h3 class="package-start-title" id="package-start-title">What's new?</h3>
+              <p class="hint" id="package-start-lead">Tap something you just built. OrgFlow looks at recent fields, layouts, flows, and permission sets.</p>
+              <div id="package-start-list" class="start-list"></div>
+              <button type="button" id="btn-browse-types" class="ghost-text">Browse types instead</button>
+            </article>
             <div id="package-hints" class="package-hints hidden">
-              <div id="recent-hints" class="hint-band hidden">
-                <p class="suggestion-kicker">Changed recently</p>
-                <p class="hint hint-lead">Tap to add. These are the newest fields, layouts, and flows in the From org.</p>
-                <div id="recent-hint-chips" class="hint-chips"></div>
+              <div id="companion-hint" class="companion-card hidden">
+                <p class="suggestion-kicker">Same object</p>
+                <p class="companion-title" id="companion-title">Add related members</p>
+                <p class="hint" id="companion-detail"></p>
+                <div class="companion-actions">
+                  <button type="button" id="btn-companion-add" class="accent">Add</button>
+                  <button type="button" id="btn-companion-skip" class="ghost-text">Not now</button>
+                </div>
               </div>
               <div id="related-hints" class="hint-band hidden">
                 <p class="suggestion-kicker" id="related-hint-kicker">Also on this object</p>
-                <p class="hint hint-lead">Opens that list for the same object. Nothing is added until you tick.</p>
+                <p class="hint hint-lead">Opens that list. Nothing extra is added until you tick.</p>
                 <div id="related-hint-chips" class="hint-chips"></div>
               </div>
             </div>
             <div id="type-browse">
+              <button type="button" id="btn-show-recent" class="ghost-text hidden">Show what changed instead</button>
               <div class="type-find">
                 <label class="grow">Search types
                   <input id="type-search" type="search" placeholder="field, object, flow, layout, permission…" autocomplete="off" />

@@ -5,7 +5,9 @@ import {
   relatedTypeHints,
   recentHintItems,
   packageHasMember,
-  shortTypeLabel
+  shortTypeLabel,
+  memberBelongsToObject,
+  companionOffer
 } from "../extension/lib/packageHints.js";
 
 describe("package hints", () => {
@@ -40,9 +42,59 @@ describe("package hints", () => {
       Flow: [
         { fullName: "Account_Status_Flow", lastModifiedDate: "2026-08-19T12:00:00Z" }
       ]
-    }, { now, windowMs: 7 * 24 * 60 * 60 * 1000, limit: 6 });
+    }, { now, windowMs: 7 * 24 * 60 * 60 * 1000, limit: 8 });
     assert.deepEqual(items.map((i) => i.fullName), ["Account.New__c", "Account_Status_Flow"]);
     assert.equal(packageHasMember([{ name: "CustomField", members: ["Account.New__c"] }], "CustomField", "Account.New__c"), true);
     assert.equal(packageHasMember([{ name: "CustomField", members: ["Account.New__c"] }], "CustomField", "Account.Old__c"), false);
+  });
+
+  it("matches layouts, fields, and Lightning pages to an object", () => {
+    assert.equal(memberBelongsToObject("Layout", "Account-Account Layout", "Account"), true);
+    assert.equal(memberBelongsToObject("Layout", "Contact-Contact Layout", "Account"), false);
+    assert.equal(memberBelongsToObject("CustomField", "Account.Status__c", "Account"), true);
+    assert.equal(memberBelongsToObject("FlexiPage", "Account_Record_Page", "Account"), true);
+    assert.equal(memberBelongsToObject("FlexiPage", "Opportunity_Record_Page", "Account"), false);
+  });
+
+  it("offers a one-tap add only when the matching list is small", () => {
+    const offer = companionOffer(
+      [{ name: "CustomField", members: ["Account.Status__c"] }],
+      {
+        Layout: [
+          { fullName: "Account-Account Layout" },
+          { fullName: "Account-Sales Layout" },
+          { fullName: "Contact-Contact Layout" }
+        ],
+        RecordType: [{ fullName: "Account.Customer" }]
+      },
+      { activeType: "CustomField" }
+    );
+    assert.equal(offer.object, "Account");
+    assert.equal(offer.add.type, "Layout");
+    assert.equal(offer.add.count, 2);
+    assert.match(offer.add.title, /2 layouts on Account/);
+    assert.deepEqual(offer.add.members, ["Account-Account Layout", "Account-Sales Layout"]);
+    assert.equal(offer.permissionSets, true);
+  });
+
+  it("turns a crowded type into browse instead of adding everything", () => {
+    const layouts = Array.from({ length: 8 }, (_, i) => ({ fullName: `Account-Layout ${i}` }));
+    const offer = companionOffer(
+      [{ name: "CustomField", members: ["Account.Status__c"] }],
+      { Layout: layouts },
+      { activeType: "CustomField", maxPerType: 4 }
+    );
+    assert.equal(offer.add, null);
+    assert.equal(offer.browse[0].type, "Layout");
+    assert.equal(offer.browse[0].count, 8);
+  });
+
+  it("skips a dismissed companion type", () => {
+    const offer = companionOffer(
+      [{ name: "CustomField", members: ["Account.Status__c"] }],
+      { Layout: [{ fullName: "Account-Account Layout" }] },
+      { dismissedKeys: ["Account:Layout"] }
+    );
+    assert.equal(offer.add, null);
   });
 });
