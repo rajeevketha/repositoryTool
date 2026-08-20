@@ -75,7 +75,7 @@ body {
 
 .stepper {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   gap: 0;
@@ -207,13 +207,7 @@ body {
   background: #3a220f;
   border-color: #7a4314;
 }
-body.retrieve-frozen .member-list,
-body.retrieve-frozen #type-picker,
-body.retrieve-frozen #object-chips,
-body.retrieve-frozen #manual-member {
-  pointer-events: none;
-  opacity: 0.7;
-}
+/* Package stays editable after retrieve. From org is locked in JS on Retrieve/Deploy only. */
 
 .app-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 main { padding: 14px; flex: 1; }
@@ -917,8 +911,8 @@ body[data-step="start"] .inspector,
 body[data-step="versions"] .inspector,
 body[data-step="review"] .inspector,
 body[data-step="deploy"] .inspector { display: none !important; }
-body[data-layout="sidepanel"][data-step="type"] .inspector,
-body[data-layout="sidepanel"][data-step="members"] .inspector { display: none !important; }
+body[data-layout="sidepanel"][data-step="package"] .inspector { display: none !important; }
+body[data-step="package"] .type-picker { max-height: 180px; }
 body[data-step="review"] .subtabs { display: none !important; }
 body[data-step="deploy"] .log-panel { display: none; }
 body[data-layout="workbench"][data-step="start"] .app-body,
@@ -927,7 +921,7 @@ body[data-layout="workbench"][data-step="versions"] .app-body {
 }
 body[data-layout="workbench"] .mode-grid { grid-template-columns: 1fr 1fr; }
 @media (max-width: 420px) {
-  .stepper { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .stepper { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .step { font-size: 10px; padding: 8px 2px 10px; }
 }
 #wizard-hint { text-align: center; font-size: 12px; color: var(--muted); }

@@ -6,13 +6,12 @@ GitHub, GitLab, or Azure DevOps is **optional**. OrgFlow always versions by Jira
 
 ## Configurator workflow
 
-Use **Back** / **Next** at the bottom. The numbered stepper (Start → Type → Members → Retrieve → Deploy) is sequential: you cannot skip ahead.
+Use **Back** / **Next** at the bottom. The numbered stepper (Start → Package → Retrieve → Deploy) is sequential: you cannot skip ahead.
 
 1. **Start** — Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). Stay on Start and choose **This browser** or **Release repo** (GitHub, GitLab, or Azure). Click **Next** when that choice is done. If a release repo: follow **Help · connecting Git**, then **Use this repo**. OrgFlow saves From → To as the promotion path (for example DEC → QA). Add Staging and Prod when those orgs are logged in so the same Jira snapshot can travel Dev → QA → Staging → Prod. Pipelines are optional — connecting the repo is enough.
-2. **Type** — search, use the picklist, or tap a common type (Custom Field, Custom Object, Flow…). That opens the member list for only that type.
-3. **Members** — tick every row that belongs in this deploy (orange check = in the package). Stay here until the list is complete. Retrieve does not run yet. The orange scrollbar and “Scroll for more” cue mean the list continues. Use **object chips** to shrink a long list. **Next** opens Retrieve.
-4. **Retrieve** — click **Retrieve from From org** when the package is complete. Use **Back** if you still need more members. **Compare with a saved version** is here, before Deploy. Unlock only if you need to change From or members, then retrieve again.
-5. **Deploy** — the component list scrolls if it is long. One **Deploy** button stays below that list. The button stays off until Salesforce returns success or failure. If a **team repo** is on, a **commit message is required** before Deploy or Save to repo (**Jira is optional**). After a successful deploy, **New package** starts over from Start.
+2. **Package** — pick a type (Custom Field, Layout, Flow…) and tick members on the **same screen**. Pick another type to add more; earlier ticks stay in the package. **Back** from Retrieve returns here so you can add more — nothing is frozen.
+3. **Retrieve** — click **Retrieve from From org** when the package is complete. **Back** returns to Package. After you add members, retrieve again before Deploy.
+4. **Deploy** — the component list scrolls if it is long. One **Deploy** button stays below that list. The button stays off until Salesforce returns success or failure. If a **release repo** is on, a **commit message is required** before Deploy or Save to repo (**Jira is optional**). After a successful deploy, **New package** starts over from Start.
 
 The UI uses a warm charcoal + bronze theme. Accent color is used on the current step and the main action, not on every heading.
 
@@ -27,7 +26,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Submission kit (listing copy, privacy URL, permission justifications, screenshots): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** `files/orgflow-extension.zip` (unzip to an `orgflow/` folder)
-- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.10**)
+- **Store upload:** `files/orgflow-chrome-web-store.zip` (`manifest.json` at the zip root, version **1.11.11**)
 - **Privacy policy:** [docs/privacy.html](docs/privacy.html)
 
 ## Install (unpacked Chrome extension)
@@ -74,15 +73,14 @@ Optional: save a pipeline (`Sandbox → UAT`) to `.orgflow/pipelines.json`.
 
 Each configurator can version **without Git**. Connect a Git host only when the team needs one shared history. Pipelines are stored in the repo at `.orgflow/pipelines.json` (no passwords, no session ids).
 
-### Pick configuration (Type → Members → Retrieve)
+### Pick configuration (Package → Retrieve)
 
-1. **Type** — common configurator types first, every Metadata API type searchable. Tap a type to open its members (the type grid goes away on purpose).
-2. **Members** — load from the source sandbox, tick what belongs to this Jira, or type a member such as `Account.Customer_Status__c`. Object chips and **Selected only** help when an object has thousands of fields.
-3. **Selected package** (side of the workbench, or below the picker in the side panel) updates on every tick:
+1. **Package** — one screen, not two tabs. Common configurator types first, every Metadata API type searchable. Tap a type, tick members, then tap another type to add more (fields, then layouts, then flows…). Earlier ticks stay in the package. Type a member such as `Account.Customer_Status__c` if you know the name. Object chips and **Selected only** help when an object has thousands of fields.
+2. **Selected package** (side of the workbench, or below the picker in the side panel) updates on every tick:
    - **By category** — columns/groups by metadata type, and by object for fields/layouts
    - **package.xml** — the exact manifest Salesforce will retrieve
-4. **Retrieve** — retrieve the package. To add members, use **Back**. Errors from Salesforce show in the result panel (component name + problem).
-5. **Deploy** — the component list and one Deploy button. After you click it, it stays disabled until Salesforce answers. Success and failure details stay in the result panel.
+3. **Retrieve** — retrieve the package when it looks complete. **Back** returns to Package unlocked so you can add more members, then retrieve again. Errors from Salesforce show in the result panel (component name + problem).
+4. **Deploy** — the component list and one Deploy button. After you click it, it stays disabled until Salesforce answers. Success and failure details stay in the result panel.
 
 Wildcard `*` for a type still works if you want everything of that type. For real releases, pick named members so the version is reviewable.
 

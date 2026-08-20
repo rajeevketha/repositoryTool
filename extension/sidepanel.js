@@ -90,11 +90,15 @@ const isWorkbench = () => document.body.dataset.layout === "workbench";
 
 const STEPS = [
   { id: "start", label: "Start", view: "start" },
-  { id: "type", label: "Type", view: "components" },
-  { id: "members", label: "Members", view: "components" },
+  { id: "package", label: "Package", view: "components" },
   { id: "review", label: "Retrieve", view: "components" },
   { id: "deploy", label: "Deploy", view: "ship" }
 ];
+
+function stepIndexById(id) {
+  const index = STEPS.findIndex((step) => step.id === id);
+  return index < 0 ? 0 : index;
+}
 
 const state = {
   settings: null,
@@ -132,7 +136,7 @@ const state = {
   compareActivePath: "",
   lastSaved: null,
   gitShipWarned: false,
-  versionsReturnStep: 3,
+  versionsReturnStep: 2,
   gitLayout: null,
   gitAutoScaffoldDone: false
 };
@@ -165,9 +169,7 @@ function setBusy(busy) {
 }
 
 function highlightedType() {
-  if (!state.typeChosen || !state.activeType) return "";
-  if (currentStepId() === "type") return "";
-  return state.activeType;
+  return state.activeType || "";
 }
 
 function selectedOrg(selectId) {
@@ -222,41 +224,41 @@ function retrieveBlockReason() {
 }
 
 function applyRetrieveLockUi() {
-  const frozen = Boolean(state.selectionFrozen && hasFreshRetrieve());
+  const stepId = currentStepId();
+  const editingPackage = stepId === "package" || stepId === "start";
+  if (editingPackage) state.selectionFrozen = false;
   const stale = Boolean(state.retrieveSnapshot && !hasFreshRetrieve());
-  document.body.classList.toggle("retrieve-frozen", frozen);
+  const lockFrom = !editingPackage && hasFreshRetrieve() && state.retrieveOk;
+  document.body.classList.toggle("retrieve-frozen", lockFrom);
   document.body.classList.toggle("retrieve-stale", stale);
   const sourceEl = $("source-org");
-  if (sourceEl) sourceEl.disabled = frozen;
+  if (sourceEl) sourceEl.disabled = lockFrom;
   const lock = $("retrieve-lock");
   const copy = $("retrieve-lock-copy");
   const unlock = $("btn-unlock-retrieve");
   if (lock) {
-    lock.classList.toggle("hidden", !frozen && !stale);
-    lock.classList.toggle("stale", stale && !frozen);
+    lock.classList.toggle("hidden", !stale && !lockFrom);
+    lock.classList.toggle("stale", stale && !lockFrom);
   }
   if (copy) {
     const source = selectedOrg("source-org");
-    if (frozen) {
-      copy.textContent = `Retrieved ${state.stagedFiles.length} files from ${source?.label || "From org"}. From org and members are frozen to that snapshot.`;
-    } else if (stale) {
-      copy.textContent = "From org or members changed after retrieve. Retrieve again — deploy stays off until then.";
+    if (stale) {
+      copy.textContent = "Package changed after retrieve. Retrieve again before deploy.";
+    } else if (lockFrom) {
+      copy.textContent = `Retrieved ${state.stagedFiles?.length || 0} files from ${source?.label || "From org"}. Back to Package to add more members, then retrieve again.`;
     }
   }
   if (unlock) {
-    unlock.classList.toggle("hidden", !frozen);
-    unlock.disabled = !frozen;
-  }
-  for (const id of ["btn-change-type", "btn-clear-type", "btn-select-visible", "btn-add-member", "btn-clear-package", "btn-clear-package-inspector", "btn-apply-xml"]) {
-    const el = $(id);
-    if (el) el.disabled = frozen || state.busy;
+    const showBack = lockFrom && stepId === "review";
+    unlock.classList.toggle("hidden", !showBack);
+    unlock.disabled = !showBack;
+    unlock.textContent = "Back to Package to add members";
   }
 }
 
 function unlockSelection() {
-  state.selectionFrozen = false;
-  applyRetrieveLockUi();
-  setStatus("From org and members are unlocked. Change them to retrieve again before deploy.", "ok");
+  goStep(stepIndexById("package"), { force: true });
+  setStatus("Add members here. Retrieve again before deploy.", "ok");
 }
 
 function alreadyDeployedToCurrentTarget() {
@@ -736,11 +738,10 @@ function currentStepId() {
 function farthestStep() {
   if (!pathReady()) return 0;
   if (useGitEnabled() && !isGitConfigured(state.settings)) return 0;
-  if (!state.typeChosen) return 1;
-  if (!memberCount(state.packageTypes)) return 2;
-  if (!state.reviewSeen && state.stepIndex < 3) return 2;
-  if (!hasFreshRetrieve() || !state.retrieveOk) return 3;
-  return 4;
+  if (!memberCount(state.packageTypes)) return stepIndexById("package");
+  if (!state.reviewSeen && state.stepIndex < stepIndexById("review")) return stepIndexById("package");
+  if (!hasFreshRetrieve() || !state.retrieveOk) return stepIndexById("review");
+  return stepIndexById("deploy");
 }
 
 function canAdvanceTo(index) {
@@ -759,9 +760,10 @@ function leaveReason(index) {
   if (index === 0 && useGitEnabled() && !isGitConfigured(state.settings)) {
     return "Sharing is on. Choose a repo and click Use this repo. Selecting it in the list, or saving a pipeline, does not connect Git yet.";
   }
-  if (index === 1 && !state.typeChosen) return "Tap a configuration type — for example Custom Field or Custom Object.";
-  if (index === 2 && !memberCount(state.packageTypes)) return "Tick at least one member (orange check) before retrieve.";
-  if (index === 3 && (!hasFreshRetrieve() || !state.retrieveOk)) {
+  if (index === stepIndexById("package") && !memberCount(state.packageTypes)) {
+    return "Pick a type and tick at least one member, then Next to retrieve.";
+  }
+  if (index === stepIndexById("review") && (!hasFreshRetrieve() || !state.retrieveOk)) {
     if (!hasFreshRetrieve()) return retrieveBlockReason();
     return "Retrieve must succeed before deploy. The result panel shows why it failed.";
   }
@@ -771,39 +773,35 @@ function leaveReason(index) {
 function stepBlockReason(index) {
   if (canAdvanceTo(index)) return "";
   if (index > 0 && !pathReady()) return leaveReason(0);
-  if (index > 1 && !state.typeChosen) return leaveReason(1);
-  if (index > 2 && !memberCount(state.packageTypes)) return leaveReason(2);
-  if (index > 3) return retrieveBlockReason() || "Retrieve the package first, then you can deploy.";
+  if (index > stepIndexById("package") && !memberCount(state.packageTypes)) return leaveReason(stepIndexById("package"));
+  if (index > stepIndexById("review")) return retrieveBlockReason() || "Retrieve the package first, then you can deploy.";
   return "Finish the current step before skipping ahead.";
 }
 
 function updatePickCopy() {
   const stepId = currentStepId();
   const type = typesForPicker().find((t) => t.name === state.activeType);
-  if ($("pick-kicker")) $("pick-kicker").textContent = `Step ${state.stepIndex + 1} of 5`;
-  if (stepId === "type") {
-    if ($("pick-heading")) $("pick-heading").textContent = "Choose a configuration type";
+  const total = STEPS.length;
+  if ($("pick-kicker")) $("pick-kicker").textContent = `Step ${state.stepIndex + 1} of ${total}`;
+  if (stepId === "package") {
+    if ($("pick-heading")) $("pick-heading").textContent = type ? `Package · ${type.label}` : "Build the package";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Search, use the picklist, or tap a type. Members open only after you choose one.";
-    }
-  } else if (stepId === "members") {
-    if ($("pick-heading")) $("pick-heading").textContent = type ? `Tick ${type.label} members` : "Tick members";
-    if ($("pick-lead")) {
-      $("pick-lead").textContent = "Tick every member that belongs in this deploy. Stay here until the list is complete. Retrieve does not run until the next step.";
+      $("pick-lead").textContent = type
+        ? "Tick members below. Pick another type above to add more (fields, then layouts, then flows…). Back from Retrieve returns here so you can add more."
+        : "Pick a type (Custom Field, Layout, Flow…), then tick the members for this deploy.";
     }
   } else if (stepId === "review") {
     if ($("pick-heading")) $("pick-heading").textContent = "Retrieve from the From org";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Review the package, then click Retrieve. Use Back if you still need more members. Retrieve again only if members, type, or the From org change.";
+      $("pick-lead").textContent = "Click Retrieve when the package is complete. Back returns to Package so you can add more members, then retrieve again.";
     }
   }
   if ($("header-sub")) {
     const labels = {
       start: "Step 1 · Connect orgs",
-      type: "Step 2 · Choose a type",
-      members: "Step 3 · Tick members",
-      review: "Step 4 · Retrieve",
-      deploy: "Step 5 · Deploy",
+      package: "Step 2 · Build the package",
+      review: "Step 3 · Retrieve",
+      deploy: "Step 4 · Deploy",
       versions: "Saved versions"
     };
     $("header-sub").textContent = labels[stepId] || "Config sandbox → other orgs";
@@ -833,7 +831,7 @@ function updateWizardNav() {
   if (state.showingVersions) {
     back.disabled = false;
     next.disabled = true;
-    const toDeploy = state.versionsReturnStep === 4;
+    const toDeploy = state.versionsReturnStep === stepIndexById("deploy");
     back.textContent = toDeploy ? "Back to deploy" : "Back to retrieve";
     next.classList.add("hidden");
     next.textContent = "Next";
@@ -867,7 +865,7 @@ function updateWizardNav() {
   back.textContent = "Back";
   const reason = leaveReason(state.stepIndex);
   next.disabled = last || Boolean(reason) || state.busy;
-  const labels = ["Next: pick type", "Next: members", "Next: retrieve", "Next: deploy", "Deploy"];
+  const labels = ["Next: package", "Next: retrieve", "Next: deploy", "Deploy"];
   next.textContent = labels[state.stepIndex] || "Next";
   next.classList.toggle("hidden", last);
   if (reason) {
@@ -877,15 +875,15 @@ function updateWizardNav() {
   } else if (state.stepIndex === 0) {
     hint.textContent = pathReady()
       ? "Choose This browser or Release repo, then Next."
-      : `Step 1 of 5 · ${currentStep().label}`;
-  } else if (state.stepIndex === 2) {
-    hint.textContent = "Tick every member you need, then Next. Retrieve runs on the next screen.";
-  } else if (state.stepIndex === 3) {
+      : `Step 1 of ${STEPS.length} · ${currentStep().label}`;
+  } else if (state.stepIndex === stepIndexById("package")) {
+    hint.textContent = "Pick a type, tick members, pick another type if you need it, then Next.";
+  } else if (state.stepIndex === stepIndexById("review")) {
     hint.textContent = hasFreshRetrieve() && state.retrieveOk
       ? "Retrieve succeeded. Next to deploy, or Back to add members."
       : "Click Retrieve when the package is complete. Back adds more members.";
   } else {
-    hint.textContent = `Step ${state.stepIndex + 1} of 5 · ${currentStep().label}`;
+    hint.textContent = `Step ${state.stepIndex + 1} of ${STEPS.length} · ${currentStep().label}`;
   }
 }
 
@@ -902,6 +900,7 @@ function applyStepUi() {
     updateHeaderStatus();
     syncCompareEntry();
     renderGitUi();
+    updateActionState();
     return;
   }
   const step = currentStep();
@@ -914,7 +913,7 @@ function applyStepUi() {
       switchSubtab("pick");
     }
   }
-  if (step.id === "type" && selectedOrg("source-org") && !typesForPicker().some((t) => t.fromOrg)) {
+  if (step.id === "package" && selectedOrg("source-org") && !typesForPicker().some((t) => t.fromOrg)) {
     setTimeout(() => run(loadOrgTypes), 0);
   }
   if (step.id === "deploy") renderDeployManifest();
@@ -926,6 +925,7 @@ function applyStepUi() {
   updateWizardNav();
   updateHeaderStatus();
   syncCompareEntry();
+  updateActionState();
 }
 
 function goStep(index, { force = false } = {}) {
@@ -936,22 +936,23 @@ function goStep(index, { force = false } = {}) {
     updateWizardNav();
     return;
   }
-  if (index === 3) {
+  if (STEPS[index]?.id === "review") {
     state.reviewSeen = true;
     if (!hasFreshRetrieve()) state.autoRetrieveAttempted = false;
   }
+  if (STEPS[index]?.id === "package") state.selectionFrozen = false;
   state.stepIndex = Math.max(0, Math.min(STEPS.length - 1, index));
   applyStepUi();
 }
 
 function wizardBack() {
   if (state.showingVersions) {
-    const returnTo = Number.isInteger(state.versionsReturnStep) ? state.versionsReturnStep : 3;
+    const returnTo = Number.isInteger(state.versionsReturnStep) ? state.versionsReturnStep : stepIndexById("review");
     state.showingVersions = false;
     goStep(Math.min(Math.max(returnTo, 0), STEPS.length - 1), { force: true });
     return;
   }
-  if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
+  if (state.stepIndex === stepIndexById("deploy") && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
     run(resetForNewPackage);
     return;
   }
@@ -961,7 +962,7 @@ function wizardBack() {
 
 function wizardNext() {
   if (state.showingVersions) return;
-  if (state.stepIndex === 4 && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
+  if (state.stepIndex === stepIndexById("deploy") && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
     if (advancePromotionHop()) return;
   }
   const reason = leaveReason(state.stepIndex);
@@ -1007,7 +1008,7 @@ function updatePipelinePathCopy() {
 }
 
 async function openVersionsPanel() {
-  state.versionsReturnStep = state.stepIndex === 4 ? 4 : 3;
+  state.versionsReturnStep = state.stepIndex === stepIndexById("deploy") ? stepIndexById("deploy") : stepIndexById("review");
   await loadVersionStore();
   renderVersions();
   showVersions();
@@ -1039,7 +1040,7 @@ function invalidateStaged() {
   renderFileList();
   if (hadFiles) {
     setStatus("From org or members changed. Retrieve again before deploy.", "error");
-    if (state.stepIndex === 4) goStep(3, { force: true });
+    if (state.stepIndex === stepIndexById("deploy")) goStep(stepIndexById("review"), { force: true });
   }
 }
 
@@ -1062,7 +1063,7 @@ async function resetForNewPackage() {
   state.gitShipWarned = false;
   state.reviewSeen = false;
   state.showingVersions = false;
-  state.versionsReturnStep = 3;
+  state.versionsReturnStep = stepIndexById("review");
   $("file-editor-wrap")?.classList.add("hidden");
   if ($("comment")) $("comment").value = "";
   if ($("jira")) $("jira").value = "";
@@ -1456,10 +1457,6 @@ function renderTypeShortcuts() {
 
 function chooseType(typeName) {
   if (!typeName) return;
-  if (state.selectionFrozen && hasFreshRetrieve()) {
-    setStatus("Unlock the retrieved snapshot first if you need a different type.", "error");
-    return;
-  }
   state.activeType = typeName;
   state.typeChosen = true;
   state.objectFilter = "";
@@ -1468,7 +1465,9 @@ function chooseType(typeName) {
   }
   const pick = $("type-picklist");
   if (pick) pick.value = typeName;
-  goStep(2, { force: true });
+  if (currentStepId() !== "package") goStep(stepIndexById("package"), { force: true });
+  syncTypeChosenUi();
+  renderTypePicker();
   renderMembers();
   queueMicrotask(() => focusInView("member-filter"));
   if (selectedOrg("source-org")) run(loadMembers);
@@ -1521,21 +1520,19 @@ function renderTypePicker() {
 }
 
 function syncTypeChosenUi() {
-  const stepId = currentStepId();
-  const onType = stepId === "type";
-  const onMembers = stepId === "members";
-  $("type-browse")?.classList.toggle("hidden", !onType);
-  $("type-chosen")?.classList.toggle("hidden", !onMembers);
-  $("member-panel")?.classList.toggle("hidden", !onMembers);
-  $("compact-package-card")?.classList.toggle("hidden", !onMembers);
+  const onPackage = currentStepId() === "package";
+  $("type-browse")?.classList.toggle("hidden", !onPackage);
+  $("type-chosen")?.classList.toggle("hidden", !onPackage || !state.typeChosen);
+  $("member-panel")?.classList.toggle("hidden", !onPackage || !state.typeChosen);
+  $("compact-package-card")?.classList.toggle("hidden", !onPackage);
   const objectScoped = OBJECT_FILTER_TYPES.includes(state.activeType) || state.activeType === "CustomObject";
-  $("object-filter-wrap")?.classList.toggle("hidden", !onMembers || !objectScoped);
+  $("object-filter-wrap")?.classList.toggle("hidden", !onPackage || !state.typeChosen || !objectScoped);
   if (state.activeType === "CustomObject") {
-    $("member-help").textContent = "Standard objects (Account, Contact, Opportunity, …) are listed first. Custom objects (__c) follow. Tick every row you need — Retrieve waits until the next step.";
+    $("member-help").textContent = "Tick objects for this deploy. Pick another type above to add fields, layouts, or flows — earlier ticks stay in the package.";
   } else if (OBJECT_FILTER_TYPES.includes(state.activeType)) {
-    $("member-help").textContent = "Tap an object chip (Account, Case, …) to shrink the list, then tick every member you need. Retrieve waits until the next step.";
+    $("member-help").textContent = "Tap an object chip to shrink the list, then tick members. Pick another type above when you need a different kind.";
   } else {
-    $("member-help").textContent = "Tick every member that belongs in this deploy. Stay on this screen until the list is complete, then Next.";
+    $("member-help").textContent = "Tick every member you need. Pick another type above to add more. Next retrieves only after you are done.";
   }
 }
 
@@ -2135,7 +2132,7 @@ async function revertSelectedFiles() {
   updateActionState();
   log(`Restored ${selected.length} file(s) from ${fromId} into the retrieve package.`);
   setStatus(`Restored ${selected.length} file(s) from ${fromId}. Review, then deploy.`, "ok");
-  goStep(3, { force: true });
+  goStep(stepIndexById("review"), { force: true });
 }
 
 function renderVersions() {
@@ -2211,7 +2208,7 @@ function updateHeaderStatus() {
     return;
   }
   if (!pack) {
-    setStatus(`${n} org${n === 1 ? "" : "s"} · choose a type, then tick members.`);
+    setStatus(`${n} org${n === 1 ? "" : "s"} · pick types and tick members.`);
     return;
   }
   if (step === "review" && !state.retrieveOk) {
@@ -2691,8 +2688,8 @@ async function retrieveIntoReview() {
     }
     applyRetrieveLockUi();
     showOutcome({ success: true, status: "Succeeded", fileCount: files.length, operation: "retrieve" });
-    if (state.stepIndex !== 3) goStep(3, { force: true });
-    log(`Retrieved ${files.length} file(s). From org and members are frozen. Next to deploy, or Back to add members.`);
+    log(`Retrieved ${files.length} file(s). Next to deploy, or Back to Package to add more members.`);
+    if (state.stepIndex !== stepIndexById("review")) goStep(stepIndexById("review"), { force: true });
     setStatus(`Retrieved ${files.length} files — Next to deploy`, "ok");
     return files;
   } catch (err) {
@@ -3072,8 +3069,8 @@ function saveFileEdits() {
 
 function switchTab(name) {
   if (name === "start") goStep(0, { force: true });
-  else if (name === "components") goStep(state.typeChosen ? 2 : 1, { force: true });
-  else if (name === "ship") goStep(canAdvanceTo(4) ? 4 : farthestStep(), { force: true });
+  else if (name === "components") goStep(stepIndexById("package"), { force: true });
+  else if (name === "ship") goStep(canAdvanceTo(stepIndexById("deploy")) ? stepIndexById("deploy") : farthestStep(), { force: true });
   else if (name === "versions") showVersions();
 }
 
@@ -3164,7 +3161,7 @@ $("btn-back-to-files")?.addEventListener("click", () => {
   switchSubtab("review");
 });
 
-$("goto-components").addEventListener("click", () => goStep(state.typeChosen ? 2 : 1, { force: true }));
+$("goto-components").addEventListener("click", () => goStep(stepIndexById("package"), { force: true }));
 $("goto-workbench")?.addEventListener("click", openWorkbench);
 $("open-workbench")?.addEventListener("click", openWorkbench);
 $("open-workbench-banner")?.addEventListener("click", openWorkbench);
@@ -3275,13 +3272,8 @@ $("type-picker").addEventListener("click", (event) => {
   if (btn) chooseType(btn.dataset.type);
 });
 $("btn-change-type")?.addEventListener("click", () => {
-  if (state.selectionFrozen && hasFreshRetrieve()) {
-    setStatus("Unlock the retrieved snapshot first to change type.", "error");
-    return;
-  }
-  state.typeChosen = false;
-  goStep(1, { force: true });
-  renderTypePicker();
+  $("type-search")?.focus();
+  $("type-browse")?.scrollIntoView({ block: "start", behavior: "smooth" });
 });
 $("object-chips")?.addEventListener("click", (event) => {
   const chip = event.target.closest("[data-object]");
@@ -3348,7 +3340,7 @@ $("version-list").addEventListener("click", (event) => {
   }
   if (useId) {
     $("jira").value = useId;
-    goStep(4, { force: true });
+    goStep(stepIndexById("deploy"), { force: true });
   }
   if (deployId) {
     if (useGitEnabled() && !gitCommitMessage()) {
@@ -3357,7 +3349,7 @@ $("version-list").addEventListener("click", (event) => {
       return;
     }
     $("jira").value = deployId;
-    goStep(4, { force: true });
+    goStep(stepIndexById("deploy"), { force: true });
     run(() => deployVersion(deployId));
   }
 });

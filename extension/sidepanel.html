@@ -49,14 +49,14 @@
       </div>
       <div id="retrieve-lock" class="retrieve-lock hidden">
         <p id="retrieve-lock-copy">Retrieved files are frozen to this From org and package.</p>
-        <button type="button" id="btn-unlock-retrieve" class="ghost-text">Unlock to change From org or members</button>
+        <button type="button" id="btn-unlock-retrieve" class="ghost-text hidden">Back to Package to add members</button>
       </div>
     </section>
 
     <div class="app-body">
       <main>
         <section id="view-start" class="view active">
-          <p class="step-kicker">Step 1 of 5</p>
+          <p class="step-kicker">Step 1 of 4</p>
           <h2 class="page-title">Start</h2>
 
           <div class="start-block" id="snapshots-block">
@@ -196,7 +196,7 @@
         </section>
 
         <section id="view-ship" class="view">
-          <p class="step-kicker">Step 5 of 5</p>
+          <p class="step-kicker">Step 4 of 4</p>
           <h2 class="page-title">Deploy</h2>
           <p class="hint" id="deploy-path-line">Set From and To in the path bar.</p>
             <article class="card" id="package-summary-card">
@@ -290,9 +290,9 @@
           </div>
 
         <section id="view-components" class="view">
-          <p class="step-kicker" id="pick-kicker">Pick configuration</p>
-          <h2 class="page-title" id="pick-heading">Choose a configuration type</h2>
-          <p class="hint" id="pick-lead">Search, use the picklist, or tap a type. Members open only after you choose one.</p>
+          <p class="step-kicker" id="pick-kicker">Step 2 of 4</p>
+          <h2 class="page-title" id="pick-heading">Build the package</h2>
+          <p class="hint" id="pick-lead">Pick a type, tick members, then pick another type if you need more. One screen — not two tabs.</p>
           <nav class="subtabs" role="tablist">
             <button type="button" class="subtab active" data-subtab="pick">Pick</button>
             <button type="button" class="subtab" data-subtab="xml">package.xml</button>
@@ -325,9 +325,7 @@
               <div class="title" id="active-type-title">Selected type</div>
               <div class="meta" id="active-type-meta"></div>
               <p class="hint" id="member-count">Nothing selected yet</p>
-              <div class="tiny">
-                <button type="button" id="btn-change-type" class="secondary">Change type</button>
-              </div>
+              <button type="button" id="btn-change-type" class="ghost-text hidden">Change type</button>
             </div>
             <div id="member-panel" class="hidden">
               <p class="hint" id="member-help">Tick the orange boxes for members that belong in this deploy. Filter by object first when the list is long.</p>
