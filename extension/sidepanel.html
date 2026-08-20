@@ -59,16 +59,17 @@
           <p class="step-kicker">Step 1 of 5</p>
           <h2 class="page-title">Start</h2>
 
-          <div class="start-block">
-            <h2 class="start-block-title">Snapshots</h2>
+          <div class="start-block" id="snapshots-block">
+            <h2 class="start-block-title">Where snapshots go</h2>
+            <p class="suggestion-kicker">Choose one</p>
             <div class="mode-grid">
               <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
                 <strong>This browser</strong>
-                <span>This Chrome profile</span>
+                <span>Keep versions on this Chrome profile</span>
               </button>
               <button type="button" class="mode-card" id="mode-git" data-mode="git">
                 <strong>Team repo</strong>
-                <span>GitHub, GitLab, Azure</span>
+                <span>Share in GitHub, GitLab, or Azure</span>
               </button>
             </div>
             <div id="mode-status" class="muted">Snapshots stay on this Chrome profile.</div>
@@ -84,10 +85,18 @@
 
           <div id="git-setup-block" class="start-block hidden">
             <h2 class="start-block-title">Team repo</h2>
-            <details class="help-card" id="git-help">
-              <summary id="git-help-title">How to connect GitHub</summary>
-              <ol class="help-steps" id="git-help-steps"></ol>
-            </details>
+            <aside class="suggestion" id="git-connect-help">
+              <p class="suggestion-kicker" id="git-help-kicker">Help · connecting GitHub</p>
+              <ol class="suggestion-steps" id="git-help-preview">
+                <li>Create a personal access token on GitHub.</li>
+                <li>Paste it below and click Connect GitHub.</li>
+                <li>Pick a repo, then click Use this repo.</li>
+              </ol>
+              <details class="help-card" id="git-help">
+                <summary id="git-help-title">More detail for GitHub</summary>
+                <ol class="help-steps" id="git-help-steps"></ol>
+              </details>
+            </aside>
             <div class="start-fields">
               <label>Host
                 <select id="git-provider">
@@ -131,7 +140,10 @@
               <button id="btn-save-repo" class="primary" data-busy>Use this repo</button>
             </div>
             <p id="repo-btn-hint" class="btn-state" data-state="off"></p>
-            <p class="hint layout-hint" id="git-layout-copy">Suggested layout: force-app/main/default/{classes, objects, layouts, lwc}. Existing Salesforce folders are never overwritten.</p>
+            <aside class="suggestion" id="git-layout-hint">
+              <p class="suggestion-kicker">Suggested project structure</p>
+              <p class="hint layout-hint" id="git-layout-copy">force-app/main/default/{classes, objects, layouts, lwc}. Existing Salesforce folders are never overwritten.</p>
+            </aside>
             <p id="git-layout-status" class="muted hidden"></p>
             <div id="git-layout-card" class="hint-actions hidden">
               <button type="button" id="btn-view-git-files" class="linkish">Open in Git</button>
@@ -175,9 +187,10 @@
           <p class="step-kicker">Step 5 of 5</p>
           <h2 class="page-title">Deploy</h2>
           <p class="hint" id="deploy-path-line">Set From and To in the path bar.</p>
-          <article class="card" id="package-summary-card">
+            <article class="card" id="package-summary-card">
             <div class="title">Components in this deploy <span id="package-count-deploy" class="badge">0</span></div>
-            <div id="deploy-manifest" class="deploy-manifest"></div>
+            <p class="hint">Scroll this list if it is long. Deploy stays below.</p>
+            <div id="deploy-manifest" class="deploy-manifest" tabindex="0"></div>
             <div id="package-summary-body" class="hidden"></div>
           </article>
           <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
@@ -340,7 +353,7 @@
             </div>
             <article class="card sidepanel-only" id="compact-package-card">
               <div class="title">In this package <span id="package-count" class="badge">0</span></div>
-              <div id="selected-package" class="meta">Open the inspector on the right (workbench) or the category view below.</div>
+              <div id="selected-package" class="package-preview">Tick members below. Retrieve waits until you click Next, then Retrieve.</div>
               <div class="tiny">
                 <button type="button" id="btn-clear-package" class="secondary">Clear package</button>
               </div>
@@ -366,7 +379,7 @@
             <div class="row-actions">
               <button type="button" id="btn-retrieve-review" class="accent" data-busy data-needs="source,package">Retrieve from From org</button>
             </div>
-            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Next retrieves automatically. Use this button after you change the package.</p>
+            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Click Retrieve when this package looks right. Use Back if you still need more members.</p>
             <div id="file-list" class="file-list"></div>
             <label id="file-editor-wrap" class="hidden">
               <span id="file-editor-name">File</span>

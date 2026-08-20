@@ -1,4 +1,4 @@
-# Chrome Web Store submission (OrgFlow 1.11.8)
+# Chrome Web Store submission (OrgFlow 1.11.9)
 
 Use this tomorrow morning after you smoke-test in Chrome. Upload **`files/orgflow-chrome-web-store.zip`** — `manifest.json` is at the zip root (required). Do **not** upload `orgflow-extension.zip`; that nested `orgflow/` folder is only for Load unpacked.
 

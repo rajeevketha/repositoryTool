@@ -367,7 +367,7 @@ function updateActionState() {
       retrieveHint.textContent = "Members, type, or From org changed — retrieve again before deploy.";
       retrieveHint.dataset.state = "off";
     } else {
-      retrieveHint.textContent = "Next retrieves automatically. Use this button after you change the package.";
+      retrieveHint.textContent = "Click Retrieve when this package looks right. Use Back if you still need more members.";
       retrieveHint.dataset.state = "off";
     }
   }
@@ -522,12 +522,11 @@ function maybeAdvanceFromStart() {
   if (!pathReady()) return;
   if (useGitEnabled() && !isGitConfigured(state.settings)) {
     $("git-setup-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-    setStatus("From and To are set. Use this repo next, then pick a configuration type.", "ok");
+    setStatus("From and To are set. Connect a team repo, or switch to This browser, then click Next.", "ok");
     return;
   }
-  goStep(1, { force: true });
-  queueMicrotask(() => focusInView("type-search"));
-  setStatus("Pick a configuration type (Custom Field, Custom Object, Flow…).", "ok");
+  $("snapshots-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
+  setStatus("From and To are set. Choose This browser or Team repo, then click Next.", "ok");
 }
 
 function renderOrgPath() {
@@ -558,7 +557,7 @@ function renderOrgPath() {
   }
   if (sub) {
     sub.textContent = ready
-      ? `Simple path: configuration moves ${orgKind(source)} → ${orgKind(target)}.`
+      ? "From and To are set. Choose This browser or Team repo on Start, then Next."
       : "Next stays off until From and To are different Salesforce orgs.";
   }
   updatePipelinePathCopy();
@@ -583,6 +582,7 @@ function farthestStep() {
   if (useGitEnabled() && !isGitConfigured(state.settings)) return 0;
   if (!state.typeChosen) return 1;
   if (!memberCount(state.packageTypes)) return 2;
+  if (!state.reviewSeen && state.stepIndex < 3) return 2;
   if (!hasFreshRetrieve() || !state.retrieveOk) return 3;
   return 4;
 }
@@ -633,12 +633,12 @@ function updatePickCopy() {
   } else if (stepId === "members") {
     if ($("pick-heading")) $("pick-heading").textContent = type ? `Tick ${type.label} members` : "Tick members";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Tick rows to include. Next retrieves those files. Use Back later if you need more members.";
+      $("pick-lead").textContent = "Tick every member that belongs in this deploy. Stay here until the list is complete. Retrieve does not run until the next step.";
     }
   } else if (stepId === "review") {
     if ($("pick-heading")) $("pick-heading").textContent = "Retrieve from the From org";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Files for this package. Retrieve again only if members, type, or the From org change.";
+      $("pick-lead").textContent = "Review the package, then click Retrieve. Use Back if you still need more members. Retrieve again only if members, type, or the From org change.";
     }
   }
   if ($("header-sub")) {
@@ -703,10 +703,23 @@ function updateWizardNav() {
   const labels = ["Next: pick type", "Next: members", "Next: retrieve", "Next: deploy", "Deploy"];
   next.textContent = labels[state.stepIndex] || "Next";
   next.classList.toggle("hidden", last);
-  hint.textContent = reason
-    || (last
-      ? (state.busy ? "Waiting for Salesforce…" : (deployBlockReason() || `Ready to send this package to ${selectedOrg("target-org")?.label || "the To org"}.`))
-      : `Step ${state.stepIndex + 1} of 5 · ${currentStep().label}`);
+  if (reason) {
+    hint.textContent = reason;
+  } else if (last) {
+    hint.textContent = state.busy ? "Waiting for Salesforce…" : (deployBlockReason() || `Ready to send this package to ${selectedOrg("target-org")?.label || "the To org"}.`);
+  } else if (state.stepIndex === 0) {
+    hint.textContent = pathReady()
+      ? "Choose This browser or Team repo, then Next."
+      : `Step 1 of 5 · ${currentStep().label}`;
+  } else if (state.stepIndex === 2) {
+    hint.textContent = "Tick every member you need, then Next. Retrieve runs on the next screen.";
+  } else if (state.stepIndex === 3) {
+    hint.textContent = hasFreshRetrieve() && state.retrieveOk
+      ? "Retrieve succeeded. Next to deploy, or Back to add members."
+      : "Click Retrieve when the package is complete. Back adds more members.";
+  } else {
+    hint.textContent = `Step ${state.stepIndex + 1} of 5 · ${currentStep().label}`;
+  }
 }
 
 function applyStepUi() {
@@ -736,10 +749,6 @@ function applyStepUi() {
   }
   if (step.id === "type" && selectedOrg("source-org") && !typesForPicker().some((t) => t.fromOrg)) {
     setTimeout(() => run(loadOrgTypes), 0);
-  }
-  if (step.id === "review" && memberCount(state.packageTypes) && !hasFreshRetrieve() && !state.autoRetrieveAttempted && !state.busy) {
-    state.autoRetrieveAttempted = true;
-    setTimeout(() => run(retrieveIntoReview), 0);
   }
   if (step.id === "deploy") renderDeployManifest();
   renderGitUi();
@@ -974,9 +983,9 @@ function renderPackageUi() {
     ? `${count} selected · ${summary}`
     : "Nothing selected yet — pick fields, layouts, flows, permission sets… on Components.";
   $("package-count").textContent = String(count);
-  $("selected-package").textContent = count
-    ? "See the live selected package beside this list (category columns or package.xml)."
-    : "Nothing selected.";
+  $("selected-package").innerHTML = count
+    ? renderCompactPackageHtml()
+    : `<p class="muted">Nothing selected yet. Tick members below. Retrieve waits until you click Next, then Retrieve.</p>`;
   $("xml-status").textContent = state.xmlDirty ? "XML edited — click Apply to use it." : "XML matches the picker.";
   renderMembers();
   renderInspector();
@@ -984,6 +993,20 @@ function renderPackageUi() {
   renderTestRunner();
   renderGitUi();
   updateActionState();
+}
+
+function renderCompactPackageHtml() {
+  const columns = categoryColumns(state.packageTypes);
+  return columns
+    .map((col) => {
+      const shown = col.members.slice(0, 40);
+      const items = shown.map((m) => `<li>${escapeHtml(m)}</li>`).join("");
+      const more = col.members.length > 40
+        ? `<li>… ${col.members.length - 40} more</li>`
+        : "";
+      return `<div class="package-preview-type"><strong>${escapeHtml(col.type)} <span class="badge">${col.count}</span></strong><ul>${items}${more}</ul></div>`;
+    })
+    .join("");
 }
 
 function renderInspector() {
@@ -1198,7 +1221,15 @@ function fillGitHostUi() {
     baseUrl: $("git-base-url")?.value.trim() || "https://gitlab.com",
     owner: $("git-org")?.value.trim() || ""
   });
-  if ($("git-help-title")) $("git-help-title").textContent = `How to connect ${meta.label}`;
+  if ($("git-help-kicker")) $("git-help-kicker").textContent = `Help · connecting ${meta.label}`;
+  if ($("git-help-preview")) {
+    $("git-help-preview").innerHTML = [
+      `<li>Create a personal access token on ${escapeHtml(meta.label)}.</li>`,
+      `<li>Paste it below and click ${escapeHtml(meta.connectLabel)}.</li>`,
+      "<li>Pick a repo, then click Use this repo.</li>"
+    ].join("");
+  }
+  if ($("git-help-title")) $("git-help-title").textContent = `More detail for ${meta.label}`;
   if ($("git-help-steps")) {
     const link = `<li>Create a token: <a href="${escapeHtml(linkHref)}" target="_blank" rel="noreferrer">${escapeHtml(linkHref.replace(/^https?:\/\//, ""))}</a></li>`;
     $("git-help-steps").innerHTML = link + meta.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
@@ -1326,15 +1357,15 @@ function syncTypeChosenUi() {
   $("type-browse")?.classList.toggle("hidden", !onType);
   $("type-chosen")?.classList.toggle("hidden", !onMembers);
   $("member-panel")?.classList.toggle("hidden", !onMembers);
-  $("compact-package-card")?.classList.toggle("hidden", !(onType || onMembers));
+  $("compact-package-card")?.classList.toggle("hidden", !onMembers);
   const objectScoped = OBJECT_FILTER_TYPES.includes(state.activeType) || state.activeType === "CustomObject";
   $("object-filter-wrap")?.classList.toggle("hidden", !onMembers || !objectScoped);
   if (state.activeType === "CustomObject") {
-    $("member-help").textContent = "Standard objects (Account, Contact, Opportunity, …) are listed first. Custom objects (__c) follow. Tick a row — orange check means it is in the package.";
+    $("member-help").textContent = "Standard objects (Account, Contact, Opportunity, …) are listed first. Custom objects (__c) follow. Tick every row you need — Retrieve waits until the next step.";
   } else if (OBJECT_FILTER_TYPES.includes(state.activeType)) {
-    $("member-help").textContent = "Tap an object chip (Account, Case, …) to shrink the list, then tick members. Orange check = selected.";
+    $("member-help").textContent = "Tap an object chip (Account, Case, …) to shrink the list, then tick every member you need. Retrieve waits until the next step.";
   } else {
-    $("member-help").textContent = "Scroll the orange bar if the list is long. Tick a row — orange check means it is in the package.";
+    $("member-help").textContent = "Tick every member that belongs in this deploy. Stay on this screen until the list is complete, then Next.";
   }
 }
 

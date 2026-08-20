@@ -296,6 +296,97 @@ main { padding: 14px; flex: 1; }
   padding: 6px 0;
 }
 
+.suggestion {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-radius: 8px;
+  border: 1px dashed #6a5d4e;
+  background: #1a1713;
+}
+
+.suggestion-kicker {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c4a574;
+}
+
+.suggestion-steps {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.suggestion .help-card {
+  margin-top: 2px;
+}
+
+.package-preview {
+  max-height: 140px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--muted);
+  scrollbar-width: auto;
+  scrollbar-color: #5a534b #1c1a17;
+}
+
+.package-preview-type {
+  margin-bottom: 8px;
+}
+
+.package-preview-type strong {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.package-preview-type ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+#package-summary-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(52vh, 420px);
+}
+
+.deploy-manifest {
+  display: block;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  max-height: min(44vh, 340px);
+  min-height: 96px;
+  padding-right: 8px;
+  scrollbar-width: auto;
+  scrollbar-color: #5a534b #1c1a17;
+}
+
+.deploy-manifest ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.deploy-manifest::-webkit-scrollbar,
+.package-preview::-webkit-scrollbar {
+  width: 10px;
+}
+
+.deploy-manifest::-webkit-scrollbar-thumb,
+.package-preview::-webkit-scrollbar-thumb {
+  background: #5a534b;
+  border-radius: 8px;
+}
+
 .layout-hint {
   margin: 0;
   font-size: 12px;
@@ -809,6 +900,8 @@ body[data-step="start"] .inspector,
 body[data-step="versions"] .inspector,
 body[data-step="review"] .inspector,
 body[data-step="deploy"] .inspector { display: none !important; }
+body[data-layout="sidepanel"][data-step="type"] .inspector,
+body[data-layout="sidepanel"][data-step="members"] .inspector { display: none !important; }
 body[data-step="review"] .subtabs { display: none !important; }
 body[data-step="deploy"] .log-panel { display: none; }
 body[data-layout="workbench"][data-step="start"] .app-body,
@@ -969,13 +1062,6 @@ body[data-layout="workbench"][data-step="versions"] .app-body {
   white-space: pre-wrap;
   overflow: auto;
   max-height: 180px;
-}
-.deploy-manifest {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: min(42vh, 420px);
-  overflow: auto;
 }
 .deploy-manifest ul { margin: 0; padding-left: 16px; font-size: 12px; word-break: break-word; }
 #btn-deploy-selected {
