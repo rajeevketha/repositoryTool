@@ -846,7 +846,41 @@ body.mode-simple .git-only { display: none !important; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
-.git-ship.hidden { display: none !important; }
+.confirm-dl {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+.confirm-dl > div {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+.confirm-dl dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.confirm-dl dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-word;
+}
+#deploy-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#deploy-result-head.ok { color: var(--ok); }
+#deploy-result-head.err { color: var(--danger); }
+#deploy-result-card .outcome-body {
+  margin: 8px 0 0;
+  max-height: 240px;
+}
 
 #compare-before-hint { margin: 10px 0 0; }
 #btn-compare-before-deploy { width: 100%; }

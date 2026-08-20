@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OrgFlow",
-  "version": "1.11.11",
+  "version": "1.11.12",
   "description": "Sequential Salesforce metadata deploys with Jira versions in this browser, GitHub, GitLab, or Azure DevOps.",
   "homepage_url": "https://github.com/rajeevketha/repositoryTool",
   "minimum_chrome_version": "116",

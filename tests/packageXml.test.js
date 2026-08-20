@@ -170,14 +170,14 @@ describe("soap result parsing", () => {
       operation: "deploy",
       status: "Blocked",
       items: [
-        { kind: "error", kicker: "Commit message", text: "Enter a commit message. Jira is optional." },
+        { kind: "error", kicker: "Jira key", text: "Enter a Jira key on Retrieve (for example PROJ-123)." },
         { kind: "error", kicker: "Release repo", text: "Connect a GitHub repo on the Start tab first." }
       ]
     });
     assert.equal(blocked.ok, false);
     assert.equal(blocked.title, "Blocked");
-    assert.equal(blocked.items[0].kicker, "Commit message");
-    assert.match(blocked.items[0].text, /Jira is optional/);
+    assert.equal(blocked.items[0].kicker, "Jira key");
+    assert.match(blocked.items[0].text, /PROJ-123/);
     assert.equal(blocked.items[1].kicker, "Release repo");
     const fromMessage = formatLocalOutcome({ local: true, errorMessage: "Enter a commit message." });
     assert.equal(fromMessage.items[0].text, "Enter a commit message.");

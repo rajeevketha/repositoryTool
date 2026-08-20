@@ -13,7 +13,8 @@ import {
   createVersionRecord,
   addDeployment,
   upsertVersion,
-  gitShipValidationItems
+  gitShipValidationItems,
+  snapshotDetailsItems
 } from "../extension/lib/versions.js";
 
 describe("jira / version ids", () => {
@@ -67,35 +68,48 @@ describe("jira / version ids", () => {
     assert.equal(store.versions[0].deployments[0].org.label, "UAT");
   });
 
-  it("explains missing commit before a missing Git repo, and does not require Jira", () => {
+  it("requires a Jira key and comment on Retrieve, and a repo when Git is on", () => {
+    const missing = snapshotDetailsItems({ jiraKey: "", comment: "" });
+    assert.equal(missing.length, 2);
+    assert.equal(missing[0].kicker, "Jira key");
+    assert.equal(missing[1].kicker, "Comment");
+
     const both = gitShipValidationItems({
       gitEnabled: true,
+      jiraKey: "",
       commitMessage: "",
       gitConfigured: false,
       hostLabel: "GitHub"
     });
-    assert.equal(both.length, 2);
-    assert.equal(both[0].kicker, "Commit message");
-    assert.match(both[0].text, /Jira is optional/i);
-    assert.match(both[0].text, /commit message is required/i);
-    assert.equal(both[1].kicker, "Release repo");
-    assert.match(both[1].text, /GitHub/);
+    assert.equal(both.length, 3);
+    assert.equal(both[0].kicker, "Jira key");
+    assert.equal(both[1].kicker, "Comment");
+    assert.equal(both[2].kicker, "Release repo");
+    assert.match(both[2].text, /GitHub/);
 
-    const commitOnly = gitShipValidationItems({
+    const commentOnly = gitShipValidationItems({
       gitEnabled: true,
+      jiraKey: "PROJ-123",
       commitMessage: "   ",
       gitConfigured: true,
       hostLabel: "GitLab"
     });
-    assert.equal(commitOnly.length, 1);
-    assert.equal(commitOnly[0].kicker, "Commit message");
+    assert.equal(commentOnly.length, 1);
+    assert.equal(commentOnly[0].kicker, "Comment");
 
-    const none = gitShipValidationItems({
+    const ready = gitShipValidationItems({
       gitEnabled: true,
+      jiraKey: "PROJ-123",
       commitMessage: "Account status field",
       gitConfigured: true
     });
-    assert.deepEqual(none, []);
-    assert.deepEqual(gitShipValidationItems({ gitEnabled: false, commitMessage: "" }), []);
+    assert.deepEqual(ready, []);
+
+    const localReady = gitShipValidationItems({
+      gitEnabled: false,
+      jiraKey: "PROJ-9",
+      commitMessage: "Layout fix"
+    });
+    assert.deepEqual(localReady, []);
   });
 });

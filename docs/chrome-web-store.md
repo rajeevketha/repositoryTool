@@ -1,4 +1,4 @@
-# Chrome Web Store submission (OrgFlow 1.11.11)
+# Chrome Web Store submission (OrgFlow 1.11.12)
 
 Use this tomorrow morning after you smoke-test in Chrome. Upload **`files/orgflow-chrome-web-store.zip`** — `manifest.json` is at the zip root (required). Do **not** upload `orgflow-extension.zip`; that nested `orgflow/` folder is only for Load unpacked.
 
@@ -31,7 +31,7 @@ Sequential Salesforce metadata deploys with Jira versions in this browser, or in
 
 OrgFlow helps Salesforce configurators move metadata from a sandbox to QA, UAT, or production.
 
-Work in order: Start → Package → Retrieve → Deploy. You cannot skip ahead. Log into both orgs in Chrome, detect them, and set From and To in the path bar. Package is one screen: pick a type, tick members, pick another type to add more. Back from Retrieve returns to Package unlocked so you can add members, then retrieve again.
+Work in order: Start → Package → Retrieve → Confirm. You cannot skip ahead. Log into both orgs in Chrome, detect them, and set From and To in the path bar (org names, not usernames). Package is one screen: pick a type, tick members, pick another type to add more. Back from Retrieve returns to Package unlocked so you can add members, then retrieve again. On Retrieve, Jira key and comment are required. Confirm shows what will go to the To org and the deploy result.
 
 Versioning is always on. Snapshots are keyed by Jira (PROJ-123-v1). Keep them in this Chrome profile, or share them in GitHub, GitLab, or Azure DevOps so teammates can reuse the same package.
 

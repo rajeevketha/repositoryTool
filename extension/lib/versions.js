@@ -147,25 +147,39 @@ export function sortVersions(versions) {
 }
 
 /**
- * Blocking reasons when a team repo is on. Commit message is always first —
- * Jira is optional, so an empty ticket is not a failure.
+ * Jira key and comment are required on Retrieve before Confirm deploy.
+ */
+export function snapshotDetailsItems({ jiraKey, comment } = {}) {
+  const items = [];
+  if (!isJiraKey(jiraKey)) {
+    items.push({
+      kind: "error",
+      kicker: "Jira key",
+      text: "Enter a Jira key on Retrieve (for example PROJ-123)."
+    });
+  }
+  if (!String(comment || "").trim()) {
+    items.push({
+      kind: "error",
+      kicker: "Comment",
+      text: "Enter a comment on Retrieve describing this change."
+    });
+  }
+  return items;
+}
+
+/**
+ * Snapshot details always, plus a connected repo when Release repo is on.
  */
 export function gitShipValidationItems({
   gitEnabled,
   commitMessage,
   gitConfigured,
-  hostLabel = "Git"
+  hostLabel = "Git",
+  jiraKey
 } = {}) {
-  if (!gitEnabled) return [];
-  const items = [];
-  if (!String(commitMessage || "").trim()) {
-    items.push({
-      kind: "error",
-      kicker: "Commit message",
-      text: "Enter a commit message. Jira is optional — skip it if you do not have a ticket. The commit message is required for Save, Salesforce deploy, and deploying a saved version."
-    });
-  }
-  if (!gitConfigured) {
+  const items = snapshotDetailsItems({ jiraKey, comment: commitMessage });
+  if (gitEnabled && !gitConfigured) {
     items.push({
       kind: "error",
       kicker: "Release repo",

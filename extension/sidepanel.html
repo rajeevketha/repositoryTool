@@ -64,15 +64,15 @@
             <p class="suggestion-kicker">Choose one</p>
             <div class="mode-grid">
               <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
-                <strong>This browser</strong>
-                <span>Keep versions on this Chrome profile</span>
+                <strong>Local snapshots</strong>
+                <span>Versions stay on this Chrome profile</span>
               </button>
               <button type="button" class="mode-card" id="mode-git" data-mode="git">
                 <strong>Release repo</strong>
                 <span>Same Jira snapshot: Dev → QA → Staging → Prod</span>
               </button>
             </div>
-            <div id="mode-status" class="muted">Snapshots stay on this Chrome profile.</div>
+            <div id="mode-status" class="muted">Keeping versions on this Chrome profile.</div>
           </div>
 
           <div class="start-block">
@@ -197,11 +197,19 @@
 
         <section id="view-ship" class="view">
           <p class="step-kicker">Step 4 of 4</p>
-          <h2 class="page-title">Deploy</h2>
+          <h2 class="page-title">Confirm deploy</h2>
           <p class="hint" id="deploy-path-line">Set From and To in the path bar.</p>
-            <article class="card" id="package-summary-card">
-            <div class="title">Components in this deploy <span id="package-count-deploy" class="badge">0</span></div>
-            <p class="hint">Scroll this list if it is long. Deploy stays below.</p>
+          <article class="card" id="deploy-confirm-card">
+            <div class="title">This snapshot</div>
+            <dl class="confirm-dl">
+              <div><dt>Jira</dt><dd id="deploy-confirm-jira">Enter on Retrieve</dd></div>
+              <div><dt>Comment</dt><dd id="deploy-confirm-comment">Enter on Retrieve</dd></div>
+              <div><dt>Saved to</dt><dd id="deploy-confirm-dest">Local snapshots</dd></div>
+            </dl>
+          </article>
+          <article class="card" id="package-summary-card">
+            <div class="title">Going to the To org <span id="package-count-deploy" class="badge">0</span></div>
+            <p class="hint">This is the package Salesforce will receive. Scroll if the list is long.</p>
             <div id="deploy-manifest" class="deploy-manifest" tabindex="0"></div>
             <div id="package-summary-body" class="hidden"></div>
           </article>
@@ -210,6 +218,16 @@
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
             <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
           </div>
+          <article class="card" id="deploy-result-card">
+            <div class="title" id="deploy-result-head">
+              <span id="deploy-result-title">Deploy result</span>
+              <span id="deploy-result-badge" class="badge">—</span>
+            </div>
+            <p class="hint" id="deploy-result-sub">Nothing sent yet. Confirm the org names and component list, then Deploy.</p>
+            <div id="deploy-result-body" class="outcome-body">
+              <p class="muted">The deploy result will show here after you send the package.</p>
+            </div>
+          </article>
         </section>
 
         <section id="view-versions" class="view">
@@ -389,7 +407,7 @@
             <div class="row-actions">
               <button type="button" id="btn-retrieve-review" class="accent" data-busy data-needs="source,package">Retrieve from From org</button>
             </div>
-            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Click Retrieve when this package looks right. Use Back if you still need more members.</p>
+            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Click Retrieve when this package looks right. Then enter Jira and a comment.</p>
             <div id="file-list" class="file-list"></div>
             <label id="file-editor-wrap" class="hidden">
               <span id="file-editor-name">File</span>
@@ -407,18 +425,18 @@
           </div>
         </section>
 
-        <section id="git-ship-panel" class="git-ship git-only hidden">
-          <h2>Save to the release repo</h2>
-          <p class="hint" id="git-ship-hint">A commit message is required when sharing in GitHub, GitLab, or Azure — for Save, Salesforce deploy, and deploying a saved version. Jira is optional.</p>
+        <section id="git-ship-panel" class="git-ship hidden">
+          <h2>Snapshot details</h2>
+          <p class="hint" id="git-ship-hint">Jira key and comment are required on Retrieve before you can confirm deploy.</p>
           <label>
-            <span class="field-title">Jira key <span class="opt-mark">Optional</span></span>
-            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" />
+            <span class="field-title">Jira key <span class="req-mark">Required</span></span>
+            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" aria-required="true" />
           </label>
           <label>
-            <span class="field-title">Commit message <span class="req-mark">Required</span></span>
-            <textarea id="comment" rows="3" placeholder="Required. Example: Account status field + layout for PROJ-123" aria-required="true"></textarea>
+            <span class="field-title">Comment <span class="req-mark">Required</span></span>
+            <textarea id="comment" rows="3" placeholder="What changed. Example: Account status field + layout for PROJ-123" aria-required="true"></textarea>
           </label>
-          <div class="row-actions">
+          <div class="row-actions git-only">
             <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to repo</button>
           </div>
         </section>

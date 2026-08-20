@@ -1,8 +1,6 @@
 import { loadSettings, saveSettings, isGitConfigured, repoLabel, savePipelineCache, loadPipelineCache } from "./lib/storage.js";
 import { catalogGroupsFromTypes, memberHint, fallbackTypeRecords, mergeDescribedTypes, withStandardObjectMembers, objectFilterOptions, memberObjectKey, OBJECT_FILTER_TYPES, isStandardObject, COMMON_CONFIG_TYPES } from "./lib/metadataTypes.js";
 import {
-  parseTicketInput,
-  mintChangeId,
   nextIncrement,
   createVersionRecord,
   addDeployment,
@@ -13,7 +11,8 @@ import {
   sortVersions,
   versionsFilePath,
   isJiraKey,
-  gitShipValidationItems
+  gitShipValidationItems,
+  snapshotDetailsItems
 } from "./lib/versions.js";
 import {
   providerMeta,
@@ -92,7 +91,7 @@ const STEPS = [
   { id: "start", label: "Start", view: "start" },
   { id: "package", label: "Package", view: "components" },
   { id: "review", label: "Retrieve", view: "components" },
-  { id: "deploy", label: "Deploy", view: "ship" }
+  { id: "deploy", label: "Confirm", view: "ship" }
 ];
 
 function stepIndexById(id) {
@@ -281,6 +280,8 @@ function deployBlockReason() {
   if (!state.retrieveOk || !hasFreshRetrieve()) {
     return retrieveBlockReason() || "Retrieve must succeed before deploy. Next stays off until then.";
   }
+  const details = snapshotValidationItems();
+  if (details.length) return details[0].text;
   if (alreadyDeployedToCurrentTarget()) {
     return `Already deployed this package to ${target.label}. Change To for another org, or start a new package.`;
   }
@@ -319,9 +320,9 @@ function updateActionState() {
   if (deployBtn) {
     const deploying = state.deployFinished === "running" || (state.busy && currentStepId() === "deploy" && state.deployFinished !== "failed");
     const doneOk = state.deployFinished === "success" || alreadyDeployedToCurrentTarget();
-    const gitItems = useGitEnabled() ? gitShipItems() : [];
+    const shipItems = gitShipItems();
     if (deploying || doneOk) deployBtn.disabled = true;
-    else if (gitItems.length) deployBtn.disabled = true;
+    else if (shipItems.length) deployBtn.disabled = true;
     deployBtn.textContent = deploying ? "Deploying…" : doneOk ? "Deployed" : "Deploy";
     const stateEl = $("deploy-btn-hint");
     if (stateEl) {
@@ -332,7 +333,7 @@ function updateActionState() {
         stateEl.textContent = `Already sent to ${selectedOrg("target-org")?.label || "this org"}`;
         stateEl.dataset.state = "done";
       } else if (deployBtn.disabled) {
-        stateEl.textContent = gitItems[0]?.text || reason || "Not ready yet";
+        stateEl.textContent = shipItems[0]?.text || reason || "Not ready yet";
         stateEl.dataset.state = "off";
       } else {
         stateEl.textContent = `Ready — send to ${selectedOrg("target-org")?.label || "To org"}`;
@@ -343,10 +344,15 @@ function updateActionState() {
   }
   const commentEl = $("comment");
   if (commentEl) {
-    const missingCommit = useGitEnabled() && !gitCommitMessage();
-    const showInvalid = missingCommit && state.gitShipWarned;
+    const showInvalid = !gitCommitMessage() && state.gitShipWarned;
     commentEl.classList.toggle("invalid", showInvalid);
     commentEl.setAttribute("aria-invalid", showInvalid ? "true" : "false");
+  }
+  const jiraEl = $("jira");
+  if (jiraEl) {
+    const showInvalid = !isJiraKey(jiraKeyValue()) && state.gitShipWarned;
+    jiraEl.classList.toggle("invalid", showInvalid);
+    jiraEl.setAttribute("aria-invalid", showInvalid ? "true" : "false");
   }
   syncCompareEntry();
   const retrieveFresh = hasFreshRetrieve() && state.retrieveOk;
@@ -369,20 +375,25 @@ function updateActionState() {
   const retrieveHint = $("retrieve-btn-hint");
   if (retrieveHint) {
     if (retrieveFresh) {
-      retrieveHint.textContent = "Snapshot matches this package and From org. Compare with a saved version before Deploy if you need to.";
+      retrieveHint.textContent = "Snapshot matches this package and From org. Enter Jira and a comment, then Next to confirm deploy.";
       retrieveHint.dataset.state = "done";
     } else if (state.retrieveSnapshot) {
       retrieveHint.textContent = "Members, type, or From org changed — retrieve again before deploy.";
       retrieveHint.dataset.state = "off";
     } else {
-      retrieveHint.textContent = "Click Retrieve when this package looks right. Use Back if you still need more members.";
+      retrieveHint.textContent = "Click Retrieve when this package looks right. Then enter Jira and a comment.";
       retrieveHint.dataset.state = "off";
     }
   }
   const saveBtn = $("btn-save");
-  if (saveBtn && useGitEnabled() && !state.busy && !gitCommitMessage()) {
-    saveBtn.disabled = true;
-    saveBtn.title = "Enter a commit message first. Jira is optional.";
+  if (saveBtn && useGitEnabled() && !state.busy) {
+    const details = snapshotValidationItems();
+    if (details.length) {
+      saveBtn.disabled = true;
+      saveBtn.title = details[0].text;
+    } else {
+      saveBtn.title = "Save this retrieve to the release repo.";
+    }
   }
   const callout = $("deploy-reason");
   if (callout) {
@@ -680,11 +691,11 @@ function maybeAdvanceFromStart() {
   if (!pathReady()) return;
   if (useGitEnabled() && !isGitConfigured(state.settings)) {
     $("git-setup-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-    setStatus("From and To are set. Connect a release repo, or switch to This browser, then click Next.", "ok");
+    setStatus("From and To are set. Connect a release repo, or switch to Local snapshots, then click Next.", "ok");
     return;
   }
   $("snapshots-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-  setStatus("From and To are set. Choose This browser or Release repo, then click Next.", "ok");
+  setStatus("From and To are set. Choose Local snapshots or Release repo, then click Next.", "ok");
 }
 
 function renderOrgPath() {
@@ -695,12 +706,12 @@ function renderOrgPath() {
   const bar = $("org-path");
   if ($("source-org-meta")) {
     $("source-org-meta").textContent = source
-      ? `${orgKind(source)} · ${source.username || source.instanceUrl}`
+      ? orgKind(source)
       : "Where you built the change";
   }
   if ($("target-org-meta")) {
     $("target-org-meta").textContent = target
-      ? `${orgKind(target)} · ${target.username || target.instanceUrl}`
+      ? orgKind(target)
       : "Where it should go (QA, UAT, prod)";
   }
   const ready = Boolean(source && target && orgKey(source) !== orgKey(target));
@@ -714,8 +725,11 @@ function renderOrgPath() {
         : "Select source and target orgs";
   }
   if (sub) {
+    const stepId = currentStepId();
     sub.textContent = ready
-      ? "From and To are set. Choose This browser or Release repo on Start, then Next."
+      ? (stepId === "start"
+        ? "From and To are set. Choose Local snapshots or Release repo on Start, then Next."
+        : `${orgKind(source)} → ${orgKind(target)}`)
       : "Next stays off until From and To are different Salesforce orgs.";
   }
   updatePipelinePathCopy();
@@ -741,6 +755,7 @@ function farthestStep() {
   if (!memberCount(state.packageTypes)) return stepIndexById("package");
   if (!state.reviewSeen && state.stepIndex < stepIndexById("review")) return stepIndexById("package");
   if (!hasFreshRetrieve() || !state.retrieveOk) return stepIndexById("review");
+  if (snapshotValidationItems().length) return stepIndexById("review");
   return stepIndexById("deploy");
 }
 
@@ -766,6 +781,10 @@ function leaveReason(index) {
   if (index === stepIndexById("review") && (!hasFreshRetrieve() || !state.retrieveOk)) {
     if (!hasFreshRetrieve()) return retrieveBlockReason();
     return "Retrieve must succeed before deploy. The result panel shows why it failed.";
+  }
+  if (index === stepIndexById("review")) {
+    const details = snapshotValidationItems();
+    if (details.length) return details[0].text;
   }
   return "";
 }
@@ -793,7 +812,7 @@ function updatePickCopy() {
   } else if (stepId === "review") {
     if ($("pick-heading")) $("pick-heading").textContent = "Retrieve from the From org";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Click Retrieve when the package is complete. Back returns to Package so you can add more members, then retrieve again.";
+      $("pick-lead").textContent = "Click Retrieve when the package is complete. Then enter Jira and a comment — both are required before Confirm deploy. Back returns to Package to add members.";
     }
   }
   if ($("header-sub")) {
@@ -801,7 +820,7 @@ function updatePickCopy() {
       start: "Step 1 · Connect orgs",
       package: "Step 2 · Build the package",
       review: "Step 3 · Retrieve",
-      deploy: "Step 4 · Deploy",
+      deploy: "Step 4 · Confirm deploy",
       versions: "Saved versions"
     };
     $("header-sub").textContent = labels[stepId] || "Config sandbox → other orgs";
@@ -865,7 +884,7 @@ function updateWizardNav() {
   back.textContent = "Back";
   const reason = leaveReason(state.stepIndex);
   next.disabled = last || Boolean(reason) || state.busy;
-  const labels = ["Next: package", "Next: retrieve", "Next: deploy", "Deploy"];
+  const labels = ["Next: package", "Next: retrieve", "Next: confirm", "Deploy"];
   next.textContent = labels[state.stepIndex] || "Next";
   next.classList.toggle("hidden", last);
   if (reason) {
@@ -874,14 +893,14 @@ function updateWizardNav() {
     hint.textContent = state.busy ? "Waiting for Salesforce…" : (deployBlockReason() || `Ready to send this package to ${selectedOrg("target-org")?.label || "the To org"}.`);
   } else if (state.stepIndex === 0) {
     hint.textContent = pathReady()
-      ? "Choose This browser or Release repo, then Next."
+      ? "Choose Local snapshots or Release repo, then Next."
       : `Step 1 of ${STEPS.length} · ${currentStep().label}`;
   } else if (state.stepIndex === stepIndexById("package")) {
     hint.textContent = "Pick a type, tick members, pick another type if you need it, then Next.";
   } else if (state.stepIndex === stepIndexById("review")) {
     hint.textContent = hasFreshRetrieve() && state.retrieveOk
-      ? "Retrieve succeeded. Next to deploy, or Back to add members."
-      : "Click Retrieve when the package is complete. Back adds more members.";
+      ? "Retrieve succeeded. Enter Jira and a comment, then Next to confirm deploy — or Back to add members."
+      : "Click Retrieve when the package is complete. Then enter Jira and a comment.";
   } else {
     hint.textContent = `Step ${state.stepIndex + 1} of ${STEPS.length} · ${currentStep().label}`;
   }
@@ -967,8 +986,9 @@ function wizardNext() {
   }
   const reason = leaveReason(state.stepIndex);
   if (reason) {
+    if (state.stepIndex === stepIndexById("review")) state.gitShipWarned = true;
     setStatus(reason, "error");
-    updateWizardNav();
+    updateActionState();
     return;
   }
   if (state.stepIndex >= STEPS.length - 1) return;
@@ -1089,12 +1109,24 @@ function gitCommitMessage() {
   return $("comment")?.value?.trim() || "";
 }
 
+function jiraKeyValue() {
+  return $("jira")?.value?.trim() || "";
+}
+
+function snapshotValidationItems() {
+  return snapshotDetailsItems({
+    jiraKey: jiraKeyValue(),
+    comment: gitCommitMessage()
+  });
+}
+
 function gitShipItems() {
   return gitShipValidationItems({
     gitEnabled: useGitEnabled(),
     commitMessage: gitCommitMessage(),
     gitConfigured: isGitConfigured(state.settings),
-    hostLabel: providerMeta(providerId(state.settings)).label
+    hostLabel: providerMeta(providerId(state.settings)).label,
+    jiraKey: jiraKeyValue()
   });
 }
 
@@ -1110,9 +1142,9 @@ function requireGitShipReady(operation = "deploy") {
   const items = gitShipItems();
   if (!items.length) return gitCommitMessage();
   state.gitShipWarned = true;
-  throw localError(items.map((item) => item.text).join(" "), {
+    throw localError(items.map((item) => item.text).join(" "), {
     validationItems: items,
-    focus: items.some((item) => item.kicker === "Commit message") ? "comment" : "",
+    focus: items.some((item) => item.kicker === "Jira key") ? "jira" : (items.some((item) => item.kicker === "Comment") ? "comment" : ""),
     operation
   });
 }
@@ -1133,7 +1165,9 @@ function showLocalFailure(operation, err) {
     operation,
     items
   });
-  if (err.focus === "comment" || (useGitEnabled() && !gitCommitMessage())) {
+  if (err.focus === "jira" || items.some((item) => item.kicker === "Jira key")) {
+    $("jira")?.focus();
+  } else if (err.focus === "comment" || (useGitEnabled() && !gitCommitMessage())) {
     $("comment")?.focus();
   }
   updateActionState();
@@ -1214,7 +1248,7 @@ function renderInspector() {
   const repo = isGitConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
   $("inspector-git").textContent = gitOn
     ? `Jira versions in the release repo · ${repo}`
-    : "Jira versions in this browser · same snapshot for QA then prod";
+    : "Jira versions in Local snapshots · same snapshot for QA then prod";
   const tests = state.specifiedTests;
   $("inspector-tests").textContent = tests.length
     ? `${tests.length} specified test${tests.length === 1 ? "" : "s"}: ${tests.slice(0, 8).join(", ")}${tests.length > 8 ? "…" : ""}`
@@ -1225,8 +1259,7 @@ function renderInspector() {
 
 function syncOutcomePanel() {
   const step = currentStepId();
-  const show = step === "review" || step === "deploy";
-  $("outcome-panel")?.classList.toggle("hidden", !show);
+  $("outcome-panel")?.classList.toggle("hidden", step !== "review");
 }
 
 function safeHttpUrl(value) {
@@ -1270,9 +1303,6 @@ function outcomeItemHtml(item) {
 }
 
 function showOutcome(result) {
-  const panel = $("outcome-panel");
-  if (!panel) return;
-  panel.classList.remove("hidden");
   const formatted = formatOperationOutcome(result);
   const titles = {
     retrieve: "Retrieve result",
@@ -1280,36 +1310,56 @@ function showOutcome(result) {
     save: "Save to repo"
   };
   const operation = titles[result?.operation] || (result?.local ? "Couldn't continue" : "Deploy result");
-  if ($("outcome-title")) $("outcome-title").textContent = operation;
-  if ($("outcome-badge")) $("outcome-badge").textContent = formatted.title;
-  const head = $("outcome-head");
-  if (head) {
-    head.classList.toggle("ok", formatted.ok === true);
-    head.classList.toggle("err", formatted.ok === false);
-    head.classList.toggle("wait", formatted.ok === null);
+  const sub = formatted.ok === true
+    ? (result?.operation === "retrieve"
+      ? "Files are ready. Enter Jira and a comment, then Next to confirm deploy."
+      : result?.gitRecord?.ok === false
+        ? "Salesforce accepted the package. The snapshot was not written to Git — see the release repo below."
+        : result?.gitRecord?.ok
+          ? "Salesforce accepted this package. Snapshot files are under .orgflow/releases/… — not the repo root."
+          : result?.operation === "save"
+            ? "Snapshot is in the release repo under .orgflow/releases/…"
+            : "Salesforce accepted this package.")
+    : formatted.ok === null
+      ? "Salesforce is still working. The button stays off until this finishes."
+      : result?.local
+        ? "OrgFlow blocked this before Salesforce. Each item below is what to fix."
+        : "Salesforce rejected this request. Each item below is why it failed.";
+  const html = formatted.items.length
+    ? formatted.items.map(outcomeItemHtml).join("")
+    : `<p class="muted">No messages from Salesforce.</p>`;
+  const onDeploy = result?.operation === "deploy" || result?.operation === "save";
+  if (!onDeploy) {
+    const panel = $("outcome-panel");
+    panel?.classList.remove("hidden");
+    if ($("outcome-title")) $("outcome-title").textContent = operation;
+    if ($("outcome-badge")) $("outcome-badge").textContent = formatted.title;
+    const head = $("outcome-head");
+    if (head) {
+      head.classList.toggle("ok", formatted.ok === true);
+      head.classList.toggle("err", formatted.ok === false);
+      head.classList.toggle("wait", formatted.ok === null);
+    }
+    if ($("outcome-sub")) $("outcome-sub").textContent = sub;
+    if ($("outcome-body")) $("outcome-body").innerHTML = html;
   }
-  if ($("outcome-sub")) {
-    $("outcome-sub").textContent = formatted.ok === true
-      ? (result?.operation === "retrieve"
-        ? "Files are ready. Compare with a saved version if you need to, then Next to Deploy."
-        : result?.gitRecord?.ok === false
-          ? "Salesforce accepted the package. The snapshot was not written to Git — see the release repo below."
-          : result?.gitRecord?.ok
-            ? "Salesforce accepted this package. Snapshot files are under .orgflow/releases/… — not the repo root."
-            : result?.operation === "save"
-              ? "Snapshot is in the release repo under .orgflow/releases/…"
-              : "Salesforce accepted this package.")
-      : formatted.ok === null
-        ? "Salesforce is still working. The button stays off until this finishes."
-        : result?.local
-          ? "OrgFlow blocked this before Salesforce. Each item below is what to fix."
-          : "Salesforce rejected this request. Each item below is why it failed.";
+  if ($("deploy-result-title")) $("deploy-result-title").textContent = onDeploy ? operation : "Deploy result";
+  if ($("deploy-result-badge")) $("deploy-result-badge").textContent = onDeploy ? formatted.title : "—";
+  const deployHead = $("deploy-result-head");
+  if (deployHead) {
+    deployHead.classList.toggle("ok", onDeploy && formatted.ok === true);
+    deployHead.classList.toggle("err", onDeploy && formatted.ok === false);
+    deployHead.classList.toggle("wait", onDeploy && formatted.ok === null);
   }
-  const body = $("outcome-body");
-  if (body) {
-    body.innerHTML = formatted.items.length
-      ? formatted.items.map(outcomeItemHtml).join("")
-      : `<p class="muted">No messages from Salesforce.</p>`;
+  if ($("deploy-result-sub")) {
+    $("deploy-result-sub").textContent = onDeploy
+      ? sub
+      : "Nothing sent yet. Confirm the org names and component list, then Deploy.";
+  }
+  if ($("deploy-result-body")) {
+    $("deploy-result-body").innerHTML = onDeploy
+      ? html
+      : `<p class="muted">The deploy result will show here after you send the package.</p>`;
   }
 }
 
@@ -1319,12 +1369,22 @@ function renderDeployManifest() {
   const pathLine = $("deploy-path-line");
   const count = memberCount(state.packageTypes);
   if (countEl) countEl.textContent = String(count);
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
   if (pathLine) {
-    const source = selectedOrg("source-org");
-    const target = selectedOrg("target-org");
     pathLine.textContent = source && target
-      ? `${source.label} → ${target.label}`
+      ? `Confirm this package from ${source.label} to ${target.label}.`
       : "Set From and To in the path bar.";
+  }
+  const jiraEl = $("deploy-confirm-jira");
+  const commentEl = $("deploy-confirm-comment");
+  const destEl = $("deploy-confirm-dest");
+  if (jiraEl) jiraEl.textContent = isJiraKey(jiraKeyValue()) ? jiraKeyValue().toUpperCase() : "Enter on Retrieve";
+  if (commentEl) commentEl.textContent = gitCommitMessage() || "Enter on Retrieve";
+  if (destEl) {
+    destEl.textContent = useGitEnabled() && isGitConfigured(state.settings)
+      ? repoLabel(state.settings)
+      : "Local snapshots";
   }
   if (!el) return;
   const columns = categoryColumns(state.packageTypes);
@@ -1348,17 +1408,17 @@ function renderGitUi() {
     ? connected
       ? `Compare this retrieve with a saved snapshot before Deploy. Shared Jira versions are in ${repoLabel(state.settings)}.`
       : `${host} is on — connect a repo on Start so the team can reuse versions. Compare before you deploy.`
-    : "Compare this retrieve with a saved snapshot before Deploy. Jira versions stay on this Chrome profile unless you connect a release repo.";
+    : "Compare this retrieve with a saved snapshot before Deploy. Jira versions stay in Local snapshots unless you connect a release repo.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
       : (($("gh-repo")?.value || $("gh-repo-input")?.value.trim())
         ? "A repo is selected in the list, but it is not connected yet. Click Use this repo."
-        : `Connect a ${host} repo on Start. Until then, versions stay in this browser.`)
-    : "Saving versions in this browser (no token).";
+        : `Connect a ${host} repo on Start. Until then, versions stay in Local snapshots.`)
+    : "Saving versions in Local snapshots (no token).";
   $("git-hint").textContent = on
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod get the same snapshot."
-    : "Each Jira save creates v1, v2, … on this computer. A release repo is optional sharing so QA and prod reuse the same snapshot.";
+    : "Each Jira save creates v1, v2, … in Local snapshots. A release repo is optional sharing so QA and prod reuse the same snapshot.";
   $("git-setup-block")?.classList.toggle("hidden", !on);
   document.body.classList.toggle("mode-simple", !on);
   document.body.classList.toggle("mode-git", on);
@@ -1369,11 +1429,13 @@ function renderGitUi() {
     ? connected
       ? `Sharing in ${repoLabel(state.settings)}${currentPipelineRecord() ? ` · ${pipelinePathLabel(currentPipelineRecord())}` : ""}.`
       : `Sharing is on — ${host}. After Connect, pick a repo and click Use this repo. OrgFlow saves From → To as the promotion path.`
-    : "Snapshots stay on this Chrome profile. Detect orgs, set From and To, then Next.";
-  const showGitShip = on && (state.showingVersions || ["review", "deploy"].includes(currentStepId()));
+    : "Keeping versions on this Chrome profile. Detect orgs, set From and To, then Next.";
+  const showGitShip = currentStepId() === "review";
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   if ($("git-ship-hint")) {
-    $("git-ship-hint").textContent = `A commit message is required when ${host} is on — for Save, Salesforce deploy, and deploying a saved version. Jira is optional. Open files in Git under .orgflow/releases/<Jira>/vN/ (classes, objects, layouts, …).`;
+    $("git-ship-hint").textContent = useGitEnabled()
+      ? `Jira key and comment are required here before Confirm deploy. The comment is also the ${host} commit message.`
+      : "Jira key and comment are required here before Confirm deploy.";
   }
   fillGitHostUi();
   renderPipelines();
@@ -1701,7 +1763,7 @@ function renderFileList() {
 
 function fillOrgSelects() {
   const options = state.orgs.length
-    ? state.orgs.map((o) => `<option value="${escapeHtml(orgKey(o))}">${escapeHtml(o.label)} — ${escapeHtml(o.username || o.instanceUrl)}</option>`).join("")
+    ? state.orgs.map((o) => `<option value="${escapeHtml(orgKey(o))}">${escapeHtml(o.label)}</option>`).join("")
     : "";
   const prevSource = state.settings.lastSourceOrgId;
   const prevTarget = state.settings.lastTargetOrgId;
@@ -2143,7 +2205,7 @@ function renderVersions() {
     return `${v.id} ${v.jira} ${v.comment}`.toLowerCase().includes(q);
   });
   if (!items.length) {
-    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to repo." : "No versions in this browser yet. Retrieve, then save a snapshot."}</div>`;
+    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to repo." : "No versions in Local snapshots yet. Retrieve, then save a snapshot."}</div>`;
     return;
   }
   $("version-list").innerHTML = items
@@ -2153,7 +2215,7 @@ function renderVersions() {
       return `<article class="card" data-id="${escapeHtml(v.id)}">
         <div class="title">${escapeHtml(v.id)}</div>
         <div class="meta">${escapeHtml(v.comment || "No comment")}</div>
-        <div class="meta">${escapeHtml(v.storage === "git" ? providerMeta(providerId(state.settings)).label : "This browser")} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
+        <div class="meta">${escapeHtml(v.storage === "git" ? providerMeta(providerId(state.settings)).label : "Local snapshots")} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
         ${comps ? `<div class="meta">${escapeHtml(comps)}</div>` : ""}
         ${deploys ? `<div class="meta">${escapeHtml(deploys)}</div>` : ""}
         <div class="tiny">
@@ -2631,22 +2693,15 @@ async function persistGitToggle(on) {
 }
 
 function resolveTicket(store) {
-  const jiraField = $("jira").value.trim();
-  const comment = $("comment").value.trim();
-  if (useGitEnabled() && !comment) {
-    throw localError("Enter a commit message. Jira is optional — skip it if you do not have a ticket. The commit message is required when a release repo is on.", {
-      focus: "comment",
+  const details = snapshotValidationItems();
+  if (details.length) {
+    throw localError(details.map((item) => item.text).join(" "), {
+      focus: details[0].kicker === "Jira key" ? "jira" : "comment",
       operation: "save",
-      validationItems: gitShipItems()
+      validationItems: details
     });
   }
-  if (jiraField) {
-    const parsed = parseTicketInput(jiraField);
-    if (parsed.kind === "jira" || isJiraKey(parsed.ticket)) return { ticket: parsed.ticket, comment };
-    return { ticket: parsed.ticket.toUpperCase().replace(/\s+/g, "-"), comment };
-  }
-  if (!comment) throw localError("Enter a Jira ticket or a comment.", { focus: "comment", operation: "save" });
-  return { ticket: mintChangeId(store.versions), comment };
+  return { ticket: jiraKeyValue().toUpperCase(), comment: gitCommitMessage() };
 }
 
 async function retrieveIntoReview() {
@@ -2872,8 +2927,8 @@ async function saveVersion(options = {}) {
     state.lastSaved = { id: record.id, fingerprint: stagedFilesFingerprint() };
     renderVersions();
     $("jira").value = record.jira;
-    log(`Saved ${record.id} in this browser (${files.length} files).`);
-    setStatus(`Saved ${record.id} on this Chrome profile`, "ok");
+    log(`Saved ${record.id} in Local snapshots (${files.length} files).`);
+    setStatus(`Saved ${record.id} in Local snapshots`, "ok");
     return record;
   }
 
@@ -2928,7 +2983,7 @@ async function deployVersion(explicitId) {
   if (version.storage === "local" || !useGitEnabled()) {
     files = await loadLocalRelease(version.id);
     if (!files.length) throw new Error(`No local files found for ${version.id}. Save the version again from Review.`);
-    log(`Loading ${version.id} from this browser…`);
+    log(`Loading ${version.id} from Local snapshots…`);
   } else {
     requireGithub();
     const creds = gitCreds();
@@ -3148,9 +3203,14 @@ $("compare-file-list")?.addEventListener("click", (event) => {
   const btn = event.target.closest("[data-compare-file]");
   if (btn) showCompareDiff(btn.dataset.compareFile);
 });
+$("jira")?.addEventListener("input", () => {
+  updateActionState();
+  if (currentStepId() === "deploy") renderDeployManifest();
+});
 $("comment")?.addEventListener("input", () => {
   if (gitCommitMessage()) state.gitShipWarned = false;
   updateActionState();
+  if (currentStepId() === "deploy") renderDeployManifest();
 });
 $("btn-show-xml")?.addEventListener("click", () => {
   state.xmlReview = true;
