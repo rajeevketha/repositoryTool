@@ -238,23 +238,33 @@
           <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
 
           <article class="card" id="version-compare-card">
-            <div class="title">Compare with a previous version</div>
-            <p class="hint">Left is usually the current retrieve. Right is a saved snapshot, newest first. Open a metadata or Apex file to see the diff.</p>
+            <div class="title">This retrieve vs a saved snapshot</div>
+            <p class="hint">Left is what is moving to the To org. Right is a saved Jira version. Pick a file to see both sides.</p>
             <div class="compare-picks">
-              <label>Left
+              <label>Moving now
                 <select id="compare-left">
-                  <option value="current">Current retrieve</option>
+                  <option value="current">This retrieve</option>
                 </select>
               </label>
-              <label>Right (latest first)
+              <label>Saved snapshot
                 <select id="compare-right"></select>
               </label>
             </div>
             <div class="row-actions">
-              <button type="button" id="btn-compare-versions" class="primary">Show diff</button>
+              <button type="button" id="btn-compare-versions" class="primary">Show both sides</button>
             </div>
             <div id="compare-summary" class="muted"></div>
             <div id="compare-file-list" class="file-list compare-files"></div>
+            <div id="version-compare-split" class="diff-split hidden">
+              <div class="diff-col">
+                <div class="diff-col-head" id="version-diff-left-head">Moving now</div>
+                <pre class="diff-pane diff-side" id="version-diff-left"></pre>
+              </div>
+              <div class="diff-col">
+                <div class="diff-col-head" id="version-diff-right-head">Saved snapshot</div>
+                <pre class="diff-pane diff-side" id="version-diff-right"></pre>
+              </div>
+            </div>
             <pre id="compare-diff" class="diff-pane" hidden></pre>
           </article>
 
@@ -445,9 +455,31 @@
                 <button type="button" id="btn-save-file" class="primary">Save file edits</button>
               </div>
             </label>
-            <p class="hint" id="compare-before-hint">Optional: compare this retrieve with a saved version and revert files <strong>before</strong> Deploy.</p>
+            <p class="hint" id="compare-before-hint">Left is this retrieve (moving to the To org). Right is a saved Jira snapshot from this browser or the repo.</p>
+            <article id="retrieve-compare" class="compare-board hidden">
+              <p class="suggestion-kicker">Before you deploy</p>
+              <h3 class="compare-board-title">This retrieve vs saved snapshot</h3>
+              <label>Saved snapshot
+                <select id="retrieve-compare-saved">
+                  <option value="">No saved snapshots yet</option>
+                </select>
+              </label>
+              <p id="retrieve-compare-empty" class="hint">Save a snapshot (local or repo) after Retrieve to compare. Nothing extra is required to deploy.</p>
+              <p id="retrieve-compare-summary" class="muted"></p>
+              <div id="retrieve-compare-files" class="file-list compare-files"></div>
+              <div id="retrieve-compare-split" class="diff-split hidden">
+                <div class="diff-col">
+                  <div class="diff-col-head" id="retrieve-diff-left-head">Moving now</div>
+                  <pre class="diff-pane diff-side" id="retrieve-diff-left"></pre>
+                </div>
+                <div class="diff-col">
+                  <div class="diff-col-head" id="retrieve-diff-right-head">Saved snapshot</div>
+                  <pre class="diff-pane diff-side" id="retrieve-diff-right"></pre>
+                </div>
+              </div>
+              <button type="button" id="btn-compare-before-deploy" class="ghost-text">Revert files from a snapshot</button>
+            </article>
             <div class="actions">
-              <button type="button" id="btn-compare-before-deploy" class="secondary">Compare with a saved version</button>
               <button type="button" id="btn-show-xml" class="ghost-text">Edit package.xml instead</button>
               <button type="button" id="btn-deploy-review" class="hidden"></button>
             </div>
@@ -459,7 +491,8 @@
           <p class="hint" id="git-ship-hint">Jira key and comment are required on Retrieve before you can confirm deploy.</p>
           <label>
             <span class="field-title">Jira key <span class="req-mark">Required</span></span>
-            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" aria-required="true" />
+            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" spellcheck="false" aria-required="true" aria-describedby="jira-hint" />
+            <p id="jira-hint" class="field-hint" data-state="empty">Use the ticket id, like PROJ-123.</p>
           </label>
           <label>
             <span class="field-title">Comment <span class="req-mark">Required</span></span>
@@ -467,6 +500,7 @@
           </label>
           <div class="row-actions git-only">
             <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to repo</button>
+            <p id="save-btn-hint" class="btn-state" data-state="off">Enter a Jira key like PROJ-123, then a comment.</p>
           </div>
         </section>
       </main>

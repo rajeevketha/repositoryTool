@@ -12,7 +12,9 @@ import {
   versionsFilePath,
   isJiraKey,
   gitShipValidationItems,
-  snapshotDetailsItems
+  snapshotDetailsItems,
+  jiraFieldHint,
+  normalizeJiraKey
 } from "./lib/versions.js";
 import {
   providerMeta,
@@ -74,7 +76,7 @@ import {
   saveLocalRelease,
   loadLocalRelease
 } from "./lib/localVersions.js";
-import { compareFileSets, revertSelectedInto, unifiedDiff, fileText } from "./lib/diff.js";
+import { compareFileSets, revertSelectedInto, fileText, sideBySideRows } from "./lib/diff.js";
 import {
   RECENT_HINT_TYPES,
   COMPANION_TYPES,
@@ -386,11 +388,43 @@ function updateActionState() {
     commentEl.classList.toggle("invalid", showInvalid);
     commentEl.setAttribute("aria-invalid", showInvalid ? "true" : "false");
   }
+  const jiraHint = jiraFieldHint($("jira")?.value);
   const jiraEl = $("jira");
   if (jiraEl) {
-    const showInvalid = !isJiraKey(jiraKeyValue()) && state.gitShipWarned;
+    const showInvalid = jiraHint.state === "error" && (Boolean(String($("jira")?.value || "").trim()) || state.gitShipWarned);
     jiraEl.classList.toggle("invalid", showInvalid);
     jiraEl.setAttribute("aria-invalid", showInvalid ? "true" : "false");
+  }
+  if ($("jira-hint")) {
+    $("jira-hint").textContent = jiraHint.text;
+    $("jira-hint").dataset.state = jiraHint.state === "empty" && state.gitShipWarned ? "error" : jiraHint.state;
+  }
+  const saveBtn = $("btn-save");
+  const saveHint = $("save-btn-hint");
+  if (saveBtn && useGitEnabled() && !state.busy) {
+    const details = snapshotValidationItems();
+    if (details.length) {
+      saveBtn.disabled = true;
+      saveBtn.title = details[0].text;
+      if (saveHint) {
+        saveHint.textContent = details[0].text;
+        saveHint.dataset.state = "off";
+      }
+    } else if (!hasFreshRetrieve()) {
+      saveBtn.disabled = true;
+      if (saveHint) {
+        saveHint.textContent = "Retrieve first, then save this snapshot to the repo.";
+        saveHint.dataset.state = "off";
+      }
+    } else {
+      saveBtn.title = "Save this retrieve to the release repo.";
+      if (saveHint) {
+        saveHint.textContent = `Ready to save as ${jiraKeyValue()}-v… in the repo.`;
+        saveHint.dataset.state = "on";
+      }
+    }
+  } else if (saveHint && !useGitEnabled()) {
+    saveHint.textContent = "";
   }
   syncCompareEntry();
   const retrieveFresh = hasFreshRetrieve() && state.retrieveOk;
@@ -421,16 +455,6 @@ function updateActionState() {
     } else {
       retrieveHint.textContent = "Click Retrieve when this package looks right. Then enter Jira and a comment.";
       retrieveHint.dataset.state = "off";
-    }
-  }
-  const saveBtn = $("btn-save");
-  if (saveBtn && useGitEnabled() && !state.busy) {
-    const details = snapshotValidationItems();
-    if (details.length) {
-      saveBtn.disabled = true;
-      saveBtn.title = details[0].text;
-    } else {
-      saveBtn.title = "Save this retrieve to the release repo.";
     }
   }
   const callout = $("deploy-reason");
@@ -948,7 +972,7 @@ function updateWizardNav() {
       : "Tap something you just changed, or browse types, then Next.";
   } else if (state.stepIndex === stepIndexById("review")) {
     hint.textContent = hasFreshRetrieve() && state.retrieveOk
-      ? "Retrieve succeeded. Enter Jira and a comment, then Next to confirm deploy — or Back to add members."
+      ? "Retrieve succeeded. Enter a Jira key like PROJ-123 and a comment, then Next."
       : "Click Retrieve when the package is complete. Then enter Jira and a comment.";
   } else {
     hint.textContent = `Step ${state.stepIndex + 1} of ${STEPS.length} · ${currentStep().label}`;
@@ -985,6 +1009,7 @@ function applyStepUi() {
     setTimeout(() => run(loadOrgTypes), 0);
   }
   if (step.id === "package") setTimeout(() => warmRecentHints(), 0);
+  if (step.id === "review") setTimeout(() => maybeRefreshRetrieveCompare(), 0);
   if (step.id === "deploy") renderDeployManifest();
   renderGitUi();
   updatePickCopy();
@@ -1063,9 +1088,11 @@ function syncCompareEntry() {
     const ready = hasFreshRetrieve();
     compareBtn.disabled = state.busy;
     compareBtn.title = ready
-      ? "Open saved versions to diff this retrieve before Deploy."
-      : "Retrieve first, then compare with a saved version before you deploy.";
+      ? "Open Versions to restore files from a saved snapshot into this retrieve."
+      : "Retrieve first, then you can restore files from a saved snapshot.";
   }
+  const board = $("retrieve-compare");
+  if (board) board.classList.toggle("hidden", currentStepId() !== "review" || !hasFreshRetrieve());
 }
 
 function updatePipelinePathCopy() {
@@ -1166,7 +1193,7 @@ function gitCommitMessage() {
 }
 
 function jiraKeyValue() {
-  return $("jira")?.value?.trim() || "";
+  return normalizeJiraKey($("jira")?.value || "");
 }
 
 function snapshotValidationItems() {
@@ -1496,8 +1523,8 @@ function renderGitUi() {
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   if ($("git-ship-hint")) {
     $("git-ship-hint").textContent = useGitEnabled()
-      ? `Jira key and comment are required here before Confirm deploy. The comment is also the ${host} commit message.`
-      : "Jira key and comment are required here before Confirm deploy.";
+      ? `Jira key (PROJ-123) and comment are required here before Confirm deploy. The comment is also the ${host} commit message.`
+      : "Jira key (PROJ-123) and comment are required here before Confirm deploy.";
   }
   fillGitHostUi();
   renderPipelines();
@@ -2281,7 +2308,7 @@ function fillVersionSelects() {
   const left = $("compare-left");
   const right = $("compare-right");
   const revertFrom = $("revert-from");
-  const currentOpt = `<option value="current">Current retrieve${state.stagedFiles?.length ? ` (${state.stagedFiles.length} files)` : " (none yet)"}</option>`;
+  const currentOpt = `<option value="current">This retrieve${state.stagedFiles?.length ? ` (${state.stagedFiles.length} files)` : " (none yet)"}</option>`;
   const versionOpts = items
     .map((v) => `<option value="${escapeHtml(v.id)}">${escapeHtml(versionOptionLabel(v))}</option>`)
     .join("");
@@ -2306,13 +2333,220 @@ function fillVersionSelects() {
     revertFrom.innerHTML = options || `<option value="">No saved versions yet</option>`;
     if (prev && [...revertFrom.options].some((o) => o.value === prev)) revertFrom.value = prev;
   }
+  fillRetrieveCompareSelect();
 }
 
-function compareStatusLabel(status) {
+function compareStatusLabel(status, moving = false) {
   if (status === "changed") return "changed";
-  if (status === "onlyLeft") return "only left";
-  if (status === "onlyRight") return "only right";
+  if (status === "onlyLeft") return moving ? "only moving" : "only left";
+  if (status === "onlyRight") return moving ? "only saved" : "only right";
   return "same";
+}
+
+function fillRetrieveCompareSelect() {
+  const sel = $("retrieve-compare-saved");
+  if (!sel) return;
+  const items = sortVersions(state.versions.versions);
+  const prev = sel.value;
+  if (!items.length) {
+    sel.innerHTML = `<option value="">No saved snapshots yet</option>`;
+    return;
+  }
+  sel.innerHTML = items
+    .map((v) => `<option value="${escapeHtml(v.id)}">${escapeHtml(versionOptionLabel(v))}</option>`)
+    .join("");
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+
+function splitLineHtml(text, kind) {
+  const display = text === "" ? " " : text;
+  return `<span class="diff-line ${escapeHtml(kind)}">${escapeHtml(display)}</span>`;
+}
+
+function bindSplitScroll(left, right) {
+  if (!left || !right || left.dataset.syncBound) return;
+  left.dataset.syncBound = "1";
+  let lock = false;
+  const sync = (from, to) => {
+    if (lock) return;
+    lock = true;
+    to.scrollTop = from.scrollTop;
+    lock = false;
+  };
+  left.addEventListener("scroll", () => sync(left, right), { passive: true });
+  right.addEventListener("scroll", () => sync(right, left), { passive: true });
+}
+
+function renderSplitDiff({
+  splitId,
+  leftId,
+  rightId,
+  leftHeadId,
+  rightHeadId,
+  path,
+  row,
+  leftLabel,
+  rightLabel
+}) {
+  const split = $(splitId);
+  const leftEl = $(leftId);
+  const rightEl = $(rightId);
+  if (!split || !leftEl || !rightEl || !row) return;
+  split.classList.remove("hidden");
+  if ($(leftHeadId)) $(leftHeadId).textContent = leftLabel;
+  if ($(rightHeadId)) $(rightHeadId).textContent = rightLabel;
+  const leftText = fileText(row.left);
+  const rightText = fileText(row.right);
+  if (leftText === null && rightText === null && (row.left || row.right)) {
+    leftEl.innerHTML = splitLineHtml(`${path} is binary — no text diff.`, "meta");
+    rightEl.innerHTML = splitLineHtml(`${path} is binary — no text diff.`, "meta");
+    return;
+  }
+  if (row.status === "onlyLeft") {
+    leftEl.innerHTML = (leftText || "").split("\n").map((line) => splitLineHtml(line, "del")).join("");
+    rightEl.innerHTML = splitLineHtml("Not in the saved snapshot", "meta");
+    bindSplitScroll(leftEl, rightEl);
+    return;
+  }
+  if (row.status === "onlyRight") {
+    leftEl.innerHTML = splitLineHtml("Not in this retrieve", "meta");
+    rightEl.innerHTML = (rightText || "").split("\n").map((line) => splitLineHtml(line, "add")).join("");
+    bindSplitScroll(leftEl, rightEl);
+    return;
+  }
+  const rows = sideBySideRows(leftText || "", rightText || "");
+  if (!rows.length) {
+    leftEl.innerHTML = splitLineHtml("Unchanged", "meta");
+    rightEl.innerHTML = splitLineHtml("Unchanged", "meta");
+    return;
+  }
+  leftEl.innerHTML = rows.map((item) => {
+    if (item.kind === "hunk" || item.kind === "meta") return splitLineHtml(item.left, item.kind);
+    if (item.leftEmpty) return splitLineHtml(" ", "empty");
+    if (item.kind === "del") return splitLineHtml(item.left, "del");
+    if (item.kind === "change") return splitLineHtml(item.left, "change-left");
+    return splitLineHtml(item.left, "eq");
+  }).join("");
+  rightEl.innerHTML = rows.map((item) => {
+    if (item.kind === "hunk" || item.kind === "meta") return splitLineHtml(item.right || item.left, item.kind);
+    if (item.rightEmpty) return splitLineHtml(" ", "empty");
+    if (item.kind === "add") return splitLineHtml(item.right, "add");
+    if (item.kind === "change") return splitLineHtml(item.right, "change-right");
+    return splitLineHtml(item.right, "eq");
+  }).join("");
+  bindSplitScroll(leftEl, rightEl);
+}
+
+function renderCompareFileList(targetId = "compare-file-list", moving = false) {
+  const el = $(targetId);
+  if (!el) return;
+  const rows = (state.compareRows || []).filter((r) => r.status !== "same");
+  if (!state.compareRows.length) {
+    el.innerHTML = `<div class="empty">Pick a saved snapshot to compare with this retrieve.</div>`;
+    return;
+  }
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty">This retrieve matches that snapshot — no metadata or Apex differences.</div>`;
+    return;
+  }
+  el.innerHTML = rows
+    .map((row) => {
+      const active = row.path === state.compareActivePath ? "active" : "";
+      return `<button type="button" class="compare-row ${active}" data-compare-file="${escapeHtml(row.path)}">
+        <span class="badge ${escapeHtml(row.status)}">${escapeHtml(compareStatusLabel(row.status, moving))}</span>
+        <span>${escapeHtml(row.path)}</span>
+      </button>`;
+    })
+    .join("");
+}
+
+function showCompareDiff(path, where = "versions") {
+  state.compareActivePath = path;
+  const row = (state.compareRows || []).find((r) => r.path === path);
+  if (!row) return;
+  const savedLabel = where === "retrieve"
+    ? ($("retrieve-compare-saved")?.selectedOptions[0]?.textContent || "Saved snapshot")
+    : ($("compare-right")?.selectedOptions[0]?.textContent || "Saved snapshot");
+  if (where === "retrieve") {
+    renderSplitDiff({
+      splitId: "retrieve-compare-split",
+      leftId: "retrieve-diff-left",
+      rightId: "retrieve-diff-right",
+      leftHeadId: "retrieve-diff-left-head",
+      rightHeadId: "retrieve-diff-right-head",
+      path,
+      row,
+      leftLabel: "Moving now — this retrieve",
+      rightLabel: savedLabel
+    });
+    renderCompareFileList("retrieve-compare-files", true);
+    return;
+  }
+  renderSplitDiff({
+    splitId: "version-compare-split",
+    leftId: "version-diff-left",
+    rightId: "version-diff-right",
+    leftHeadId: "version-diff-left-head",
+    rightHeadId: "version-diff-right-head",
+    path,
+    row,
+    leftLabel: "Moving now",
+    rightLabel: savedLabel
+  });
+  const pane = $("compare-diff");
+  if (pane) {
+    pane.hidden = true;
+    pane.textContent = "";
+  }
+  renderCompareFileList("compare-file-list", true);
+}
+
+function syncRetrieveCompareEmpty() {
+  const empty = $("retrieve-compare-empty");
+  const saved = $("retrieve-compare-saved")?.value;
+  if (empty) empty.classList.toggle("hidden", Boolean(saved) && hasFreshRetrieve());
+}
+
+async function runRetrieveCompare({ quiet = false } = {}) {
+  if (!hasFreshRetrieve()) {
+    if ($("retrieve-compare-summary")) $("retrieve-compare-summary").textContent = "Retrieve first, then compare.";
+    syncRetrieveCompareEmpty();
+    return;
+  }
+  await loadVersionStore();
+  fillRetrieveCompareSelect();
+  const savedId = $("retrieve-compare-saved")?.value;
+  syncRetrieveCompareEmpty();
+  if (!savedId) {
+    state.compareRows = [];
+    state.compareActivePath = "";
+    if ($("retrieve-compare-summary")) $("retrieve-compare-summary").textContent = "";
+    $("retrieve-compare-split")?.classList.add("hidden");
+    renderCompareFileList("retrieve-compare-files", true);
+    return;
+  }
+  if (!quiet) log(`Comparing this retrieve with ${savedId}…`);
+  const savedFiles = await loadVersionFiles(savedId);
+  state.compareRows = compareFileSets(state.stagedFiles, savedFiles);
+  const counts = { changed: 0, onlyLeft: 0, onlyRight: 0, same: 0 };
+  for (const row of state.compareRows) counts[row.status] += 1;
+  const summary = `${counts.changed} changed · ${counts.onlyLeft} only moving · ${counts.onlyRight} only in snapshot · ${counts.same} same`;
+  if ($("retrieve-compare-summary")) $("retrieve-compare-summary").textContent = summary;
+  state.compareActivePath = "";
+  renderCompareFileList("retrieve-compare-files", true);
+  const first = state.compareRows.find((r) => r.status !== "same");
+  if (first) showCompareDiff(first.path, "retrieve");
+  else $("retrieve-compare-split")?.classList.add("hidden");
+  if (!quiet) log(`Compared this retrieve with ${savedId}: ${summary}`);
+}
+
+async function maybeRefreshRetrieveCompare() {
+  if (currentStepId() !== "review" || !hasFreshRetrieve()) return;
+  try {
+    await runRetrieveCompare({ quiet: true });
+  } catch {
+    /* snapshot load is optional on Retrieve */
+  }
 }
 
 async function loadVersionFiles(versionId) {
@@ -2346,96 +2580,29 @@ async function loadVersionFiles(versionId) {
   return files;
 }
 
-function renderCompareFileList() {
-  const el = $("compare-file-list");
-  if (!el) return;
-  const rows = (state.compareRows || []).filter((r) => r.status !== "same");
-  if (!state.compareRows.length) {
-    el.innerHTML = `<div class="empty">Pick two versions and click Show diff.</div>`;
-    return;
-  }
-  if (!rows.length) {
-    el.innerHTML = `<div class="empty">These versions match — no metadata or Apex differences.</div>`;
-    return;
-  }
-  el.innerHTML = rows
-    .map((row) => {
-      const active = row.path === state.compareActivePath ? "active" : "";
-      return `<button type="button" class="compare-row ${active}" data-compare-file="${escapeHtml(row.path)}">
-        <span class="badge ${escapeHtml(row.status)}">${escapeHtml(compareStatusLabel(row.status))}</span>
-        <span>${escapeHtml(row.path)}</span>
-      </button>`;
-    })
-    .join("");
-}
-
-function showCompareDiff(path) {
-  state.compareActivePath = path;
-  const row = (state.compareRows || []).find((r) => r.path === path);
-  const pane = $("compare-diff");
-  if (!pane || !row) return;
-  pane.hidden = false;
-  const leftText = fileText(row.left);
-  const rightText = fileText(row.right);
-  if (leftText === null && rightText === null && (row.left || row.right)) {
-    pane.innerHTML = `<span class="diff-meta">${escapeHtml(path)} is binary — no text diff.</span>`;
-    renderCompareFileList();
-    return;
-  }
-  if (row.status === "onlyLeft") {
-    pane.innerHTML = `<span class="diff-meta">${escapeHtml(path)} exists only on the left.</span>\n<span class="diff-del">${escapeHtml(leftText || "")}</span>`;
-    renderCompareFileList();
-    return;
-  }
-  if (row.status === "onlyRight") {
-    pane.innerHTML = `<span class="diff-meta">${escapeHtml(path)} exists only on the right (selected version).</span>\n<span class="diff-add">${escapeHtml(rightText || "")}</span>`;
-    renderCompareFileList();
-    return;
-  }
-  const diff = unifiedDiff(leftText || "", rightText || "", { leftLabel: `left/${path}`, rightLabel: `right/${path}` });
-  if (!diff) {
-    pane.innerHTML = `<span class="diff-meta">${escapeHtml(path)} is unchanged.</span>`;
-    renderCompareFileList();
-    return;
-  }
-  pane.innerHTML = diff
-    .split("\n")
-    .map((line) => {
-      const cls = line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@")
-        ? "diff-hunk"
-        : line.startsWith("+")
-          ? "diff-add"
-          : line.startsWith("-")
-            ? "diff-del"
-            : "";
-      return `<span class="${cls}">${escapeHtml(line)}</span>`;
-    })
-    .join("\n");
-  renderCompareFileList();
-}
-
 async function runCompareVersions() {
   await loadVersionStore();
   fillVersionSelects();
   const leftId = $("compare-left")?.value;
   const rightId = $("compare-right")?.value;
-  if (!rightId) throw new Error("Pick a version on the right to compare.");
-  if (leftId === rightId) throw new Error("Pick two different versions (or current retrieve vs a saved version).");
+  if (!rightId) throw new Error("Pick a saved snapshot on the right.");
+  if (leftId === rightId) throw new Error("Pick this retrieve on the left and a saved snapshot on the right.");
   log(`Loading files to compare ${leftId} → ${rightId}…`);
   const [leftFiles, rightFiles] = await Promise.all([loadVersionFiles(leftId), loadVersionFiles(rightId)]);
   state.compareRows = compareFileSets(leftFiles, rightFiles);
   const counts = { changed: 0, onlyLeft: 0, onlyRight: 0, same: 0 };
   for (const row of state.compareRows) counts[row.status] += 1;
-  const summary = `${counts.changed} changed · ${counts.onlyLeft} only on left · ${counts.onlyRight} only on right · ${counts.same} same`;
+  const summary = `${counts.changed} changed · ${counts.onlyLeft} only moving · ${counts.onlyRight} only in snapshot · ${counts.same} same`;
   if ($("compare-summary")) $("compare-summary").textContent = summary;
   state.compareActivePath = "";
   if ($("compare-diff")) {
     $("compare-diff").hidden = true;
     $("compare-diff").textContent = "";
   }
-  renderCompareFileList();
+  renderCompareFileList("compare-file-list", true);
   const first = state.compareRows.find((r) => r.status !== "same");
-  if (first) showCompareDiff(first.path);
+  if (first) showCompareDiff(first.path, "versions");
+  else $("version-compare-split")?.classList.add("hidden");
   log(`Compared ${leftId} with ${rightId}: ${summary}`);
 }
 
@@ -3052,6 +3219,7 @@ async function retrieveIntoReview() {
     log(`Retrieved ${files.length} file(s). Next to deploy, or Back to Package to add more members.`);
     if (state.stepIndex !== stepIndexById("review")) goStep(stepIndexById("review"), { force: true });
     setStatus(`Retrieved ${files.length} files — Next to deploy`, "ok");
+    setTimeout(() => maybeRefreshRetrieveCompare(), 0);
     return files;
   } catch (err) {
     if (state.stagedFiles?.length && state.retrieveSnapshot) {
@@ -3251,6 +3419,7 @@ async function saveVersion(options = {}) {
     $("jira").value = record.jira;
     log(`Saved ${record.id} in Local snapshots (${files.length} files).`);
     setStatus(`Saved ${record.id} in Local snapshots`, "ok");
+    setTimeout(() => maybeRefreshRetrieveCompare(), 0);
     return record;
   }
 
@@ -3285,6 +3454,7 @@ async function saveVersion(options = {}) {
       gitRecord: gitSnapshotRecord(record, files)
     });
   }
+  setTimeout(() => maybeRefreshRetrieveCompare(), 0);
   return record;
 }
 
@@ -3528,6 +3698,18 @@ $("compare-file-list")?.addEventListener("click", (event) => {
 $("jira")?.addEventListener("input", () => {
   updateActionState();
   if (currentStepId() === "deploy") renderDeployManifest();
+});
+$("jira")?.addEventListener("blur", () => {
+  const hint = jiraFieldHint($("jira")?.value);
+  if (hint.state === "ok" && $("jira") && $("jira").value.trim() !== hint.key) {
+    $("jira").value = hint.key;
+  }
+  updateActionState();
+});
+$("retrieve-compare-saved")?.addEventListener("change", () => run(() => runRetrieveCompare()));
+$("retrieve-compare-files")?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-compare-file]");
+  if (btn) showCompareDiff(btn.dataset.compareFile, "retrieve");
 });
 $("comment")?.addEventListener("input", () => {
   if (gitCommitMessage()) state.gitShipWarned = false;

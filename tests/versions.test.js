@@ -14,14 +14,22 @@ import {
   addDeployment,
   upsertVersion,
   gitShipValidationItems,
-  snapshotDetailsItems
+  snapshotDetailsItems,
+  jiraFieldHint
 } from "../extension/lib/versions.js";
 
 describe("jira / version ids", () => {
   it("normalizes jira keys", () => {
     assert.equal(normalizeJiraKey(" proj-123 "), "PROJ-123");
+    assert.equal(normalizeJiraKey("Proj 123"), "PROJ-123");
+    assert.equal(normalizeJiraKey("proj123"), "PROJ-123");
     assert.equal(isJiraKey("PROJ-123"), true);
+    assert.equal(isJiraKey("Proj 123"), true);
     assert.equal(isJiraKey("not a ticket"), false);
+    assert.equal(jiraFieldHint("").state, "empty");
+    assert.equal(jiraFieldHint("Proj 123").state, "ok");
+    assert.equal(jiraFieldHint("Proj 123").key, "PROJ-123");
+    assert.equal(jiraFieldHint("hello").state, "error");
   });
 
   it("increments per jira ticket", () => {

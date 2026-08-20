@@ -55,6 +55,77 @@ export function diffRows(leftText, rightText) {
   return tokensToRows(tokens, DEFAULT_CONTEXT);
 }
 
+export function sideBySideRows(leftText, rightText) {
+  const a = splitLines(leftText ?? "");
+  const b = splitLines(rightText ?? "");
+  if (a.length * b.length > MAX_LCS_CELLS) {
+    return [{
+      kind: "meta",
+      left: `Files differ (${a.length} vs ${b.length} lines). Too large for a side-by-side diff.`,
+      right: ""
+    }];
+  }
+  const tokens = diffTokens(a, b);
+  const changed = tokens.map((t) => t.kind !== "eq");
+  if (!changed.some(Boolean)) return [];
+  const keep = new Array(tokens.length).fill(false);
+  for (let i = 0; i < tokens.length; i++) {
+    if (!changed[i]) continue;
+    const from = Math.max(0, i - DEFAULT_CONTEXT);
+    const to = Math.min(tokens.length - 1, i + DEFAULT_CONTEXT);
+    for (let k = from; k <= to; k++) keep[k] = true;
+  }
+  const rows = [];
+  let i = 0;
+  while (i < tokens.length) {
+    if (!keep[i]) {
+      i += 1;
+      continue;
+    }
+    let j = i;
+    while (j < tokens.length && keep[j]) j += 1;
+    rows.push({ kind: "hunk", left: "···", right: "···" });
+    let k = i;
+    while (k < j) {
+      const token = tokens[k];
+      if (token.kind === "eq") {
+        rows.push({ kind: "eq", left: token.text, right: token.text });
+        k += 1;
+        continue;
+      }
+      if (token.kind === "del") {
+        const dels = [];
+        const adds = [];
+        while (k < j && tokens[k].kind === "del") {
+          dels.push(tokens[k].text);
+          k += 1;
+        }
+        while (k < j && tokens[k].kind === "add") {
+          adds.push(tokens[k].text);
+          k += 1;
+        }
+        const n = Math.max(dels.length, adds.length);
+        for (let x = 0; x < n; x++) {
+          const left = dels[x];
+          const right = adds[x];
+          rows.push({
+            kind: left != null && right != null ? "change" : (left != null ? "del" : "add"),
+            left: left ?? "",
+            right: right ?? "",
+            leftEmpty: left == null,
+            rightEmpty: right == null
+          });
+        }
+        continue;
+      }
+      rows.push({ kind: "add", left: "", right: token.text, leftEmpty: true });
+      k += 1;
+    }
+    i = j;
+  }
+  return rows;
+}
+
 export function unifiedDiff(leftText, rightText, { leftLabel = "left", rightLabel = "right" } = {}) {
   const rows = diffRows(leftText, rightText);
   if (!rows.length) return "";

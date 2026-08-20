@@ -5,7 +5,8 @@ import {
   compareFileSets,
   revertSelectedInto,
   splitLines,
-  diffRows
+  diffRows,
+  sideBySideRows
 } from "../extension/lib/diff.js";
 
 function file(path, text) {
@@ -25,6 +26,9 @@ describe("diff", () => {
     assert.match(diff, /--- v1\/classes\/Foo.cls/);
     assert.match(diff, /\+\+\+ v2\/classes\/Foo.cls/);
     assert.match(diff, /\+  Integer b;/);
+    const split = sideBySideRows(left, right);
+    assert.ok(split.some((row) => row.kind === "add" && row.right.includes("Integer b")));
+    assert.ok(split.some((row) => row.kind === "eq" && row.left.includes("Integer a")));
   });
 
   it("splits lines without keeping CR", () => {

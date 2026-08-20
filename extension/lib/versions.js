@@ -2,12 +2,40 @@ const JIRA_PATTERN = /^[A-Z][A-Z0-9]+-\d+$/i;
 const CHANGE_PATTERN = /^CHANGE-\d{8}-\d+$/i;
 
 export function normalizeJiraKey(raw) {
-  const value = String(raw || "").trim().toUpperCase();
+  let value = String(raw || "").trim().toUpperCase();
+  value = value.replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  if (JIRA_PATTERN.test(value)) return value;
+  const glued = value.match(/^([A-Z]{2,})(\d+)$/);
+  if (glued) {
+    const next = `${glued[1]}-${glued[2]}`;
+    if (JIRA_PATTERN.test(next)) return next;
+  }
   return value;
 }
 
 export function isJiraKey(value) {
-  return JIRA_PATTERN.test(String(value || "").trim());
+  return JIRA_PATTERN.test(normalizeJiraKey(value));
+}
+
+/** Live hint under the Jira field — accepts PROJ-123, proj 123, or PROJ123. */
+export function jiraFieldHint(raw) {
+  const typed = String(raw || "").trim();
+  if (!typed) {
+    return { state: "empty", key: "", text: "Use the ticket id, like PROJ-123." };
+  }
+  const key = normalizeJiraKey(typed);
+  if (JIRA_PATTERN.test(key)) {
+    return {
+      state: "ok",
+      key,
+      text: JIRA_PATTERN.test(typed) ? `Looks good: ${key}` : `Will be saved as ${key}`
+    };
+  }
+  return {
+    state: "error",
+    key: "",
+    text: "Needs a project key, a hyphen, and a number. Example: PROJ-123."
+  };
 }
 
 export function ticketFolderName(ticket) {
@@ -155,7 +183,9 @@ export function snapshotDetailsItems({ jiraKey, comment } = {}) {
     items.push({
       kind: "error",
       kicker: "Jira key",
-      text: "Enter a Jira key on Retrieve (for example PROJ-123)."
+      text: String(jiraKey || "").trim()
+        ? "Use a Jira key like PROJ-123 (project, hyphen, number)."
+        : "Enter a Jira key on Retrieve (for example PROJ-123)."
     });
   }
   if (!String(comment || "").trim()) {
