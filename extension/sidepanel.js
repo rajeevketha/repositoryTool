@@ -75,6 +75,13 @@ import {
   loadLocalRelease
 } from "./lib/localVersions.js";
 import { compareFileSets, revertSelectedInto, unifiedDiff, fileText } from "./lib/diff.js";
+import {
+  RECENT_HINT_TYPES,
+  relatedTypeHints,
+  recentHintItems,
+  packageHasMember,
+  shortTypeLabel
+} from "./lib/packageHints.js";
 
 const $ = (id) => document.getElementById(id);
 const MAX_MEMBERS = 400;
@@ -139,7 +146,8 @@ const state = {
   gitShipWarned: false,
   versionsReturnStep: 2,
   gitLayout: null,
-  gitAutoScaffoldDone: false
+  gitAutoScaffoldDone: false,
+  recentWarmGen: 0
 };
 
 function escapeHtml(value) {
@@ -920,7 +928,7 @@ function updateWizardNav() {
       ? "Choose Local snapshots or Release repo, then Next."
       : `Step 1 of ${STEPS.length} · ${currentStep().label}`;
   } else if (state.stepIndex === stepIndexById("package")) {
-    hint.textContent = "Pick a type, tick members, pick another type if you need it, then Next.";
+    hint.textContent = "Pick a type or tap something you just changed, then Next.";
   } else if (state.stepIndex === stepIndexById("review")) {
     hint.textContent = hasFreshRetrieve() && state.retrieveOk
       ? "Retrieve succeeded. Enter Jira and a comment, then Next to confirm deploy — or Back to add members."
@@ -959,10 +967,12 @@ function applyStepUi() {
   if (step.id === "package" && selectedOrg("source-org") && !typesForPicker().some((t) => t.fromOrg)) {
     setTimeout(() => run(loadOrgTypes), 0);
   }
+  if (step.id === "package") setTimeout(() => warmRecentHints(), 0);
   if (step.id === "deploy") renderDeployManifest();
   renderGitUi();
   updatePickCopy();
   syncTypeChosenUi();
+  renderPackageHints();
   syncOutcomePanel();
   renderStepper();
   updateWizardNav();
@@ -1096,6 +1106,7 @@ async function resetForNewPackage() {
   state.activeType = "";
   state.xmlDirty = false;
   state.membersCache = {};
+  state.recentWarmGen += 1;
   state.specifiedTests = [];
   state.stagedFiles = null;
   state.activeFilePath = "";
@@ -1224,6 +1235,7 @@ function renderPackageUi() {
   renderDeployManifest();
   renderTestRunner();
   renderGitUi();
+  renderPackageHints();
   updateActionState();
 }
 
@@ -1547,20 +1559,23 @@ function renderTypeShortcuts() {
     .join("");
 }
 
-function chooseType(typeName) {
+function chooseType(typeName, { objectFilter = "", memberQuery = "" } = {}) {
   if (!typeName) return;
   state.activeType = typeName;
   state.typeChosen = true;
-  state.objectFilter = "";
+  state.objectFilter = objectFilter || "";
   if (state.activeType === "CustomObject" && !state.membersCache.CustomObject) {
     state.membersCache.CustomObject = { items: withStandardObjectMembers("CustomObject", []), error: "" };
   }
   const pick = $("type-picklist");
   if (pick) pick.value = typeName;
+  if ($("member-filter")) $("member-filter").value = memberQuery || "";
+  if ($("object-filter")) $("object-filter").value = state.objectFilter;
   if (currentStepId() !== "package") goStep(stepIndexById("package"), { force: true });
   syncTypeChosenUi();
   renderTypePicker();
   renderMembers();
+  renderPackageHints();
   queueMicrotask(() => focusInView("member-filter"));
   if (selectedOrg("source-org")) run(loadMembers);
 }
@@ -1626,6 +1641,121 @@ function syncTypeChosenUi() {
   } else {
     $("member-help").textContent = "Tick every member you need. Pick another type above to add more. Next retrieves only after you are done.";
   }
+  if (!onPackage) $("package-hints")?.classList.add("hidden");
+}
+
+function membersByTypeFromCache() {
+  const map = {};
+  for (const [typeName, cache] of Object.entries(state.membersCache || {})) {
+    if (cache?.items?.length) map[typeName] = cache.items;
+  }
+  return map;
+}
+
+function renderPackageHints() {
+  const wrap = $("package-hints");
+  const recentWrap = $("recent-hints");
+  const relatedWrap = $("related-hints");
+  const recentChips = $("recent-hint-chips");
+  const relatedChips = $("related-hint-chips");
+  if (!wrap || !recentWrap || !relatedWrap) return;
+  const onPackage = currentStepId() === "package";
+  if (!onPackage) {
+    wrap.classList.add("hidden");
+    return;
+  }
+
+  const now = Date.now();
+  let recent = recentHintItems(membersByTypeFromCache(), { now, windowMs: 7 * 24 * 60 * 60 * 1000, limit: 6 });
+  if (recent.length < 3) {
+    recent = recentHintItems(membersByTypeFromCache(), { now, windowMs: 30 * 24 * 60 * 60 * 1000, limit: 6 });
+  }
+  if (recentChips) {
+    recentChips.innerHTML = recent.map((row) => {
+      const inPack = packageHasMember(state.packageTypes, row.type, row.fullName);
+      const when = formatMemberWhen(row.lastModifiedDate);
+      return `<button type="button" class="hint-chip ${inPack ? "in-package" : ""}" data-hint-add="1" data-type="${escapeHtml(row.type)}" data-member="${escapeHtml(row.fullName)}" title="${inPack ? "Already in this package" : "Add to this package"}">
+        <span class="hint-type">${escapeHtml(shortTypeLabel(row.type))}</span>
+        <span class="hint-name">${escapeHtml(row.fullName)}</span>
+        <span class="hint-meta">${escapeHtml(when)}${inPack ? " · in package" : ""}</span>
+      </button>`;
+    }).join("");
+  }
+  recentWrap.classList.toggle("hidden", !recent.length);
+
+  const related = relatedTypeHints(state.packageTypes, state.activeType, 4);
+  if ($("related-hint-kicker")) {
+    $("related-hint-kicker").textContent = related.object ? `Also on ${related.object}` : "Also on this object";
+  }
+  if (relatedChips) {
+    relatedChips.innerHTML = related.types.map((row) => `<button type="button" class="hint-chip" data-hint-related="1" data-type="${escapeHtml(row.type)}" data-object="${escapeHtml(related.object)}" title="Show ${escapeHtml(row.label)} for ${escapeHtml(related.object)}">
+        <span class="hint-type">${escapeHtml(related.object)}</span>
+        <span class="hint-name">${escapeHtml(row.label)}</span>
+        <span class="hint-meta">Open list</span>
+      </button>`).join("");
+  }
+  relatedWrap.classList.toggle("hidden", !related.object || !related.types.length);
+  wrap.classList.toggle("hidden", recentWrap.classList.contains("hidden") && relatedWrap.classList.contains("hidden"));
+}
+
+async function prefetchMembers(typeName) {
+  if (!typeName || state.membersCache[typeName]?.items?.length || state.membersCache[typeName]?.loading || state.membersCache[typeName]?.attempted) return;
+  const source = selectedOrg("source-org");
+  if (!source) return;
+  const meta = typesForPicker().find((t) => t.name === typeName);
+  state.membersCache[typeName] = { items: [], loading: true, attempted: true, error: "" };
+  try {
+    const listed = await listMetadataType({
+      instanceUrl: source.instanceUrl,
+      sid: source.sid,
+      typeName,
+      folderType: meta?.folderType,
+      inFolder: meta?.inFolder,
+      apiVersion: apiVersion()
+    });
+    const items = withStandardObjectMembers(typeName, listed);
+    state.membersCache[typeName] = { items, error: "", attempted: true };
+  } catch {
+    state.membersCache[typeName] = { items: state.membersCache[typeName]?.items || [], error: "", loading: false, attempted: true };
+  }
+}
+
+async function warmRecentHints() {
+  if (currentStepId() !== "package" || !selectedOrg("source-org")) return;
+  const gen = ++state.recentWarmGen;
+  for (const typeName of RECENT_HINT_TYPES) {
+    if (gen !== state.recentWarmGen || currentStepId() !== "package") return;
+    await prefetchMembers(typeName);
+    if (gen !== state.recentWarmGen) return;
+    renderPackageHints();
+  }
+}
+
+async function addRecentHint(typeName, fullName) {
+  if (!typeName || !fullName) return;
+  if (packageHasMember(state.packageTypes, typeName, fullName)) {
+    openRelatedHint(typeName, memberObjectKey(typeName, fullName) || "");
+    return;
+  }
+  const listed = (state.membersCache[typeName]?.items || []).map((i) => i.fullName);
+  state.packageTypes = toggleMember(state.packageTypes, typeName, fullName, true, listed);
+  invalidateStaged();
+  await persistPackage();
+  const object = memberObjectKey(typeName, fullName);
+  chooseType(typeName, {
+    objectFilter: OBJECT_FILTER_TYPES.includes(typeName) || typeName === "CustomObject" ? object : "",
+    memberQuery: object && !OBJECT_FILTER_TYPES.includes(typeName) ? object : ""
+  });
+  setStatus(`Added ${fullName} · pick more on ${shortTypeLabel(typeName)} if you need them`, "ok");
+}
+
+function openRelatedHint(typeName, objectName) {
+  if (!typeName) return;
+  const objectScoped = OBJECT_FILTER_TYPES.includes(typeName) || typeName === "CustomObject";
+  chooseType(typeName, {
+    objectFilter: objectScoped ? objectName : "",
+    memberQuery: objectScoped ? "" : (objectName || "")
+  });
 }
 
 function renderObjectChips() {
@@ -1775,6 +1905,7 @@ function renderMembers() {
       ? `<div class="muted">Showing ${cap} of ${combined.length}. Filter by object or tick Selected only to find the rest.</div>`
       : "");
   updateMemberScrollHint();
+  renderPackageHints();
 }
 
 function updateMemberScrollHint() {
@@ -3406,6 +3537,15 @@ $("type-picker").addEventListener("click", (event) => {
   const btn = event.target.closest("[data-type]");
   if (btn) chooseType(btn.dataset.type);
 });
+$("package-hints")?.addEventListener("click", (event) => {
+  const add = event.target.closest("[data-hint-add]");
+  if (add) {
+    run(() => addRecentHint(add.dataset.type, add.dataset.member));
+    return;
+  }
+  const related = event.target.closest("[data-hint-related]");
+  if (related) openRelatedHint(related.dataset.type, related.dataset.object || "");
+});
 $("btn-change-type")?.addEventListener("click", () => {
   $("type-search")?.focus();
   $("type-browse")?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -3503,6 +3643,7 @@ $("source-org")?.addEventListener("change", () => run(async () => {
     if (state.promotingHop) state.promotingHop = false;
     else {
       state.membersCache = {};
+  state.recentWarmGen += 1;
       state.availableTypes = fallbackTypeRecords();
       invalidateStaged();
     }

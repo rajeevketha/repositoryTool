@@ -322,6 +322,18 @@
             <div class="workbench-banner" id="workbench-banner">
               The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> — this side panel will close.
             </div>
+            <div id="package-hints" class="package-hints hidden">
+              <div id="recent-hints" class="hint-band hidden">
+                <p class="suggestion-kicker">Changed recently</p>
+                <p class="hint hint-lead">Tap to add. These are the newest fields, layouts, and flows in the From org.</p>
+                <div id="recent-hint-chips" class="hint-chips"></div>
+              </div>
+              <div id="related-hints" class="hint-band hidden">
+                <p class="suggestion-kicker" id="related-hint-kicker">Also on this object</p>
+                <p class="hint hint-lead">Opens that list for the same object. Nothing is added until you tick.</p>
+                <div id="related-hint-chips" class="hint-chips"></div>
+              </div>
+            </div>
             <div id="type-browse">
               <div class="type-find">
                 <label class="grow">Search types
