@@ -1,0 +1,3 @@
+# Salesforce CLI should not push OrgFlow version snapshots
+.orgflow/**
+**/.gitkeep
