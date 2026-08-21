@@ -13,6 +13,10 @@ Use **Back** / **Next** at the bottom. The numbered stepper (Start → Package �
 3. **Retrieve** — click **Retrieve from From org** when the package is complete. Then enter a **Jira key** like `PROJ-123` (spaces are OK — OrgFlow turns `Proj 123` into `PROJ-123`) and a **comment**. **Save to repo** stays off until that key looks right. After retrieve, **This retrieve vs saved snapshot** shows moving files on the left and the saved Jira version on the right. **Back** returns to Package. After you add members, retrieve again before Confirm.
 4. **Confirm** — review org names, Jira, comment, and what is going to the To org. If the package includes Apex, **Run Apex tests** is optional: pick classes to run in the To org for a coverage percentage. Test classes do not have to be in the package. Skip tests and Deploy still works in a sandbox. **Validate in To org** is a dry run (nothing is saved). **Deploy** sends it. The result stays on this screen. After a successful deploy, **New package** starts over from Start.
 
+### Deploy a zip (Workbench-style)
+
+On Start, choose **From a zip** instead of From an org. Set **To** (any logged-in org). Next → upload a Metadata API zip (the same layout Workbench retrieve produces: `package.xml` plus `classes/`, `objects/`, `layouts/`, `lwc/`, …). OrgFlow will not enable Confirm until `package.xml` members match files in the zip and the folders are Salesforce Metadata API layout. Salesforce DX `force-app` zips are rejected — convert to Metadata API first. Then Validate / Deploy as usual. Jira is not required on this path.
+
 The UI uses a warm charcoal + bronze theme. Accent color is used on the current step and the main action, not on every heading.
 
 Typical configuration you can pick by name: **CustomField** (`Account.Status__c`), record types, validation rules, page layouts, Lightning pages, flows, permission sets, apps, tabs, picklists, reports, email templates. Search the type list for any other Metadata API type (Apex, LWC, Experience Cloud, settings, and so on). **Load all types from source org** refreshes the list from that sandbox.
@@ -26,7 +30,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Full dashboard paste kit (what to upload, every listing/privacy field, and what you still must do): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** [files/orgflow-extension.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip) (unzip to an `orgflow/` folder)
-- **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.18**)
+- **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.19**)
 - **Privacy policy:** [docs/privacy.html](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/docs/privacy.html)
 
 ## Install (unpacked Chrome extension)

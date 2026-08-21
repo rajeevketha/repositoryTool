@@ -148,6 +148,18 @@ body {
 }
 #path-caption { display: block; font-size: 15px; margin: 2px 0; }
 .path-sub { display: block; font-size: 12px; color: var(--muted); }
+.path-zip-from {
+  display: none;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  padding: 6px 0 2px;
+}
+body[data-flow="zip"] #source-org { display: none; }
+body[data-flow="zip"] #path-zip-from { display: block; }
+body[data-flow="zip"] #snapshots-block,
+body[data-flow="zip"] #git-setup-block,
+body[data-flow="zip"] #open-versions { display: none; }
 .path-flow {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -227,6 +239,30 @@ main { padding: 14px; flex: 1; }
   border: 1px solid var(--line);
   background: var(--card);
 }
+
+.zip-drop {
+  display: grid;
+  gap: 6px;
+  padding: 18px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  cursor: pointer;
+  text-align: center;
+}
+.zip-drop input { display: none; }
+.zip-drop strong { font-size: 14px; color: var(--text); }
+.zip-drop span { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.zip-report {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.zip-report .ok { color: var(--ok); }
+.zip-report .err { color: var(--danger); }
+.zip-report .warn { color: var(--orange-2, #d4a574); }
+.zip-report ul { margin: 0; padding-left: 18px; }
 
 .start-block-title {
   margin: 0;
@@ -1219,6 +1255,7 @@ body[data-layout="workbench"] .diff-split {
 body[data-step="start"] .inspector,
 body[data-step="versions"] .inspector,
 body[data-step="review"] .inspector,
+body[data-step="zip"] .inspector,
 body[data-step="deploy"] .inspector { display: none !important; }
 body[data-layout="sidepanel"][data-step="package"] .inspector { display: none !important; }
 body[data-step="package"] .type-picker { max-height: 180px; }

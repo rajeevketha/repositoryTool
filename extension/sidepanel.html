@@ -36,6 +36,7 @@
         <label class="path-node source">
           <span class="path-role">From</span>
           <select id="source-org"></select>
+          <span id="path-zip-from" class="path-zip-from hidden">Zip file</span>
           <span id="source-org-meta" class="path-meta">Source org</span>
         </label>
         <div class="path-arrow" id="path-arrow" aria-hidden="true">
@@ -55,9 +56,36 @@
 
     <div class="app-body">
       <main>
+        <section id="view-zip" class="view">
+          <p class="step-kicker">Step 2 of 3</p>
+          <h2 class="page-title">Zip package</h2>
+          <p class="hint">Choose a Metadata API zip — the same layout Workbench retrieve gives you. OrgFlow will not deploy until <code>package.xml</code> matches the folders in the zip.</p>
+          <label class="zip-drop">
+            <input id="zip-file" type="file" accept=".zip,application/zip" />
+            <strong id="zip-file-label">Choose a .zip</strong>
+            <span>Needs package.xml plus Salesforce folders such as classes/, objects/, layouts/, lwc/, flows/.</span>
+          </label>
+          <div id="zip-report" class="zip-report"></div>
+        </section>
+
         <section id="view-start" class="view active">
           <p class="step-kicker">Step 1 of 4</p>
           <h2 class="page-title">Start</h2>
+
+          <div class="start-block" id="deploy-kind-block">
+            <h2 class="start-block-title">How you deploy</h2>
+            <div class="mode-grid">
+              <button type="button" class="mode-card selected" id="flow-org" data-flow="org">
+                <strong>From an org</strong>
+                <span>Build a package in From, retrieve, deploy to To</span>
+              </button>
+              <button type="button" class="mode-card" id="flow-zip" data-flow="zip">
+                <strong>From a zip</strong>
+                <span>Metadata API zip (Workbench layout) to any org</span>
+              </button>
+            </div>
+            <div id="flow-status" class="muted">Build a package in the From org, then deploy to To.</div>
+          </div>
 
           <div class="start-block" id="snapshots-block">
             <h2 class="start-block-title">Where snapshots go</h2>

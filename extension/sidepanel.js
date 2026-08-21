@@ -77,6 +77,7 @@ import {
   loadLocalRelease
 } from "./lib/localVersions.js";
 import { compareFileSets, revertSelectedInto, fileText, sideBySideRows } from "./lib/diff.js";
+import { validateZipPackage } from "./lib/zipPackage.js";
 import {
   RECENT_HINT_TYPES,
   COMPANION_TYPES,
@@ -98,17 +99,18 @@ if (new URLSearchParams(location.search).get("layout") === "workbench") {
 
 const isWorkbench = () => document.body.dataset.layout === "workbench";
 
-const STEPS = [
+const ORG_STEPS = [
   { id: "start", label: "Start", view: "start" },
   { id: "package", label: "Package", view: "components" },
   { id: "review", label: "Retrieve", view: "components" },
   { id: "deploy", label: "Confirm", view: "ship" }
 ];
 
-function stepIndexById(id) {
-  const index = STEPS.findIndex((step) => step.id === id);
-  return index < 0 ? 0 : index;
-}
+const ZIP_STEPS = [
+  { id: "start", label: "Start", view: "start" },
+  { id: "zip", label: "Zip", view: "zip" },
+  { id: "deploy", label: "Confirm", view: "ship" }
+];
 
 const state = {
   settings: null,
@@ -155,8 +157,36 @@ const state = {
   recentWarming: false,
   browseTypes: false,
   dismissedCompanions: [],
-  pendingCompanion: null
+  pendingCompanion: null,
+  flow: "org",
+  zipName: "",
+  zipReport: null
 };
+
+function isZipFlow() {
+  return state.flow === "zip";
+}
+
+function flowSteps() {
+  return isZipFlow() ? ZIP_STEPS : ORG_STEPS;
+}
+
+function zipReady() {
+  return isZipFlow()
+    && Boolean(state.zipReport?.ok)
+    && Boolean(state.stagedFiles?.length)
+    && memberCount(state.packageTypes) > 0;
+}
+
+function stepIndexById(id) {
+  const steps = flowSteps();
+  const index = steps.findIndex((step) => step.id === id);
+  if (index >= 0) return index;
+  if (isZipFlow() && (id === "review" || id === "package")) {
+    return steps.findIndex((step) => step.id === "zip");
+  }
+  return 0;
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -218,6 +248,7 @@ function stagedFilesFingerprint() {
 }
 
 function hasFreshRetrieve() {
+  if (isZipFlow()) return zipReady();
   const source = selectedOrg("source-org");
   const snap = state.retrieveSnapshot;
   return Boolean(
@@ -230,6 +261,11 @@ function hasFreshRetrieve() {
 }
 
 function retrieveBlockReason() {
+  if (isZipFlow()) {
+    if (zipReady()) return "";
+    if (state.zipReport && !state.zipReport.ok) return state.zipReport.errors[0] || "Fix the zip before deploy.";
+    return "Upload a valid Metadata API zip on Zip, then Confirm.";
+  }
   if (hasFreshRetrieve()) return "";
   if (state.retrieveSnapshot && state.stagedFiles?.length) {
     return "From org or members no longer match the last retrieve. Retrieve again before deploy.";
@@ -241,6 +277,13 @@ function retrieveBlockReason() {
 }
 
 function applyRetrieveLockUi() {
+  if (isZipFlow()) {
+    document.body.classList.remove("retrieve-frozen", "retrieve-stale");
+    const sourceEl = $("source-org");
+    if (sourceEl) sourceEl.disabled = false;
+    $("retrieve-lock")?.classList.add("hidden");
+    return;
+  }
   const stepId = currentStepId();
   const editingPackage = stepId === "package" || stepId === "start";
   if (editingPackage) state.selectionFrozen = false;
@@ -302,6 +345,14 @@ function deployBlockReason() {
   const target = selectedOrg("target-org");
   const pack = memberCount(state.packageTypes);
   if (!state.orgs.length) return "Detect logged-in Salesforce orgs on Start, then choose From and To.";
+  if (isZipFlow()) {
+    if (!target) return "Select a target org in the path bar (To).";
+    if (!pack || !zipReady()) return retrieveBlockReason() || "Upload a valid zip before deploy.";
+    if (alreadyDeployedToCurrentTarget()) {
+      return `Already deployed this zip to ${target.label}. Change To, or start a new package.`;
+    }
+    return "";
+  }
   if (!source) return "Select a source org in the path bar (From).";
   if (!target) return "Select a target org in the path bar (To). Deploy stays disabled until then.";
   if (orgKey(source) === orgKey(target)) return "From and To are the same org. Pick a different target (for example Dev → QA).";
@@ -334,10 +385,10 @@ function updateActionState() {
     const pack = memberCount(state.packageTypes);
     const same = source && target && orgKey(source) === orgKey(target);
     let disabled = false;
-    if (needs.includes("source") && !source) disabled = true;
+    if (needs.includes("source") && !source && !isZipFlow()) disabled = true;
     if (needs.includes("target") && !target) disabled = true;
     if (needs.includes("package") && !pack) disabled = true;
-    if (needs.includes("distinct") && same) disabled = true;
+    if (needs.includes("distinct") && same && !isZipFlow()) disabled = true;
     if (needs.includes("retrieve") && !hasFreshRetrieve()) disabled = true;
     if (needs.includes("git") && (!useGitEnabled() || !isGitConfigured(state.settings))) disabled = true;
     if ((btn.id === "btn-retrieve" || btn.id === "btn-retrieve-review") && hasFreshRetrieve() && state.retrieveOk) {
@@ -751,6 +802,10 @@ function syncSetupButtons() {
 function maybeAdvanceFromStart() {
   if (state.stepIndex !== 0 || state.showingVersions) return;
   if (!pathReady()) return;
+  if (isZipFlow()) {
+    setStatus("To org is set. Next, upload a Metadata API zip.", "ok");
+    return;
+  }
   if (useGitEnabled() && !isGitConfigured(state.settings)) {
     $("git-setup-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
     setStatus("From and To are set. Connect a release repo, or switch to Local snapshots, then click Next.", "ok");
@@ -767,32 +822,44 @@ function renderOrgPath() {
   const sub = $("path-sub");
   const bar = $("org-path");
   if ($("source-org-meta")) {
-    $("source-org-meta").textContent = source
-      ? orgKind(source)
-      : "Where you built the change";
+    $("source-org-meta").textContent = isZipFlow()
+      ? "Metadata API zip"
+      : source
+        ? orgKind(source)
+        : "Where you built the change";
   }
   if ($("target-org-meta")) {
     $("target-org-meta").textContent = target
       ? orgKind(target)
       : "Where it should go (QA, UAT, prod)";
   }
-  const ready = Boolean(source && target && orgKey(source) !== orgKey(target));
+  const ready = isZipFlow() ? Boolean(target) : Boolean(source && target && orgKey(source) !== orgKey(target));
   bar?.classList.toggle("incomplete", !ready);
   bar?.classList.toggle("ready", ready);
   if (caption) {
-    caption.textContent = ready
-      ? `${source.label} → ${target.label}`
-      : source && target
-        ? "Source and target must be different orgs"
-        : "Select source and target orgs";
+    if (isZipFlow()) {
+      caption.textContent = target ? `Zip → ${target.label}` : "Select the To org for this zip";
+    } else {
+      caption.textContent = ready
+        ? `${source.label} → ${target.label}`
+        : source && target
+          ? "Source and target must be different orgs"
+          : "Select source and target orgs";
+    }
   }
   if (sub) {
     const stepId = currentStepId();
-    sub.textContent = ready
-      ? (stepId === "start"
-        ? "From and To are set. Choose Local snapshots or Release repo on Start, then Next."
-        : `${orgKind(source)} → ${orgKind(target)}`)
-      : "Next stays off until From and To are different Salesforce orgs.";
+    if (isZipFlow()) {
+      sub.textContent = target
+        ? (stepId === "start" ? "To is set. Next, upload the zip." : `Zip → ${orgKind(target) || target.label}`)
+        : "Next stays off until you pick a To org.";
+    } else {
+      sub.textContent = ready
+        ? (stepId === "start"
+          ? "From and To are set. Choose Local snapshots or Release repo on Start, then Next."
+          : `${orgKind(source)} → ${orgKind(target)}`)
+        : "Next stays off until From and To are different Salesforce orgs.";
+    }
   }
   updatePipelinePathCopy();
 }
@@ -800,11 +867,12 @@ function renderOrgPath() {
 function pathReady() {
   const source = selectedOrg("source-org");
   const target = selectedOrg("target-org");
+  if (isZipFlow()) return Boolean(target);
   return Boolean(source && target && orgKey(source) !== orgKey(target));
 }
 
 function currentStep() {
-  return STEPS[state.stepIndex] || STEPS[0];
+  return flowSteps()[state.stepIndex] || flowSteps()[0];
 }
 
 function currentStepId() {
@@ -813,6 +881,10 @@ function currentStepId() {
 
 function farthestStep() {
   if (!pathReady()) return 0;
+  if (isZipFlow()) {
+    if (!zipReady()) return stepIndexById("zip");
+    return stepIndexById("deploy");
+  }
   if (useGitEnabled() && !isGitConfigured(state.settings)) return 0;
   if (!memberCount(state.packageTypes)) return stepIndexById("package");
   if (!state.reviewSeen && state.stepIndex < stepIndexById("review")) return stepIndexById("package");
@@ -822,7 +894,7 @@ function farthestStep() {
 }
 
 function canAdvanceTo(index) {
-  if (index < 0 || index >= STEPS.length) return false;
+  if (index < 0 || index >= flowSteps().length) return false;
   if (index <= state.stepIndex) return true;
   return index <= farthestStep();
 }
@@ -831,11 +903,15 @@ function leaveReason(index) {
   if (index === 0 && !pathReady()) {
     const source = selectedOrg("source-org");
     const target = selectedOrg("target-org");
+    if (isZipFlow()) return "Set To in the path bar, then Next.";
     if (!source || !target) return "Set From and To in the path bar, then Next.";
     return "From and To must be different orgs before you pick configuration.";
   }
-  if (index === 0 && useGitEnabled() && !isGitConfigured(state.settings)) {
+  if (index === 0 && !isZipFlow() && useGitEnabled() && !isGitConfigured(state.settings)) {
     return "Sharing is on. Choose a repo and click Use this repo. Selecting it in the list, or saving a pipeline, does not connect Git yet.";
+  }
+  if (index === stepIndexById("zip") && isZipFlow() && !zipReady()) {
+    return retrieveBlockReason() || "Upload a valid Metadata API zip, then Next.";
   }
   if (index === stepIndexById("package") && !memberCount(state.packageTypes)) {
     return "Pick a type and tick at least one member, then Next to retrieve.";
@@ -854,6 +930,7 @@ function leaveReason(index) {
 function stepBlockReason(index) {
   if (canAdvanceTo(index)) return "";
   if (index > 0 && !pathReady()) return leaveReason(0);
+  if (isZipFlow() && index > stepIndexById("zip")) return retrieveBlockReason() || "Upload a valid zip first, then you can deploy.";
   if (index > stepIndexById("package") && !memberCount(state.packageTypes)) return leaveReason(stepIndexById("package"));
   if (index > stepIndexById("review")) return retrieveBlockReason() || "Retrieve the package first, then you can deploy.";
   return "Finish the current step before skipping ahead.";
@@ -862,8 +939,7 @@ function stepBlockReason(index) {
 function updatePickCopy() {
   const stepId = currentStepId();
   const type = typesForPicker().find((t) => t.name === state.activeType);
-  const total = STEPS.length;
-  if ($("pick-kicker")) $("pick-kicker").textContent = `Step ${state.stepIndex + 1} of ${total}`;
+  if ($("pick-kicker")) $("pick-kicker").textContent = `Step ${state.stepIndex + 1} of ${flowSteps().length}`;
   if (stepId === "package") {
     const empty = memberCount(state.packageTypes) === 0;
     if ($("pick-heading")) {
@@ -891,7 +967,8 @@ function updatePickCopy() {
       start: "Step 1 · Connect orgs",
       package: "Step 2 · Build the package",
       review: "Step 3 · Retrieve",
-      deploy: "Step 4 · Confirm deploy",
+      zip: "Step 2 · Zip package",
+      deploy: isZipFlow() ? "Step 3 · Confirm deploy" : "Step 4 · Confirm deploy",
       versions: "Saved versions"
     };
     $("header-sub").textContent = labels[stepId] || "Config sandbox → other orgs";
@@ -903,7 +980,7 @@ function renderStepper() {
   if (!el) return;
   const max = farthestStep();
   const current = state.showingVersions ? -1 : state.stepIndex;
-  el.innerHTML = STEPS.map((step, i) => {
+  el.innerHTML = flowSteps().map((step, i) => {
     const active = i === current ? "active" : "";
     const done = !state.showingVersions && i < state.stepIndex ? "done" : "";
     const allowed = i <= Math.max(max, state.stepIndex);
@@ -930,7 +1007,7 @@ function updateWizardNav() {
       : "Compare and restore files here, then Back to retrieve and Deploy if the package looks right.";
     return;
   }
-  const last = state.stepIndex >= STEPS.length - 1;
+  const last = state.stepIndex >= flowSteps().length - 1;
   if (last && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
     const hop = nextHopAfter(currentPipelineRecord(), selectedOrg("target-org"));
     back.disabled = false;
@@ -955,7 +1032,9 @@ function updateWizardNav() {
   back.textContent = "Back";
   const reason = leaveReason(state.stepIndex);
   next.disabled = last || Boolean(reason) || state.busy;
-  const labels = ["Next: package", "Next: retrieve", "Next: confirm", "Deploy"];
+  const labels = isZipFlow()
+    ? ["Next: zip", "Next: confirm", "Deploy"]
+    : ["Next: package", "Next: retrieve", "Next: confirm", "Deploy"];
   next.textContent = labels[state.stepIndex] || "Next";
   next.classList.toggle("hidden", last);
   if (reason) {
@@ -964,27 +1043,32 @@ function updateWizardNav() {
     hint.textContent = state.busy ? "Waiting for Salesforce…" : (deployBlockReason() || `Ready to send this package to ${selectedOrg("target-org")?.label || "the To org"}.`);
   } else if (state.stepIndex === 0) {
     hint.textContent = pathReady()
-      ? "Choose Local snapshots or Release repo, then Next."
-      : `Step 1 of ${STEPS.length} · ${currentStep().label}`;
-  } else if (state.stepIndex === stepIndexById("package")) {
+      ? (isZipFlow() ? "To is set. Next to upload the zip." : "Choose Local snapshots or Release repo, then Next.")
+      : `Step 1 of ${flowSteps().length} · ${currentStep().label}`;
+  } else if (currentStepId() === "zip") {
+    hint.textContent = zipReady()
+      ? "Zip matches package.xml. Next to confirm."
+      : "Upload a Metadata API zip. Next stays off until package.xml matches the folders.";
+  } else if (currentStepId() === "package") {
     hint.textContent = memberCount(state.packageTypes)
       ? "Add related members if you need them, then Next."
       : "Tap something you just changed, or browse types, then Next.";
-  } else if (state.stepIndex === stepIndexById("review")) {
+  } else if (currentStepId() === "review") {
     hint.textContent = hasFreshRetrieve() && state.retrieveOk
       ? "Retrieve succeeded. Enter a Jira key like PROJ-123 and a comment, then Next."
       : "Click Retrieve when the package is complete. Then enter Jira and a comment.";
   } else {
-    hint.textContent = `Step ${state.stepIndex + 1} of ${STEPS.length} · ${currentStep().label}`;
+    hint.textContent = `Step ${state.stepIndex + 1} of ${flowSteps().length} · ${currentStep().label}`;
   }
 }
 
 function applyStepUi() {
-  const names = ["start", "components", "ship", "versions"];
+  const names = ["start", "components", "ship", "versions", "zip"];
   names.forEach((name) => $(`view-${name}`)?.classList.toggle("active", false));
   if (state.showingVersions) {
     $("view-versions")?.classList.add("active");
     document.body.dataset.step = "versions";
+    document.body.dataset.flow = state.flow || "org";
     updatePickCopy();
     syncOutcomePanel();
     renderStepper();
@@ -997,6 +1081,7 @@ function applyStepUi() {
   }
   const step = currentStep();
   document.body.dataset.step = step.id;
+  document.body.dataset.flow = state.flow || "org";
   $(`view-${step.view}`)?.classList.add("active");
   if (step.view === "components") {
     if (step.id === "review") switchSubtab(state.xmlReview ? "xml" : "review");
@@ -1010,11 +1095,18 @@ function applyStepUi() {
   }
   if (step.id === "package") setTimeout(() => warmRecentHints(), 0);
   if (step.id === "review") setTimeout(() => maybeRefreshRetrieveCompare(), 0);
+  if (step.id === "zip") renderZipReport();
   if (step.id === "deploy") {
     renderDeployManifest();
     renderTestRunner();
+    if ($("btn-scan-tests")) {
+      $("btn-scan-tests").textContent = isZipFlow() ? "List test classes in To org" : "List test classes in From org";
+    }
+    const kicker = document.querySelector("#view-ship .step-kicker");
+    if (kicker) kicker.textContent = isZipFlow() ? "Step 3 of 3" : "Step 4 of 4";
   }
   renderGitUi();
+  renderFlowUi();
   updatePickCopy();
   syncTypeChosenUi();
   renderPackageHints();
@@ -1034,12 +1126,12 @@ function goStep(index, { force = false } = {}) {
     updateWizardNav();
     return;
   }
-  if (STEPS[index]?.id === "review") {
+  if (flowSteps()[index]?.id === "review") {
     state.reviewSeen = true;
     if (!hasFreshRetrieve()) state.autoRetrieveAttempted = false;
   }
-  if (STEPS[index]?.id === "package") state.selectionFrozen = false;
-  state.stepIndex = Math.max(0, Math.min(STEPS.length - 1, index));
+  if (flowSteps()[index]?.id === "package") state.selectionFrozen = false;
+  state.stepIndex = Math.max(0, Math.min(flowSteps().length - 1, index));
   applyStepUi();
 }
 
@@ -1047,7 +1139,7 @@ function wizardBack() {
   if (state.showingVersions) {
     const returnTo = Number.isInteger(state.versionsReturnStep) ? state.versionsReturnStep : stepIndexById("review");
     state.showingVersions = false;
-    goStep(Math.min(Math.max(returnTo, 0), STEPS.length - 1), { force: true });
+    goStep(Math.min(Math.max(returnTo, 0), flowSteps().length - 1), { force: true });
     return;
   }
   if (state.stepIndex === stepIndexById("deploy") && (state.deployFinished === "success" || alreadyDeployedToCurrentTarget())) {
@@ -1070,7 +1162,7 @@ function wizardNext() {
     updateActionState();
     return;
   }
-  if (state.stepIndex >= STEPS.length - 1) return;
+  if (state.stepIndex >= flowSteps().length - 1) return;
   goStep(state.stepIndex + 1, { force: true });
 }
 
@@ -1169,6 +1261,12 @@ async function resetForNewPackage() {
   state.gitShipWarned = false;
   state.reviewSeen = false;
   state.showingVersions = false;
+  state.zipName = "";
+  state.zipReport = null;
+  const zipInput = $("zip-file");
+  if (zipInput) zipInput.value = "";
+  if ($("zip-file-label")) $("zip-file-label").textContent = "Choose a .zip";
+  if ($("zip-report")) $("zip-report").innerHTML = "";
   state.versionsReturnStep = stepIndexById("review");
   $("file-editor-wrap")?.classList.add("hidden");
   if ($("comment")) $("comment").value = "";
@@ -1200,6 +1298,7 @@ function jiraKeyValue() {
 }
 
 function snapshotValidationItems() {
+  if (isZipFlow()) return [];
   return snapshotDetailsItems({
     jiraKey: jiraKeyValue(),
     comment: gitCommitMessage()
@@ -1207,6 +1306,7 @@ function snapshotValidationItems() {
 }
 
 function gitShipItems() {
+  if (isZipFlow()) return [];
   return gitShipValidationItems({
     gitEnabled: useGitEnabled(),
     commitMessage: gitCommitMessage(),
@@ -1471,19 +1571,27 @@ function renderDeployManifest() {
   const source = selectedOrg("source-org");
   const target = selectedOrg("target-org");
   if (pathLine) {
-    pathLine.textContent = source && target
-      ? `Confirm this package from ${source.label} to ${target.label}.`
-      : "Set From and To in the path bar.";
+    if (isZipFlow()) {
+      pathLine.textContent = target
+        ? `Confirm this zip (${state.zipName || "package.zip"}) to ${target.label}.`
+        : "Set To in the path bar.";
+    } else {
+      pathLine.textContent = source && target
+        ? `Confirm this package from ${source.label} to ${target.label}.`
+        : "Set From and To in the path bar.";
+    }
   }
   const jiraEl = $("deploy-confirm-jira");
   const commentEl = $("deploy-confirm-comment");
   const destEl = $("deploy-confirm-dest");
-  if (jiraEl) jiraEl.textContent = isJiraKey(jiraKeyValue()) ? jiraKeyValue().toUpperCase() : "Enter on Retrieve";
-  if (commentEl) commentEl.textContent = gitCommitMessage() || "Enter on Retrieve";
+  if (jiraEl) jiraEl.textContent = isZipFlow() ? "Not used for zip deploy" : (isJiraKey(jiraKeyValue()) ? jiraKeyValue().toUpperCase() : "Enter on Retrieve");
+  if (commentEl) commentEl.textContent = isZipFlow() ? (state.zipName || "Uploaded zip") : (gitCommitMessage() || "Enter on Retrieve");
   if (destEl) {
-    destEl.textContent = useGitEnabled() && isGitConfigured(state.settings)
-      ? repoLabel(state.settings)
-      : "Local snapshots";
+    destEl.textContent = isZipFlow()
+      ? "Zip file"
+      : (useGitEnabled() && isGitConfigured(state.settings)
+        ? repoLabel(state.settings)
+        : "Local snapshots");
   }
   if (!el) return;
   const columns = categoryColumns(state.packageTypes);
@@ -1521,7 +1629,7 @@ function renderGitUi() {
   $("git-setup-block")?.classList.toggle("hidden", !on);
   document.body.classList.toggle("mode-simple", !on);
   document.body.classList.toggle("mode-git", on);
-  document.querySelectorAll(".mode-card").forEach((card) => {
+  document.querySelectorAll("#mode-simple, #mode-git").forEach((card) => {
     card.classList.toggle("selected", card.dataset.mode === (on ? "git" : "simple"));
   });
   $("mode-status").textContent = on
@@ -2748,7 +2856,13 @@ function updateHeaderStatus() {
     return;
   }
   if (step === "start") {
-    setStatus(`${n} org${n === 1 ? "" : "s"} detected. Set From and To, then continue.`);
+    setStatus(isZipFlow()
+      ? `${n} org${n === 1 ? "" : "s"} detected. Set To, then upload a zip.`
+      : `${n} org${n === 1 ? "" : "s"} detected. Set From and To, then continue.`);
+    return;
+  }
+  if (isZipFlow() && (step === "zip" || !pack)) {
+    setStatus(zipReady() ? `Zip ready (${state.zipName || "package.zip"}). Next to confirm.` : "Upload a Metadata API zip with package.xml.");
     return;
   }
   if (!pack) {
@@ -3163,12 +3277,12 @@ async function setSpecifiedTest(name, selected) {
 }
 
 async function scanOrgTests() {
-  const source = selectedOrg("source-org");
-  if (!source) throw new Error("Select a source org on Start or Deploy first.");
-  log(`Listing Apex classes in ${source.label} to find test classes…`);
+  const org = isZipFlow() ? selectedOrg("target-org") : selectedOrg("source-org");
+  if (!org) throw new Error(isZipFlow() ? "Select a To org first." : "Select a source org on Start or Deploy first.");
+  log(`Listing Apex classes in ${org.label} to find test classes…`);
   const items = await listMetadataType({
-    instanceUrl: source.instanceUrl,
-    sid: source.sid,
+    instanceUrl: org.instanceUrl,
+    sid: org.sid,
     typeName: "ApexClass",
     apiVersion: apiVersion(),
     onProgress: (m) => log(m)
@@ -3277,6 +3391,105 @@ async function filesForDeploy() {
   return state.stagedFiles;
 }
 
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const size = 0x8000;
+  for (let i = 0; i < bytes.length; i += size) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + size));
+  }
+  return btoa(binary);
+}
+
+function renderFlowUi() {
+  document.body.dataset.flow = state.flow || "org";
+  $("flow-org")?.classList.toggle("selected", !isZipFlow());
+  $("flow-zip")?.classList.toggle("selected", isZipFlow());
+  if ($("flow-status")) {
+    $("flow-status").textContent = isZipFlow()
+      ? "Pick a To org, then Next. package.xml must match the zip folders."
+      : "Build a package in the From org, then deploy to To.";
+  }
+  const startKicker = document.querySelector("#view-start .step-kicker");
+  if (startKicker) startKicker.textContent = isZipFlow() ? "Step 1 of 3" : "Step 1 of 4";
+}
+
+function renderZipReport() {
+  const el = $("zip-report");
+  if (!el) return;
+  const report = state.zipReport;
+  if (!report) {
+    el.innerHTML = "";
+    return;
+  }
+  const errs = (report.errors || []).map((t) => `<li class="err">${escapeHtml(t)}</li>`).join("");
+  const warns = (report.warnings || []).map((t) => `<li class="warn">${escapeHtml(t)}</li>`).join("");
+  const head = report.ok
+    ? `<p class="ok">${escapeHtml(state.zipName || "Zip")} is a valid Metadata API package (${memberCount(report.types)} members · ${report.files.length} files).</p>`
+    : `<p class="err">${escapeHtml(state.zipName || "Zip")} cannot be deployed until the items below are fixed.</p>`;
+  el.innerHTML = `${head}${errs || warns ? `<ul>${errs}${warns}</ul>` : ""}`;
+}
+
+async function loadZipFile(file) {
+  if (!file) return;
+  state.zipName = file.name || "package.zip";
+  if ($("zip-file-label")) $("zip-file-label").textContent = state.zipName;
+  const zipBase64 = arrayBufferToBase64(await file.arrayBuffer());
+  const unzipped = await unzipToFiles(zipBase64);
+  const files = unzipped.map((f) => {
+    if (String(f.path || "").toLowerCase().endsWith("package.xml")) {
+      return { ...f, text: decodeUtf8Base64(f.base64) };
+    }
+    return f;
+  });
+  const report = validateZipPackage(files);
+  state.zipReport = report;
+  if (report.ok) {
+    state.packageTypes = normalizePackageTypes(report.types);
+    state.stagedFiles = report.files;
+    state.retrieveOk = true;
+    state.retrieveSnapshot = {
+      sourceKey: "zip",
+      fingerprint: packageFingerprint(),
+      zipName: state.zipName
+    };
+    state.reviewSeen = true;
+    await persistPackage();
+    log(`Zip OK: ${state.zipName} · ${memberCount(state.packageTypes)} members · ${report.files.length} files.`);
+    setStatus(`${state.zipName} matches package.xml. Next to confirm.`, "ok");
+  } else {
+    state.packageTypes = [];
+    state.stagedFiles = null;
+    state.retrieveOk = false;
+    state.retrieveSnapshot = null;
+    await persistPackage();
+    log(report.errors.join(" "), "error");
+    setStatus(report.errors[0] || "Zip is not a valid Metadata API package.", "error");
+  }
+  renderZipReport();
+  renderDeployManifest();
+  renderStepper();
+  updateWizardNav();
+  updateActionState();
+}
+
+function setDeployFlow(flow) {
+  const next = flow === "zip" ? "zip" : "org";
+  if (state.flow !== next) {
+    state.flow = next;
+    state.stepIndex = 0;
+    state.showingVersions = false;
+    state.zipReport = next === "zip" ? state.zipReport : null;
+    if (next !== "zip") {
+      state.zipName = "";
+      state.zipReport = null;
+    }
+  }
+  renderFlowUi();
+  renderOrgPath();
+  applyStepUi();
+}
+
 function deployOptions({ checkOnly = false } = {}) {
   const runTests = specifiedTests();
   const selectedLevel = $("test-level")?.value || "NoTestRun";
@@ -3362,7 +3575,7 @@ async function deploySelected({ checkOnly = false } = {}) {
     }
     log(`Deployed selected package to ${target.label} (${result.status || "Succeeded"}).`);
     setStatus(`Deployed package → ${target.label}`, "ok");
-    if (useGitEnabled()) {
+    if (useGitEnabled() && !isZipFlow()) {
       try {
         const version = await recordSuccessfulGitDeploy(target, result, options);
         const gitRecord = gitSnapshotRecord(version, state.stagedFiles);
@@ -3709,7 +3922,7 @@ $("stepper")?.addEventListener("click", (event) => {
 $("btn-back")?.addEventListener("click", wizardBack);
 $("btn-next")?.addEventListener("click", async () => {
   if (state.busy) return;
-  if (state.stepIndex === 0) {
+  if (state.stepIndex === 0 && !isZipFlow()) {
     await run(async () => {
       await saveSettings({ setupComplete: true, useGit: useGitEnabled() });
       state.settings = await loadSettings();
@@ -3917,6 +4130,12 @@ $("object-filter")?.addEventListener("change", () => {
 });
 $("mode-simple")?.addEventListener("click", () => run(() => persistGitToggle(false)));
 $("mode-git")?.addEventListener("click", () => run(() => persistGitToggle(true)));
+$("flow-org")?.addEventListener("click", () => setDeployFlow("org"));
+$("flow-zip")?.addEventListener("click", () => setDeployFlow("zip"));
+$("zip-file")?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (file) run(() => loadZipFile(file));
+});
 $("btn-start-continue")?.addEventListener("click", () => run(async () => {
   await saveSettings({ setupComplete: true, useGit: useGitEnabled() });
   state.settings = await loadSettings();
