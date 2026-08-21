@@ -1,8 +1,16 @@
 # Store listing images
 
-- `screenshots/` — 1280×800 PNGs for the Chrome Web Store gallery (upload all five).
-- `promo-small.png` — 440×280 small promotional tile (required).
+Upload these on the Chrome Web Store **Store listing** tab. Sizes are already correct.
 
-These match the current OrgFlow UI. After your morning smoke test you can replace them with live captures from the side panel or workbench if you prefer; sizes must stay **1280×800** (screenshots) and **440×280** (promo).
+- `promo-small.png` — **440×280** small promotional tile (required).
+- `screenshots/` — **1280×800** PNGs (upload all five, or replace with live captures after smoke test):
+  - `01-start.png` — Start: detect orgs, From / To, local snapshots vs Git
+  - `02-type.png` — Package: type / What’s new
+  - `03-members.png` — Package: members
+  - `04-retrieve.png` — Retrieve: Jira + comment
+  - `05-versions-diff.png` — Retrieve: this package vs saved snapshot
+- Store icon: `../../extension/icons/icon128.png` (**128×128**)
 
-Store icon: `../../extension/icons/icon128.png`.
+These files were generated before Package became a single screen. After you smoke-test 1.11.18, recapture Start, Package (What’s new), Retrieve (side-by-side), and Confirm if the listing should match the live UI. Keep **1280×800** (screenshots) and **440×280** (promo), square corners, no padding.
+
+Full paste kit: `../chrome-web-store.md`.

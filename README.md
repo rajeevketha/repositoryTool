@@ -23,7 +23,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 
 ## Chrome Web Store
 
-Submission kit (listing copy, privacy URL, permission justifications, screenshots): [docs/chrome-web-store.md](docs/chrome-web-store.md).
+Full dashboard paste kit (what to upload, every listing/privacy field, and what you still must do): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** [files/orgflow-extension.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip) (unzip to an `orgflow/` folder)
 - **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.18**)
