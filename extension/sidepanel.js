@@ -50,6 +50,7 @@ import {
   sameOrg
 } from "./lib/pipelines.js";
 import { discoverOrgsFromCookies, listOrgApiVersions, orgKey } from "./lib/salesforce.js";
+import { distinctTarget, orgsAreSame, pickOtherOrg, sessionAfterOrgChange } from "./lib/orgPath.js";
 import {
   DEFAULT_API_VERSION,
   METADATA_API_VERSIONS,
@@ -405,6 +406,7 @@ function updateActionState() {
     if (needs.includes("target") && !target) disabled = true;
     if (needs.includes("package") && !pack) disabled = true;
     if (needs.includes("distinct") && same && !isZipFlow()) disabled = true;
+    if ((btn.id === "btn-retrieve" || btn.id === "btn-retrieve-review") && same && !isZipFlow()) disabled = true;
     if (needs.includes("retrieve") && !hasFreshRetrieve()) disabled = true;
     if (needs.includes("git") && (!useGitEnabled() || !isGitConfigured(state.settings))) disabled = true;
     if ((btn.id === "btn-retrieve" || btn.id === "btn-retrieve-review") && hasFreshRetrieve() && state.retrieveOk) {
@@ -705,8 +707,7 @@ function advancePromotionHop() {
     return true;
   }
   state.promotingHop = true;
-  $("source-org").value = orgKey(nextSource);
-  $("target-org").value = orgKey(nextTarget);
+  writeOrgSelects(orgKey(nextSource), orgKey(nextTarget));
   state.deployFinished = "";
   const record = currentPipelineRecord();
   if (record) {
@@ -723,6 +724,7 @@ function advancePromotionHop() {
     renderPipelines();
     updateActionState();
   });
+  state.promotingHop = false;
   setStatus(`Next hop ${nextSource.label} → ${nextTarget.label}. Deploy the same snapshot — do not retrieve again.`, "ok");
   log(`Promotion hop: ${nextSource.label} → ${nextTarget.label}. Same Jira files travel; retrieve stays frozen.`);
   updateActionState();
@@ -934,12 +936,12 @@ function canAdvanceTo(index) {
 }
 
 function leaveReason(index) {
-  if (index === 0 && !pathReady()) {
+  if (!pathReady()) {
     const source = selectedOrg("source-org");
     const target = selectedOrg("target-org");
     if (isZipFlow()) return "Set To in the path bar, then Next.";
     if (!source || !target) return "Set From and To in the path bar, then Next.";
-    return "From and To must be different orgs before you pick configuration.";
+    return "From and To must be different orgs before you continue.";
   }
   if (index === 0 && !isZipFlow() && useGitEnabled() && !isGitConfigured(state.settings)) {
     return "Sharing is on. Choose a repo and click Use this repo. Selecting it in the list, or saving a pipeline, does not connect Git yet.";
@@ -1347,6 +1349,19 @@ function selectedMembersFor(typeName) {
   return new Set(state.packageTypes.find((t) => t.name === typeName)?.members || []);
 }
 
+function goToNamedStep(id) {
+  if (!id) return;
+  const index = stepIndexById(id);
+  if (index >= 0) goStep(index, { force: true });
+}
+
+function invalidateRetrieveForOrgChange() {
+  const had = Boolean(state.stagedFiles?.length || state.retrieveSnapshot);
+  state.retrieveSnapshot = null;
+  invalidateStaged();
+  if (had) setStatus("Org changed. Retrieve again before deploy.", "error");
+}
+
 function invalidateStaged() {
   const hadFiles = Boolean(state.stagedFiles?.length);
   state.stagedFiles = null;
@@ -1369,7 +1384,7 @@ function invalidateStaged() {
   }
 }
 
-async function resetForNewPackage() {
+async function resetWorkingPackage({ clearTicket = false } = {}) {
   state.packageTypes = [];
   state.typeChosen = false;
   state.activeType = "";
@@ -1391,6 +1406,9 @@ async function resetForNewPackage() {
   state.gitShipWarned = false;
   state.reviewSeen = false;
   state.showingVersions = false;
+  state.browseTypes = false;
+  state.dismissedCompanions = [];
+  state.pendingCompanion = null;
   state.zipName = "";
   state.zipReport = null;
   state.preflight = { key: "", running: false, error: "", report: null, existingByType: {}, listedTypes: [] };
@@ -1400,8 +1418,10 @@ async function resetForNewPackage() {
   if ($("zip-report")) $("zip-report").innerHTML = "";
   state.versionsReturnStep = stepIndexById("review");
   $("file-editor-wrap")?.classList.add("hidden");
-  if ($("comment")) $("comment").value = "";
-  if ($("jira")) $("jira").value = "";
+  if (clearTicket) {
+    if ($("comment")) $("comment").value = "";
+    if ($("jira")) $("jira").value = "";
+  }
   if ($("package-xml")) $("package-xml").value = "";
   await persistPackage();
   renderFileList();
@@ -1412,6 +1432,10 @@ async function resetForNewPackage() {
   applyRetrieveLockUi();
   renderPackageUi();
   renderTypePicker();
+}
+
+async function resetForNewPackage() {
+  await resetWorkingPackage({ clearTicket: true });
   goStep(0, { force: true });
   setStatus("New package. From and To stay set. Pick a type when you are ready.", "ok");
 }
@@ -2373,27 +2397,58 @@ function renderFileList() {
     .join("");
 }
 
-function fillOrgSelects() {
-  const options = state.orgs.length
-    ? state.orgs.map((o) => `<option value="${escapeHtml(orgKey(o))}">${escapeHtml(o.label)}</option>`).join("")
-    : "";
-  const prevSource = state.settings.lastSourceOrgId;
-  const prevTarget = state.settings.lastTargetOrgId;
-  const sourceBlank = `<option value="">Select source org</option>`;
-  const targetBlank = `<option value="">Select target org</option>`;
+function orgSelectOptions(excludeKey) {
+  return state.orgs.map((org) => {
+    const key = orgKey(org);
+    const disabled = excludeKey && key === excludeKey ? " disabled" : "";
+    return `<option value="${escapeHtml(key)}"${disabled}>${escapeHtml(org.label)}</option>`;
+  }).join("");
+}
+
+function writeOrgSelects(sourceVal, targetVal) {
   const sourceEl = $("source-org");
   const targetEl = $("target-org");
-  if (sourceEl) sourceEl.innerHTML = sourceBlank + options;
-  if (targetEl) targetEl.innerHTML = targetBlank + options;
-  if (sourceEl && prevSource && state.orgs.some((o) => orgKey(o) === prevSource)) sourceEl.value = prevSource;
-  if (targetEl && prevTarget && prevTarget !== sourceEl?.value && state.orgs.some((o) => orgKey(o) === prevTarget)) {
-    targetEl.value = prevTarget;
+  const sourceBlank = `<option value="">Select source org</option>`;
+  const targetBlank = `<option value="">Select target org</option>`;
+  const excludeFrom = isZipFlow() ? "" : targetVal;
+  const excludeTo = isZipFlow() ? "" : sourceVal;
+  if (sourceEl) {
+    sourceEl.innerHTML = sourceBlank + orgSelectOptions(excludeFrom);
+    sourceEl.value = sourceVal || "";
   }
-  if (sourceEl?.value && !targetEl?.value && state.orgs.length === 2) {
-    const other = state.orgs.find((o) => orgKey(o) !== sourceEl.value);
-    if (other) targetEl.value = orgKey(other);
+  if (targetEl) {
+    targetEl.innerHTML = targetBlank + orgSelectOptions(excludeTo);
+    targetEl.value = targetVal || "";
   }
+}
+
+function resolvedOrgPath(preferredSource, preferredTarget) {
+  const keys = state.orgs.map((org) => orgKey(org));
+  const sourceVal = keys.includes(preferredSource) ? preferredSource : "";
+  let targetVal = keys.includes(preferredTarget) ? preferredTarget : "";
+  targetVal = distinctTarget(sourceVal, targetVal);
+  if (sourceVal && !targetVal) targetVal = pickOtherOrg(keys, sourceVal);
+  return { sourceVal, targetVal };
+}
+
+function fillOrgSelects() {
+  const sourceEl = $("source-org");
+  const targetEl = $("target-org");
+  const currentSource = sourceEl?.value || "";
+  const currentTarget = targetEl?.value || "";
+  const preferredSource = currentSource || state.settings?.lastSourceOrgId || "";
+  const preferredTarget = currentTarget || state.settings?.lastTargetOrgId || "";
+  const { sourceVal, targetVal } = resolvedOrgPath(preferredSource, preferredTarget);
+  writeOrgSelects(sourceVal, targetVal);
   updateActionState();
+}
+
+async function persistOrgPath() {
+  await saveSettings({
+    lastSourceOrgId: $("source-org")?.value || "",
+    lastTargetOrgId: $("target-org")?.value || ""
+  });
+  state.settings = await loadSettings();
 }
 
 function renderPipelines() {
@@ -2471,8 +2526,9 @@ function applyPipeline(record, { keepHop = false } = {}) {
   }
   const source = matchOrg(state.orgs, hopSource);
   const target = matchOrg(state.orgs, hopTarget);
-  if (source && $("source-org")) $("source-org").value = orgKey(source);
-  if (target && $("target-org")) $("target-org").value = orgKey(target);
+  const sourceKey = source ? orgKey(source) : "";
+  const targetKey = target && !orgsAreSame(sourceKey, orgKey(target)) ? orgKey(target) : "";
+  if (sourceKey || targetKey) writeOrgSelects(sourceKey, targetKey);
   if (record.testLevel && $("test-level")) $("test-level").value = record.testLevel;
   if ($("pipeline-name")) $("pipeline-name").value = record.name || pipelinePathLabel(record);
   if ($("pipeline-select")) $("pipeline-select").value = record.id;
@@ -2485,6 +2541,7 @@ async function useSelectedPipeline() {
   const id = $("pipeline-select")?.value || $("deploy-pipeline")?.value;
   const record = findPipeline(state.pipelines.pipelines, id);
   if (!record) throw new Error("Save a pipeline on Start first.");
+  const previousSource = $("source-org")?.value || state.settings?.lastSourceOrgId || "";
   applyPipeline(record);
   await saveSettings({
     lastPipelineId: record.id,
@@ -2494,6 +2551,12 @@ async function useSelectedPipeline() {
     useGit: useGitEnabled()
   });
   state.settings = await loadSettings();
+  const nextSource = $("source-org")?.value || "";
+  if (previousSource && previousSource !== nextSource && state.stepIndex > 0) {
+    await resetWorkingPackage();
+    goToNamedStep("package");
+    setStatus("From org changed with the pipeline. Previous members were cleared. Pick configuration again, then retrieve.", "ok");
+  }
   renderGitUi();
   log(`Using pipeline ${record.name}.`);
   setStatus(`Pipeline: ${record.name}`, "ok");
@@ -3044,9 +3107,11 @@ function updateHeaderStatus() {
   setStatus(`${n} org${n === 1 ? "" : "s"} · ${pack} in this package.`);
 }
 
-async function refreshAll() {
+async function refreshAll({ newSession = false } = {}) {
   state.settings = await loadSettings();
-  state.packageTypes = normalizePackageTypes(state.settings.packageTypes);
+  if (newSession) {
+    await resetWorkingPackage({ clearTicket: true });
+  }
   const creds = hostCreds(state.settings);
   if ($("git-provider")) $("git-provider").value = creds.provider || "github";
   $("gh-token").value = creds.token || "";
@@ -3061,7 +3126,9 @@ async function refreshAll() {
   $("check-only").checked = Boolean(state.settings.checkOnly);
   $("use-git").checked = Boolean(state.settings.useGit) || isGitConfigured(state.settings);
   fillApiVersionSelect();
-  state.specifiedTests = normalizeTestNames(state.settings.specifiedTests);
+  if (!newSession && !state.specifiedTests.length) {
+    state.specifiedTests = normalizeTestNames(state.settings.specifiedTests);
+  }
   $("package-xml").value = currentXml();
   state.xmlDirty = false;
   fillGitHostUi();
@@ -3493,7 +3560,11 @@ function resolveTicket(store) {
 
 async function retrieveIntoReview() {
   const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
   if (!source) throw new Error("Select a source org. Log into it in Chrome first.");
+  if (target && orgsAreSame(orgKey(source), orgKey(target))) {
+    throw new Error("From and To are the same org. Pick a different To before retrieve.");
+  }
   if (hasFreshRetrieve() && state.retrieveOk) {
     log("Already retrieved this package from the From org. Change members, type, or From org to retrieve again.");
     setStatus("Already retrieved — Next to deploy, or Back to change members", "ok");
@@ -4554,37 +4625,48 @@ $("version-list").addEventListener("click", (event) => {
 });
 $("use-git")?.addEventListener("change", () => run(() => persistGitToggle($("use-git").checked)));
 $("btn-unlock-retrieve")?.addEventListener("click", unlockSelection);
-$("source-org")?.addEventListener("change", () => run(async () => {
-  const previous = state.retrieveSnapshot?.sourceKey;
-  await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
-  state.settings = await loadSettings();
-  if ($("source-org").value && !$("target-org").value && state.orgs.length === 2) {
-    const other = state.orgs.find((o) => orgKey(o) !== $("source-org").value);
-    if (other) $("target-org").value = orgKey(other);
-  }
-  if (previous && previous !== $("source-org").value) {
-    if (state.promotingHop) state.promotingHop = false;
-    else {
-      state.membersCache = {};
-  state.recentWarmGen += 1;
-      state.availableTypes = fallbackTypeRecords();
-      invalidateStaged();
-    }
+async function applyOrgPathChange(changed) {
+  const previousSource = state.settings?.lastSourceOrgId || "";
+  const previousTarget = state.settings?.lastTargetOrgId || "";
+  const nextSource = $("source-org")?.value || "";
+  const nextTargetRaw = $("target-org")?.value || "";
+  const { sourceVal, targetVal } = resolvedOrgPath(nextSource, nextTargetRaw);
+  writeOrgSelects(sourceVal, targetVal);
+  const policy = sessionAfterOrgChange({
+    changed,
+    previousSource,
+    nextSource: sourceVal,
+    previousTarget,
+    nextTarget: targetVal,
+    hadRetrieve: Boolean(state.retrieveSnapshot || state.stagedFiles?.length),
+    promotingHop: Boolean(state.promotingHop)
+  });
+  if (state.promotingHop) state.promotingHop = false;
+  await persistOrgPath();
+  if (policy.resetPackage) {
+    state.availableTypes = fallbackTypeRecords();
+    await resetWorkingPackage();
+    setStatus("From org changed. Previous members were cleared. Pick configuration again, then retrieve.", "ok");
+  } else if (policy.invalidateRetrieve) {
+    state.lastDeploy = null;
+    state.lastValidate = null;
+    state.deployFinished = "";
+    invalidateRetrieveForOrgChange();
+  } else if (changed === "target") {
+    state.lastDeploy = null;
+    state.lastValidate = null;
+    if (state.deployFinished === "success") state.deployFinished = "";
   }
   await refreshApiVersionsFromOrgs();
-  updateActionState();
-  maybeAdvanceFromStart();
-}));
-$("target-org")?.addEventListener("change", () => run(async () => {
-  await saveSettings({ lastSourceOrgId: $("source-org").value, lastTargetOrgId: $("target-org").value });
-  state.settings = await loadSettings();
-  if (alreadyDeployedToCurrentTarget()) state.deployFinished = "success";
-  else if (state.deployFinished === "success") state.deployFinished = "";
-  await refreshApiVersionsFromOrgs();
+  if (!pathReady() && state.stepIndex > 0) goStep(0, { force: true });
+  else if (state.stepIndex > 0) goToNamedStep(policy.bounceTo);
   updateActionState();
   maybeAdvanceFromStart();
   if (currentStepId() === "deploy") refreshToOrgPreflight({ force: true });
-}));
+}
+
+$("source-org")?.addEventListener("change", () => run(() => applyOrgPathChange("source")));
+$("target-org")?.addEventListener("change", () => run(() => applyOrgPathChange("target")));
 $("inspector-filter")?.addEventListener("input", renderInspector);
 document.querySelectorAll(".insp-tab").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -4627,4 +4709,4 @@ if (isWorkbench()) {
   chrome.runtime?.sendMessage?.({ type: "closeSidePanel" })?.catch?.(() => {});
 }
 
-refreshAll();
+refreshAll({ newSession: true });
