@@ -1,4 +1,4 @@
-# Chrome Web Store submission (OrgFlow 1.11.22)
+# Chrome Web Store submission (OrgFlow 1.11.23)
 
 Paste kit for [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole). This environment cannot submit for you. You upload the zip, paste the fields below, and click **Submit for review**.
 
@@ -52,7 +52,7 @@ https://github.com/rajeevketha/repositoryTool/blob/cursor/orgflow-salesforce-dep
 After upload you should see:
 
 - Name: **OrgFlow**
-- Version: **1.11.22**
+- Version: **1.11.23**
 - Manifest V3
 
 If Chrome rejects the zip, the usual cause is uploading the nested Load-unpacked zip. Use the store zip only.

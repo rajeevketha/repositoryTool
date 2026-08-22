@@ -1,4 +1,4 @@
-import { DEFAULT_API_VERSION } from "./apiVersion.js";
+import { DEFAULT_API_VERSION, newestApiVersion, parseOrgApiVersions } from "./apiVersion.js";
 
 const DISCOVERY_API_VERSIONS = [...new Set([DEFAULT_API_VERSION, "61.0", "58.0"])];
 
@@ -66,17 +66,40 @@ export async function discoverOrgsFromCookies() {
   return orgs.sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/** Salesforce version catalog: GET /services/data/ (no version in the path). */
+export async function listOrgApiVersions(instanceUrl, sid) {
+  const base = instanceUrl.replace(/\/$/, "");
+  const headers = { Authorization: `Bearer ${sid}`, Accept: "application/json" };
+  return parseOrgApiVersions(await jsonFetch(`${base}/services/data/`, headers));
+}
+
+function discoveryVersions(discovered) {
+  const versions = [];
+  if (discovered.length) versions.push(newestApiVersion(discovered));
+  for (const fallback of DISCOVERY_API_VERSIONS) {
+    if (!versions.includes(fallback)) versions.push(fallback);
+  }
+  return versions;
+}
+
 export async function describeOrg(instanceUrl, sid) {
   const base = instanceUrl.replace(/\/$/, "");
   const headers = { Authorization: `Bearer ${sid}`, Accept: "application/json" };
-  const identity = await jsonFetchFirst(base, headers, "/", DISCOVERY_API_VERSIONS);
+  let discovered = [];
+  try {
+    discovered = await listOrgApiVersions(base, sid);
+  } catch {
+    discovered = [];
+  }
+  const versions = discoveryVersions(discovered);
+  const identity = await jsonFetchFirst(base, headers, "/", versions);
   const orgRes = await jsonFetchFirst(
     base,
     headers,
     `/query?q=${encodeURIComponent("SELECT Id, Name, IsSandbox, OrganizationType, InstanceName FROM Organization")}`,
-    DISCOVERY_API_VERSIONS
+    versions
   );
-  const userRes = await jsonFetchFirst(base, headers, "/chatter/users/me", DISCOVERY_API_VERSIONS).catch(() => null);
+  const userRes = await jsonFetchFirst(base, headers, "/chatter/users/me", versions).catch(() => null);
   const org = orgRes.records?.[0];
   if (!org) throw new Error("Could not read Organization");
   const username = userRes?.username || userRes?.name || "";
@@ -91,7 +114,9 @@ export async function describeOrg(instanceUrl, sid) {
     instanceUrl: base,
     sid,
     username,
-    apiHost: identity?.identity ? originFromUrl(identity.identity) : base
+    apiHost: identity?.identity ? originFromUrl(identity.identity) : base,
+    apiVersions: discovered,
+    maxApiVersion: discovered.length ? newestApiVersion(discovered) : ""
   };
 }
 

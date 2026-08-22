@@ -49,8 +49,15 @@ import {
   nextHopAfter,
   sameOrg
 } from "./lib/pipelines.js";
-import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
-import { DEFAULT_API_VERSION, METADATA_API_VERSIONS, normalizeApiVersion, apiVersionLabel } from "./lib/apiVersion.js";
+import { discoverOrgsFromCookies, listOrgApiVersions, orgKey } from "./lib/salesforce.js";
+import {
+  DEFAULT_API_VERSION,
+  METADATA_API_VERSIONS,
+  apiVersionLabel,
+  mergeApiVersionRows,
+  newestApiVersion,
+  normalizeApiVersion
+} from "./lib/apiVersion.js";
 import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata, existingMembersInOrg } from "./lib/metadata.js";
 import { decodeUtf8Base64, withEditedText, isEditablePath } from "./lib/files.js";
 import {
@@ -168,6 +175,7 @@ const state = {
   flow: "org",
   zipName: "",
   zipReport: null,
+  apiVersionRows: METADATA_API_VERSIONS,
   preflight: { key: "", running: false, error: "", report: null, existingByType: {}, listedTypes: [] }
 };
 
@@ -1241,15 +1249,78 @@ function apiVersion() {
   return normalizeApiVersion($("api-version")?.value || state.settings?.apiVersion || DEFAULT_API_VERSION);
 }
 
+function currentApiVersionRows() {
+  return state.apiVersionRows?.length ? state.apiVersionRows : METADATA_API_VERSIONS;
+}
+
+function orgApiVersionRows(org) {
+  return Array.isArray(org?.apiVersions) && org.apiVersions.length ? org.apiVersions : [];
+}
+
+function orgNewestApiVersion(org) {
+  if (org?.maxApiVersion) return org.maxApiVersion;
+  const rows = orgApiVersionRows(org);
+  return rows.length ? newestApiVersion(rows) : "";
+}
+
 function fillApiVersionSelect() {
   const select = $("api-version");
   if (!select) return;
   const current = normalizeApiVersion(state.settings?.apiVersion || DEFAULT_API_VERSION);
-  select.innerHTML = METADATA_API_VERSIONS.map((row) => {
+  const rows = mergeApiVersionRows(currentApiVersionRows(), [{ version: current, season: "" }]);
+  select.innerHTML = rows.map((row) => {
     const selected = row.version === current ? " selected" : "";
-    return `<option value="${row.version}"${selected}>${row.version} · ${row.season}</option>`;
+    const text = row.season ? `${row.version} · ${row.season}` : row.version;
+    return `<option value="${row.version}"${selected}>${escapeHtml(text)}</option>`;
   }).join("");
   select.value = current;
+  updateApiVersionHint();
+}
+
+function updateApiVersionHint() {
+  const hint = $("api-version-hint");
+  if (!hint) return;
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  const fromMax = orgNewestApiVersion(source);
+  const toMax = orgNewestApiVersion(target);
+  const selected = apiVersion();
+  const parts = [
+    "After Detect, this list comes from the org so later Salesforce releases (68, 69, …) appear here. Pick a lower version if an org is not on the newest yet."
+  ];
+  if (fromMax) parts.push(`From newest: ${fromMax}.`);
+  if (toMax) parts.push(`To newest: ${toMax}.`);
+  if (toMax && Number(selected) > Number(toMax)) {
+    parts.push(`Selected ${selected} is newer than To — pick ${toMax} or lower if deploy fails.`);
+  }
+  hint.textContent = parts.join(" ");
+}
+
+async function refreshApiVersionsFromOrgs() {
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  const first = state.orgs.find((org) => org.sid && org.instanceUrl);
+  const lists = [METADATA_API_VERSIONS];
+  const seen = new Set();
+  for (const org of [source, target, first]) {
+    if (!org) continue;
+    const key = orgKey(org);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let rows = orgApiVersionRows(org);
+    if (!rows.length && org.sid && org.instanceUrl) {
+      try {
+        rows = await listOrgApiVersions(org.instanceUrl, org.sid);
+        org.apiVersions = rows;
+        org.maxApiVersion = newestApiVersion(rows);
+      } catch {
+        rows = [];
+      }
+    }
+    if (rows.length) lists.push(rows);
+  }
+  state.apiVersionRows = mergeApiVersionRows(...lists);
+  fillApiVersionSelect();
 }
 
 async function persistApiVersion() {
@@ -1257,13 +1328,14 @@ async function persistApiVersion() {
   const prev = normalizeApiVersion(state.settings?.apiVersion);
   await saveSettings({ apiVersion: next });
   state.settings = await loadSettings();
+  updateApiVersionHint();
   if (prev !== next) {
     state.membersCache = {};
     state.availableTypes = fallbackTypeRecords();
     if (!state.xmlDirty) $("package-xml").value = currentXml();
     invalidateStaged();
-    setStatus(`API version set to ${apiVersionLabel(next)}. Retrieve again before deploy.`, "ok");
-    log(`Metadata API version is ${apiVersionLabel(next)}.`);
+    setStatus(`API version set to ${apiVersionLabel(next, currentApiVersionRows())}. Retrieve again before deploy.`, "ok");
+    log(`Metadata API version is ${apiVersionLabel(next, currentApiVersionRows())}.`);
   }
 }
 
@@ -1661,7 +1733,7 @@ function renderDeployManifest() {
     else if (useGitEnabled()) commentEl.textContent = "Enter on Retrieve";
     else commentEl.textContent = "Optional";
   }
-  if (apiEl) apiEl.textContent = apiVersionLabel(apiVersion());
+  if (apiEl) apiEl.textContent = apiVersionLabel(apiVersion(), currentApiVersionRows());
   if (destEl) {
     destEl.textContent = isZipFlow()
       ? "Zip file"
@@ -2935,6 +3007,7 @@ async function refreshOrgs() {
   await saveSettings({ savedOrgs: state.orgs.map(({ sid, ...rest }) => ({ ...rest, sid })) });
   fillOrgSelects();
   renderOrgCards();
+  await refreshApiVersionsFromOrgs();
   log(`Found ${state.orgs.length} org${state.orgs.length === 1 ? "" : "s"}.`);
 }
 
@@ -4498,6 +4571,7 @@ $("source-org")?.addEventListener("change", () => run(async () => {
       invalidateStaged();
     }
   }
+  await refreshApiVersionsFromOrgs();
   updateActionState();
   maybeAdvanceFromStart();
 }));
@@ -4506,6 +4580,7 @@ $("target-org")?.addEventListener("change", () => run(async () => {
   state.settings = await loadSettings();
   if (alreadyDeployedToCurrentTarget()) state.deployFinished = "success";
   else if (state.deployFinished === "success") state.deployFinished = "";
+  await refreshApiVersionsFromOrgs();
   updateActionState();
   maybeAdvanceFromStart();
   if (currentStepId() === "deploy") refreshToOrgPreflight({ force: true });
