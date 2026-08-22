@@ -1414,9 +1414,16 @@ body[data-layout="workbench"][data-step="versions"] .app-body {
   border-radius: 10px;
   padding: 10px;
 }
-.outcome-item.err { border-color: #7a2a2a; background: #2a1414; }
-.outcome-item.ok { border-color: #2a5a38; background: #142018; }
-.outcome-item.info { border-color: #5a3a14; background: #22180e; }
+.outcome-item.warn { border-color: #4a4034; background: #2a241c; }
+.outcome-item.warn .outcome-kicker { color: var(--orange-2); }
+.preflight-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
 .outcome-kicker {
   font-size: 11px;
   font-weight: 500;

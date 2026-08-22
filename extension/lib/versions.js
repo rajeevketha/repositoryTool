@@ -176,7 +176,7 @@ export function sortVersions(versions) {
 
 /**
  * Jira key and comment are required only when Release repo is on.
- * On this Chrome profile they are optional. A typed key still has to look like PROJ-123.
+ * On this device they are optional. A typed key still has to look like PROJ-123.
  */
 export function snapshotDetailsItems({ jiraKey, comment, gitEnabled } = {}) {
   const items = [];
@@ -205,7 +205,7 @@ export function snapshotDetailsItems({ jiraKey, comment, gitEnabled } = {}) {
     items.push({
       kind: "error",
       kicker: "Jira key",
-      text: "Use a Jira key like PROJ-123, or leave it blank for this Chrome profile."
+      text: "Use a Jira key like PROJ-123, or leave it blank on this device."
     });
   }
   return items;
@@ -213,7 +213,7 @@ export function snapshotDetailsItems({ jiraKey, comment, gitEnabled } = {}) {
 
 /**
  * Snapshot details when Release repo is on, plus a connected repo.
- * This Chrome profile does not require Jira or a comment.
+ * On this device, Jira and comment are optional.
  */
 export function gitShipValidationItems({
   gitEnabled,

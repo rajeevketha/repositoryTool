@@ -13,6 +13,8 @@ import {
   parseDeployResult,
   parseAsyncId,
   parseListMetadata,
+  readMetadataBody,
+  parseReadMetadataFullNames,
   toggleMember,
   memberCount,
   assertPackageXml,
@@ -88,6 +90,19 @@ describe("package.xml", () => {
     types = [{ name: "ApexClass", members: ["*"] }];
     types = toggleMember(types, "ApexClass", "Bar", false, ["Foo", "Bar", "Baz"]);
     assert.deepEqual(types[0].members, ["Baz", "Foo"]);
+  });
+
+  it("builds readMetadata SOAP and parses returned fullNames", () => {
+    const body = readMetadataBody("CustomField", ["Account.Status__c", "Lead.Flag__c"]);
+    assert.match(body, /<urn:type>CustomField<\/urn:type>/);
+    assert.match(body, /<urn:fullNames>Account.Status__c<\/urn:fullNames>/);
+    const xml = `<readMetadataResponse>
+      <result>
+        <records xsi:type="CustomField"><fullName>Account.Status__c</fullName></records>
+        <records xsi:nil="true"/>
+      </result>
+    </readMetadataResponse>`;
+    assert.deepEqual(parseReadMetadataFullNames(xml), ["Account.Status__c"]);
   });
 });
 

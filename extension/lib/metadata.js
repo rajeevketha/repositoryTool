@@ -12,6 +12,8 @@ import {
   parseDescribeMetadata,
   listMetadataBody,
   parseListMetadata,
+  readMetadataBody,
+  parseReadMetadataFullNames,
   normalizePackageTypes
 } from "./packageXml.js";
 import { API_VERSION } from "./salesforce.js";
@@ -140,6 +142,31 @@ export async function listMetadataType({ instanceUrl, sid, typeName, folderType,
     apiVersion,
     queries: [{ type: typeName }]
   });
+}
+
+export async function readMetadataMembers({ instanceUrl, sid, typeName, fullNames, apiVersion = API_VERSION }) {
+  const names = [...new Set((fullNames || []).map((name) => String(name || "").trim()).filter(Boolean))];
+  const found = [];
+  for (const group of chunk(names, 10)) {
+    const xml = await soapCall(instanceUrl, sid, "readMetadata", readMetadataBody(typeName, group), apiVersion);
+    const fault = soapFault(xml);
+    if (fault && !/readMetadataResponse|records/i.test(xml)) throw new Error(fault);
+    found.push(...parseReadMetadataFullNames(xml));
+  }
+  return found;
+}
+
+export async function existingMembersInOrg({ instanceUrl, sid, typeName, fullNames, apiVersion = API_VERSION, onProgress }) {
+  const names = [...new Set((fullNames || []).map((name) => String(name || "").trim()).filter(Boolean))];
+  if (!names.length) return [];
+  try {
+    return await readMetadataMembers({ instanceUrl, sid, typeName, fullNames: names, apiVersion });
+  } catch (err) {
+    onProgress?.(`readMetadata failed for ${typeName}, listing instead: ${err.message || err}`);
+    const listed = await listMetadataType({ instanceUrl, sid, typeName, apiVersion, onProgress });
+    const want = new Set(names.map((name) => name.toLowerCase()));
+    return listed.map((row) => row.fullName).filter((name) => want.has(String(name || "").toLowerCase()));
+  }
 }
 
 export async function unzipToFiles(zipBase64) {

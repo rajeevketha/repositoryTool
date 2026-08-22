@@ -50,7 +50,7 @@ import {
   sameOrg
 } from "./lib/pipelines.js";
 import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
-import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata } from "./lib/metadata.js";
+import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata, existingMembersInOrg } from "./lib/metadata.js";
 import { decodeUtf8Base64, withEditedText, isEditablePath } from "./lib/files.js";
 import {
   buildPackageXmlFromTypes,
@@ -78,6 +78,11 @@ import {
   loadLocalRelease
 } from "./lib/localVersions.js";
 import { compareFileSets, revertSelectedInto, fileText, sideBySideRows } from "./lib/diff.js";
+import {
+  typesToPreflight,
+  buildPreflightReport,
+  existingNameSet
+} from "./lib/preflight.js";
 import { validateZipPackage } from "./lib/zipPackage.js";
 import {
   RECENT_HINT_TYPES,
@@ -161,7 +166,8 @@ const state = {
   pendingCompanion: null,
   flow: "org",
   zipName: "",
-  zipReport: null
+  zipReport: null,
+  preflight: { key: "", running: false, error: "", report: null, existingByType: {}, listedTypes: [] }
 };
 
 function isZipFlow() {
@@ -452,7 +458,7 @@ function updateActionState() {
     if (jiraHint.state === "empty") {
       $("jira-hint").textContent = gitOn
         ? "Required for the release repo. Use the ticket id, like PROJ-123."
-        : "Optional on this Chrome profile. Leave blank and OrgFlow mints CHANGE-YYYYMMDD-N.";
+        : "Optional on this device. Leave blank and OrgFlow mints CHANGE-YYYYMMDD-N.";
       $("jira-hint").dataset.state = gitOn && state.gitShipWarned ? "error" : "empty";
     } else {
       $("jira-hint").textContent = jiraHint.text;
@@ -517,9 +523,15 @@ function updateActionState() {
     } else {
       retrieveHint.textContent = gitOn
         ? "Click Retrieve when this package looks right. Then enter Jira and a comment."
-        : "Click Retrieve when this package looks right. Jira and comment are optional on this Chrome profile.";
+        : "Click Retrieve when this package looks right. Jira and comment are optional on this device.";
       retrieveHint.dataset.state = "off";
     }
+  }
+  const zipReadyToSave = canDownloadPackageZip();
+  for (const id of ["btn-download-zip", "btn-download-zip-confirm"]) {
+    const btn = $(id);
+    if (!btn) continue;
+    btn.disabled = Boolean(state.busy) || !zipReadyToSave;
   }
   const callout = $("deploy-reason");
   if (callout) {
@@ -821,11 +833,11 @@ function maybeAdvanceFromStart() {
   }
   if (useGitEnabled() && !isGitConfigured(state.settings)) {
     $("git-setup-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-    setStatus("From and To are set. Connect a release repo, or switch to This Chrome profile, then click Next.", "ok");
+    setStatus("From and To are set. Connect a release repo, or switch to On this device, then click Next.", "ok");
     return;
   }
   $("snapshots-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-  setStatus("From and To are set. Choose This Chrome profile or Release repo, then click Next.", "ok");
+  setStatus("From and To are set. Choose On this device or Release repo, then click Next.", "ok");
 }
 
 function renderOrgPath() {
@@ -869,7 +881,7 @@ function renderOrgPath() {
     } else {
       sub.textContent = ready
         ? (stepId === "start"
-          ? "From and To are set. Choose This Chrome profile or Release repo on Start, then Next."
+          ? "From and To are set. Choose On this device or Release repo on Start, then Next."
           : `${orgKind(source)} → ${orgKind(target)}`)
         : "Next stays off until From and To are different Salesforce orgs.";
     }
@@ -974,7 +986,7 @@ function updatePickCopy() {
     if ($("pick-lead")) {
       $("pick-lead").textContent = useGitEnabled()
         ? "Click Retrieve when the package is complete. Then enter Jira and a comment — both are required before Confirm deploy. Back returns to Package to add members."
-        : "Click Retrieve when the package is complete. Jira and comment are optional on this Chrome profile. Back returns to Package to add members.";
+        : "Click Retrieve when the package is complete. Jira and comment are optional on this device. Back returns to Package to add members.";
     }
   }
   if ($("header-sub")) {
@@ -1058,7 +1070,7 @@ function updateWizardNav() {
     hint.textContent = state.busy ? "Waiting for Salesforce…" : (deployBlockReason() || `Ready to send this package to ${selectedOrg("target-org")?.label || "the To org"}.`);
   } else if (state.stepIndex === 0) {
     hint.textContent = pathReady()
-      ? (isZipFlow() ? "To is set. Next to upload the zip." : "Choose This Chrome profile or Release repo, then Next.")
+      ? (isZipFlow() ? "To is set. Next to upload the zip." : "Choose On this device or Release repo, then Next.")
       : `Step 1 of ${flowSteps().length} · ${currentStep().label}`;
   } else if (currentStepId() === "zip") {
     hint.textContent = zipReady()
@@ -1114,6 +1126,8 @@ function applyStepUi() {
   if (step.id === "deploy") {
     renderDeployManifest();
     renderTestRunner();
+    renderToOrgPreflight();
+    setTimeout(() => refreshToOrgPreflight(), 0);
     if ($("btn-scan-tests")) {
       $("btn-scan-tests").textContent = isZipFlow() ? "List test classes in To org" : "List test classes in From org";
     }
@@ -1246,6 +1260,8 @@ function invalidateStaged() {
   state.shipKind = "";
   state.autoRetrieveAttempted = false;
   state.lastSaved = null;
+  state.preflight = { key: "", running: false, error: "", report: null, existingByType: {}, listedTypes: [] };
+  state.preflightGen = (state.preflightGen || 0) + 1;
   $("file-editor-wrap")?.classList.add("hidden");
   renderFileList();
   if (hadFiles) {
@@ -1278,6 +1294,7 @@ async function resetForNewPackage() {
   state.showingVersions = false;
   state.zipName = "";
   state.zipReport = null;
+  state.preflight = { key: "", running: false, error: "", report: null, existingByType: {}, listedTypes: [] };
   const zipInput = $("zip-file");
   if (zipInput) zipInput.value = "";
   if ($("zip-file-label")) $("zip-file-label").textContent = "Choose a .zip";
@@ -1312,8 +1329,8 @@ function jiraKeyValue() {
   return normalizeJiraKey($("jira")?.value || "");
 }
 
-function chromeProfileLabel() {
-  return "This Chrome profile";
+function localStoreLabel() {
+  return "On this device";
 }
 
 function snapshotValidationItems() {
@@ -1457,7 +1474,7 @@ function renderInspector() {
   const repo = isGitConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
   $("inspector-git").textContent = gitOn
     ? `Jira versions in the release repo · ${repo}`
-    : "Jira versions on this Chrome profile · same snapshot for QA then prod";
+    : "Jira versions on this device · same snapshot for QA then prod";
   const tests = state.specifiedTests;
   $("inspector-tests").textContent = tests.length
     ? `${tests.length} specified test${tests.length === 1 ? "" : "s"}: ${tests.slice(0, 8).join(", ")}${tests.length > 8 ? "…" : ""}`
@@ -1621,8 +1638,9 @@ function renderDeployManifest() {
       ? "Zip file"
       : (useGitEnabled() && isGitConfigured(state.settings)
         ? repoLabel(state.settings)
-        : chromeProfileLabel());
+        : localStoreLabel());
   }
+  renderToOrgPreflight();
   if (!el) return;
   const columns = categoryColumns(state.packageTypes);
   if (!count) {
@@ -1645,17 +1663,17 @@ function renderGitUi() {
     ? connected
       ? `Compare this retrieve with a saved snapshot before Deploy. Shared Jira versions are in ${repoLabel(state.settings)}.`
       : `${host} is on — connect a repo on Start so the team can reuse versions. Compare before you deploy.`
-    : "Compare this retrieve with a saved snapshot before Deploy. Versions stay on this Chrome profile unless you connect a release repo.";
+    : "Compare this retrieve with a saved snapshot before Deploy. Versions stay on this device unless you connect a release repo.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
       : (($("gh-repo")?.value || $("gh-repo-input")?.value.trim())
         ? "A repo is selected in the list, but it is not connected yet. Click Use this repo."
-        : `Connect a ${host} repo on Start. Until then, versions stay on this Chrome profile.`)
-    : "Saving versions on this Chrome profile (no token). Jira is optional.";
+        : `Connect a ${host} repo on Start. Until then, versions stay on this device.`)
+    : "Saving versions on this device (no token). Jira is optional.";
   $("git-hint").textContent = on
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod get the same snapshot."
-    : "Jira is optional here. If you enter a key, saves create v1, v2, … on this Chrome profile.";
+    : "Jira is optional here. If you enter a key, saves create v1, v2, … on this device.";
   $("git-setup-block")?.classList.toggle("hidden", !on);
   document.body.classList.toggle("mode-simple", !on);
   document.body.classList.toggle("mode-git", on);
@@ -1666,13 +1684,13 @@ function renderGitUi() {
     ? connected
       ? `Sharing in ${repoLabel(state.settings)}${currentPipelineRecord() ? ` · ${pipelinePathLabel(currentPipelineRecord())}` : ""}.`
       : `Sharing is on — ${host}. After Connect, pick a repo and click Use this repo. OrgFlow saves From → To as the promotion path.`
-    : "Keeping versions on this Chrome profile. Detect orgs, set From and To, then Next.";
+    : "Keeping versions on this device. Detect orgs, set From and To, then Next.";
   const showGitShip = currentStepId() === "review";
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   if ($("git-ship-hint")) {
     $("git-ship-hint").textContent = on
       ? `Jira key (PROJ-123) and comment are required here before Confirm deploy. The comment is also the ${host} commit message.`
-      : "Jira key and comment are optional on this Chrome profile. Leave them blank to deploy; OrgFlow mints CHANGE-YYYYMMDD-N if you save a snapshot.";
+      : "Jira key and comment are optional on this device. Leave them blank to deploy; OrgFlow mints CHANGE-YYYYMMDD-N if you save a snapshot.";
   }
   for (const id of ["jira-req-mark", "comment-req-mark"]) {
     const mark = $(id);
@@ -2839,7 +2857,7 @@ function renderVersions() {
     return `${v.id} ${v.jira} ${v.comment}`.toLowerCase().includes(q);
   });
   if (!items.length) {
-    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to repo." : "No versions on this Chrome profile yet. Retrieve, then save a snapshot."}</div>`;
+    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to repo." : "No versions on this device yet. Retrieve, then save a snapshot."}</div>`;
     return;
   }
   $("version-list").innerHTML = items
@@ -2849,7 +2867,7 @@ function renderVersions() {
       return `<article class="card" data-id="${escapeHtml(v.id)}">
         <div class="title">${escapeHtml(v.id)}</div>
         <div class="meta">${escapeHtml(v.comment || "No comment")}</div>
-        <div class="meta">${escapeHtml(v.storage === "git" ? providerMeta(providerId(state.settings)).label : chromeProfileLabel())} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
+        <div class="meta">${escapeHtml(v.storage === "git" ? providerMeta(providerId(state.settings)).label : localStoreLabel())} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
         ${comps ? `<div class="meta">${escapeHtml(comps)}</div>` : ""}
         ${deploys ? `<div class="meta">${escapeHtml(deploys)}</div>` : ""}
         <div class="tiny">
@@ -3437,6 +3455,175 @@ async function filesForDeploy() {
   return state.stagedFiles;
 }
 
+function canDownloadPackageZip() {
+  return Boolean(state.stagedFiles?.length) && (isZipFlow() ? zipReady() : hasFreshRetrieve());
+}
+
+function packageZipFilename() {
+  if (isZipFlow() && state.zipName) return state.zipName.replace(/\.zip$/i, "") + ".zip";
+  const key = isJiraKey(jiraKeyValue()) ? jiraKeyValue() : "";
+  return `${key || "orgflow-package"}.zip`;
+}
+
+function downloadBase64Zip(base64, filename) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: "application/zip" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function downloadStagedPackage() {
+  if (!canDownloadPackageZip()) throw localError("Retrieve or upload a package first, then download the zip.");
+  const zipBase64 = await zipFromFiles(state.stagedFiles);
+  const name = packageZipFilename();
+  downloadBase64Zip(zipBase64, name);
+  log(`Downloaded ${name} (${state.stagedFiles.length} files).`);
+  setStatus(`Downloaded ${name}`, "ok");
+}
+
+function preflightCacheKey() {
+  const target = selectedOrg("target-org");
+  return [
+    orgKey(target),
+    packageFingerprint(),
+    specifiedTests().join(","),
+    orgKind(target) === "Production" ? "prod" : "sb"
+  ].join("|");
+}
+
+function rebuildPreflightReport() {
+  const target = selectedOrg("target-org");
+  return buildPreflightReport({
+    packageTypes: state.packageTypes,
+    existingByType: state.preflight.existingByType || {},
+    listedTypes: state.preflight.listedTypes || [],
+    production: orgKind(target) === "Production",
+    hasTests: specifiedTests().length > 0
+  });
+}
+
+function renderToOrgPreflight() {
+  const card = $("to-preflight-card");
+  if (!card) return;
+  const body = $("preflight-body");
+  const hint = $("preflight-hint");
+  const badge = $("preflight-badge");
+  const target = selectedOrg("target-org");
+  if (!target || !memberCount(state.packageTypes)) {
+    if (body) body.innerHTML = `<p class="muted">Set To and pick members, then OrgFlow checks whether they already exist.</p>`;
+    if (hint) hint.textContent = "This does not block Deploy.";
+    if (badge) badge.textContent = "—";
+    return;
+  }
+  if (state.preflight.running) {
+    if (badge) badge.textContent = "Checking";
+    if (hint) hint.textContent = `Checking selected members in ${target.label}…`;
+    if (body) body.innerHTML = `<p class="muted">Reading the To org. Deploy stays available.</p>`;
+    return;
+  }
+  if (state.preflight.error && !state.preflight.report) {
+    if (badge) badge.textContent = "Couldn't check";
+    if (hint) hint.textContent = "This does not block Deploy.";
+    if (body) body.innerHTML = `<p class="muted">${escapeHtml(state.preflight.error)}</p>`;
+    return;
+  }
+  const report = state.preflight.report || rebuildPreflightReport();
+  if (badge) badge.textContent = report.summary;
+  if (hint) {
+    hint.textContent = report.missingParent
+      ? "A custom object is missing in To. Deploy can still fail — add the object, or create it in To first."
+      : "This does not block Deploy. Overwrite means the member already exists in To.";
+  }
+  if (!body) return;
+  if (!report.items.length) {
+    body.innerHTML = `<p class="muted">No named members to check against ${escapeHtml(target.label)}.</p>`;
+    return;
+  }
+  body.innerHTML = report.items.map((item) => {
+    const kind = item.kind === "warn" ? "warn" : (item.kind === "ok" ? "ok" : (item.kind === "error" ? "err" : "info"));
+    return `<article class="outcome-item ${kind}">
+      <div class="outcome-kicker">${escapeHtml(item.kicker)}</div>
+      <p>${escapeHtml(item.text)}</p>
+    </article>`;
+  }).join("");
+}
+
+async function refreshToOrgPreflight({ force = false } = {}) {
+  if (currentStepId() !== "deploy") return;
+  const target = selectedOrg("target-org");
+  if (!target || !memberCount(state.packageTypes)) {
+    state.preflight = { key: "", running: false, error: "", report: null, existingByType: {}, listedTypes: [] };
+    renderToOrgPreflight();
+    return;
+  }
+  const key = preflightCacheKey();
+  const types = typesToPreflight(state.packageTypes);
+  if (!force && state.preflight.key === key && state.preflight.report) {
+    renderToOrgPreflight();
+    return;
+  }
+  if (!force && state.preflight.existingByType && Object.keys(state.preflight.existingByType).length && state.preflight.key?.startsWith(`${orgKey(target)}|${packageFingerprint()}`)) {
+    state.preflight.key = key;
+    state.preflight.report = rebuildPreflightReport();
+    renderToOrgPreflight();
+    return;
+  }
+  const gen = (state.preflightGen = (state.preflightGen || 0) + 1);
+  state.preflight = { ...state.preflight, key, running: true, error: "" };
+  renderToOrgPreflight();
+  const existingByType = {};
+  const listedTypes = [];
+  try {
+    for (const type of types) {
+      if (gen !== state.preflightGen) return;
+      const found = await existingMembersInOrg({
+        instanceUrl: target.instanceUrl,
+        sid: target.sid,
+        typeName: type.name,
+        fullNames: type.members,
+        apiVersion: apiVersion(),
+        onProgress: (m) => log(m)
+      });
+      existingByType[type.name] = existingNameSet(found);
+      listedTypes.push(type.name);
+    }
+    if (gen !== state.preflightGen) return;
+    state.preflight = {
+      key,
+      running: false,
+      error: "",
+      existingByType,
+      listedTypes,
+      report: null
+    };
+    state.preflight.report = rebuildPreflightReport();
+    const missing = state.preflight.report.missingParent;
+    log(`To org check in ${target.label}: ${state.preflight.report.summary}.`);
+    if (missing) setStatus(`To org is missing ${missing} custom object(s) this package needs.`, "error");
+  } catch (err) {
+    if (gen !== state.preflightGen) return;
+    state.preflight = {
+      key,
+      running: false,
+      error: err.message || String(err),
+      existingByType,
+      listedTypes,
+      report: null
+    };
+    if (listedTypes.length) state.preflight.report = rebuildPreflightReport();
+    log(`To org check failed: ${state.preflight.error}`, "error");
+  }
+  renderToOrgPreflight();
+}
+
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -3621,18 +3808,28 @@ async function deploySelected({ checkOnly = false } = {}) {
     }
     log(`Deployed selected package to ${target.label} (${result.status || "Succeeded"}).`);
     setStatus(`Deployed package → ${target.label}`, "ok");
-    if (useGitEnabled() && !isZipFlow()) {
+    if (!isZipFlow()) {
       try {
-        const version = await recordSuccessfulGitDeploy(target, result, options);
-        const gitRecord = gitSnapshotRecord(version, state.stagedFiles);
-        showOutcome({ ...result, operation: "deploy", gitRecord });
-        log(`Snapshot ${version.id} is in ${gitRecord.path} on ${gitRecord.branch} (${gitRecord.repo}).`);
-        setStatus(`Deployed to ${target.label} · snapshot in ${gitRecord.path}`, "ok");
-      } catch (gitErr) {
-        const gitRecord = { ok: false, error: gitErr.message || String(gitErr) };
-        showOutcome({ ...result, operation: "deploy", gitRecord });
-        log(`Salesforce deploy succeeded, but ${providerMeta(providerId(state.settings)).label} could not record it: ${gitRecord.error}`, "error");
-        setStatus(`Deployed to Salesforce, but Git was not updated`, "error");
+        const version = await recordSuccessfulDeploy(target, result, options);
+        if (useGitEnabled()) {
+          const gitRecord = gitSnapshotRecord(version, state.stagedFiles);
+          showOutcome({ ...result, operation: "deploy", gitRecord });
+          log(`Snapshot ${version.id} is in ${gitRecord.path} on ${gitRecord.branch} (${gitRecord.repo}).`);
+          setStatus(`Deployed to ${target.label} · snapshot in ${gitRecord.path}`, "ok");
+        } else {
+          log(`Saved ${version.id} on this device so you can promote the same snapshot to the next org.`);
+          setStatus(`Deployed to ${target.label} · saved ${version.id}`, "ok");
+        }
+      } catch (saveErr) {
+        if (useGitEnabled()) {
+          const gitRecord = { ok: false, error: saveErr.message || String(saveErr) };
+          showOutcome({ ...result, operation: "deploy", gitRecord });
+          log(`Salesforce deploy succeeded, but ${providerMeta(providerId(state.settings)).label} could not record it: ${gitRecord.error}`, "error");
+          setStatus(`Deployed to Salesforce, but Git was not updated`, "error");
+        } else {
+          log(`Salesforce deploy succeeded, but the snapshot was not saved on this device: ${saveErr.message || saveErr}`, "error");
+          setStatus(`Deployed to ${target.label}, but the snapshot was not saved`, "error");
+        }
       }
     }
     return result;
@@ -3646,7 +3843,7 @@ async function deploySelected({ checkOnly = false } = {}) {
   }
 }
 
-async function recordSuccessfulGitDeploy(target, result, options, existingVersion) {
+async function recordSuccessfulDeploy(target, result, options, existingVersion) {
   await loadVersionStore();
   let version = existingVersion;
   if (!version && state.lastSaved?.id && state.lastSaved.fingerprint === stagedFilesFingerprint()) {
@@ -3711,8 +3908,8 @@ async function saveVersion(options = {}) {
     state.lastSaved = { id: record.id, fingerprint: stagedFilesFingerprint() };
     renderVersions();
     $("jira").value = record.jira;
-    log(`Saved ${record.id} on this Chrome profile (${files.length} files).`);
-    setStatus(`Saved ${record.id} on this Chrome profile`, "ok");
+    log(`Saved ${record.id} on this device (${files.length} files).`);
+    setStatus(`Saved ${record.id} on this device`, "ok");
     setTimeout(() => maybeRefreshRetrieveCompare(), 0);
     return record;
   }
@@ -3769,7 +3966,7 @@ async function deployVersion(explicitId) {
   if (version.storage === "local" || !useGitEnabled()) {
     files = await loadLocalRelease(version.id);
     if (!files.length) throw new Error(`No local files found for ${version.id}. Save the version again from Review.`);
-    log(`Loading ${version.id} from this Chrome profile…`);
+    log(`Loading ${version.id} from this device…`);
   } else {
     requireGithub();
     const creds = gitCreds();
@@ -3800,7 +3997,7 @@ async function deployVersion(explicitId) {
     return version;
   }
   try {
-    const updated = await recordSuccessfulGitDeploy(target, result, options, version);
+    const updated = await recordSuccessfulDeploy(target, result, options, version);
     const gitRecord = useGitEnabled() ? gitSnapshotRecord(updated, files) : null;
     showOutcome({ ...result, operation: "deploy", gitRecord });
     log(`Deployed ${version.id} to ${target.label} (${result.status || "Succeeded"}).`);
@@ -4068,6 +4265,9 @@ $("btn-save").addEventListener("click", () => run(saveVersion));
 $("btn-deploy").addEventListener("click", () => run(() => deployVersion()));
 $("btn-validate-selected")?.addEventListener("click", () => run(() => deploySelected({ checkOnly: true })));
 $("btn-deploy-selected").addEventListener("click", () => run(() => deploySelected({ checkOnly: false })));
+$("btn-download-zip")?.addEventListener("click", () => run(downloadStagedPackage));
+$("btn-download-zip-confirm")?.addEventListener("click", () => run(downloadStagedPackage));
+$("btn-preflight")?.addEventListener("click", () => refreshToOrgPreflight({ force: true }));
 $("btn-deploy-from-pick").addEventListener("click", () => run(deploySelected));
 $("btn-deploy-review").addEventListener("click", () => run(deploySelected));
 $("btn-retrieve").addEventListener("click", () => run(retrieveIntoReview));
@@ -4277,6 +4477,7 @@ $("target-org")?.addEventListener("change", () => run(async () => {
   else if (state.deployFinished === "success") state.deployFinished = "";
   updateActionState();
   maybeAdvanceFromStart();
+  if (currentStepId() === "deploy") refreshToOrgPreflight({ force: true });
 }));
 $("inspector-filter")?.addEventListener("input", renderInspector);
 document.querySelectorAll(".insp-tab").forEach((btn) => {
@@ -4292,6 +4493,7 @@ $("btn-clear-tests")?.addEventListener("click", () => run(async () => {
   await persistShipOptions();
   renderTestRunner();
   renderInspector();
+  if (currentStepId() === "deploy") refreshToOrgPreflight();
 }));
 $("btn-add-test")?.addEventListener("click", () => run(async () => {
   const name = $("manual-test").value.trim();

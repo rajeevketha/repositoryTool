@@ -1,4 +1,4 @@
-# Chrome Web Store submission (OrgFlow 1.11.20)
+# Chrome Web Store submission (OrgFlow 1.11.21)
 
 Paste kit for [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole). This environment cannot submit for you. You upload the zip, paste the fields below, and click **Submit for review**.
 
@@ -19,7 +19,7 @@ Paste kit for [Chrome Developer Dashboard](https://chrome.google.com/webstore/de
 ### Required from you before Submit
 
 1. **Chrome Web Store developer account** — [Register](https://chrome.google.com/webstore/devconsole) (one-time **$5** USD). Turn on **2-step verification**. New publishers often must complete **identity verification** (government ID) in the dashboard before the first publish.
-2. **Smoke-test in Chrome** with two real Salesforce orgs on the same profile: Detect → From/To (This Chrome profile) → Package (What’s new) → Retrieve (Jira optional on this path) → Validate → Deploy. Optional: switch to Release repo, enter Jira `PROJ-123` + comment, Save to a test Git repo. Load unpacked from `extension/` or unzip `orgflow-extension.zip` → `orgflow/`.
+2. **Smoke-test in Chrome** with two real Salesforce orgs on the same profile: Detect → From/To (**On this device**) → Package (What’s new) → Retrieve (Jira optional on this path) → Validate → Deploy. Optional: switch to Release repo, enter Jira `PROJ-123` + comment, Save to a test Git repo. Load unpacked from `extension/` or unzip `orgflow-extension.zip` → `orgflow/`.
 3. **Reviewer test login** — Chrome reviewers cannot retrieve/deploy without Salesforce. Create **two disposable Developer Editions** (or one DE + one Trailhead Playground). Put username, password, and MFA steps in the **Test instructions** tab. Do **not** use production or customer orgs. From and To must be different.
 4. **Contact email** — dashboard account email, and optionally add the same address to `docs/privacy.html` Contact (today it only says “open a GitHub issue”).
 5. **Distribution** — pick Public, Unlisted, or Private (trusted testers). For a first Salesforce tool, **Unlisted** or **Private testers** is safer until review passes; you can switch to Public later.
@@ -52,7 +52,7 @@ https://github.com/rajeevketha/repositoryTool/blob/cursor/orgflow-salesforce-dep
 After upload you should see:
 
 - Name: **OrgFlow**
-- Version: **1.11.20**
+- Version: **1.11.21**
 - Manifest V3
 
 If Chrome rejects the zip, the usual cause is uploading the nested Load-unpacked zip. Use the store zip only.
@@ -85,9 +85,9 @@ Sequential Salesforce metadata deploys with Jira versions in this browser, or in
 ```
 OrgFlow helps Salesforce configurators move named metadata from a sandbox to QA, UAT, or production.
 
-Work in order: Start → Package → Retrieve → Confirm. You cannot skip ahead. Log into both orgs in Chrome, detect them, and set From and To in the path bar (org names, not usernames). Package starts with what just changed in the From org; you can browse types when you need them. After you pick members on an object, OrgFlow can add a small set of matching layouts or record types in one tap. Back from Retrieve returns to Package unlocked so you can add members, then retrieve again. On this Chrome profile, a Jira key and comment are optional. They are required only when you choose a release repo. After retrieve you can compare this package (left) with a saved snapshot (right) on the same screen. Confirm shows what will go to the To org. If Apex is in the package, running tests is optional and does not add test classes to the package; coverage appears after Validate or Deploy when tests ran. Validate in To org is a dry run; Deploy sends it; the result stays on that screen.
+Work in order: Start → Package → Retrieve → Confirm. You cannot skip ahead. Log into both orgs in Chrome, detect them, and set From and To in the path bar (org names, not usernames). Package starts with what just changed in the From org; you can browse types when you need them. After you pick members on an object, OrgFlow can add a small set of matching layouts or record types in one tap. Back from Retrieve returns to Package unlocked so you can add members, then retrieve again. On this device, a Jira key and comment are optional. They are required only when you choose a release repo. After retrieve you can compare this package (left) with a saved snapshot (right) on the same screen, download the zip, and check whether members already exist in the To org. Confirm shows what will go to the To org. If Apex is in the package, running tests is optional and does not add test classes to the package; coverage appears after Validate or Deploy when tests ran. Validate in To org is a dry run; Deploy sends it; the result stays on that screen.
 
-Versioning is always on. Keep snapshots on this Chrome profile (Jira optional; blank keys save as CHANGE-YYYYMMDD-N), or share them in GitHub, GitLab, or Azure DevOps so teammates can reuse the same package. A Jira key (PROJ-123) and comment are required only for the repo path.
+Versioning is always on. Keep snapshots on this device (Jira optional; blank keys save as CHANGE-YYYYMMDD-N), or share them in GitHub, GitLab, or Azure DevOps so teammates can reuse the same package. A Jira key (PROJ-123) and comment are required only for the repo path.
 
 With a team repo you can:
 
@@ -264,7 +264,7 @@ To org:    [USERNAME]  /  [PASSWORD]  MFA: [how to pass, or "no MFA"]
 STEPS:
 1. In this Chrome profile, log into both orgs (Lightning home is enough).
 2. Pin OrgFlow and open the side panel.
-3. Start → Detect logged-in orgs → set From and To (must differ). Leave storage on This Chrome profile.
+3. Start → Detect logged-in orgs → set From and To (must differ). Leave storage set to On this device.
 4. Next → Package. Add any small member from What’s new, or browse CustomField / ApexClass.
 5. Next → Retrieve from From org. Jira and comment are optional on this path. Then Next.
 6. Next → Confirm. Click Validate in To org (dry run). Then Deploy if validate succeeds.
@@ -291,7 +291,7 @@ If Google asks for a justification of `https://*/*`, paste the optional-host par
 ## After upload (your smoke test, before or in parallel)
 
 1. Load unpacked from `extension/` or unzip [orgflow-extension.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip) → `orgflow/`.
-2. Confirm From/To, retrieve (Jira optional on This Chrome profile), validate, deploy, and (if you use Git) Jira `PROJ-123` + comment then Save to repo.
+2. Confirm From/To, retrieve (Jira optional unless Release repo is on), validate, deploy, and (if you use Git) Jira `PROJ-123` + comment then Save to repo.
 3. If anything fails, **do not submit** until it is fixed; bump `extension/manifest.json` version and rebuild the store zip.
 
 ---

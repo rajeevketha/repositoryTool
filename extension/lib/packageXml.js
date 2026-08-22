@@ -216,6 +216,30 @@ export function parseListMetadata(xml) {
   return results.sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
+export function readMetadataBody(typeName, fullNames = []) {
+  const names = (fullNames || [])
+    .map((name) => String(name || "").trim())
+    .filter(Boolean)
+    .map((name) => `      <urn:fullNames>${escapeXml(name)}</urn:fullNames>`)
+    .join("\n");
+  return `    <urn:readMetadata xmlns:urn="http://soap.sforce.com/2006/04/metadata">
+      <urn:type>${escapeXml(typeName)}</urn:type>
+${names}
+    </urn:readMetadata>`;
+}
+
+export function parseReadMetadataFullNames(xml) {
+  const names = [];
+  const blocks = String(xml || "").split(/<(?:[\w]+:)?records\b[^>]*>/i).slice(1);
+  for (const block of blocks) {
+    if (/^[^>]*xsi:nil="true"/i.test(block)) continue;
+    const chunk = block.split(/<\/(?:[\w]+:)?records>/i)[0];
+    const fullName = xmlText(chunk, "fullName");
+    if (fullName) names.push(fullName);
+  }
+  return names;
+}
+
 export function checkRetrieveBody(asyncId, includeZip) {
   return `    <urn:checkRetrieveStatus xmlns:urn="http://soap.sforce.com/2006/04/metadata">
       <urn:asyncProcessId>${escapeXml(asyncId)}</urn:asyncProcessId>

@@ -92,15 +92,15 @@
             <p class="suggestion-kicker">Choose one</p>
             <div class="mode-grid">
               <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
-                <strong>This Chrome profile</strong>
-                <span>Versions stay here. Jira is optional.</span>
+                <strong>On this device</strong>
+                <span>Versions stay on this computer. Jira is optional.</span>
               </button>
               <button type="button" class="mode-card" id="mode-git" data-mode="git">
                 <strong>Release repo</strong>
                 <span>Same Jira snapshot: Dev → QA → Staging → Prod</span>
               </button>
             </div>
-            <div id="mode-status" class="muted">Keeping versions on this Chrome profile.</div>
+            <div id="mode-status" class="muted">Keeping versions on this device.</div>
           </div>
 
           <div class="start-block">
@@ -232,7 +232,7 @@
             <dl class="confirm-dl">
               <div><dt>Jira</dt><dd id="deploy-confirm-jira">Enter on Retrieve</dd></div>
               <div><dt>Comment</dt><dd id="deploy-confirm-comment">Enter on Retrieve</dd></div>
-              <div><dt>Saved to</dt><dd id="deploy-confirm-dest">This Chrome profile</dd></div>
+              <div><dt>Saved to</dt><dd id="deploy-confirm-dest">On this device</dd></div>
             </dl>
           </article>
           <article class="card" id="package-summary-card">
@@ -240,6 +240,15 @@
             <p class="hint">This is the package Salesforce will receive. Validate first if you want a dry run — nothing is saved in the To org until Deploy.</p>
             <div id="deploy-manifest" class="deploy-manifest" tabindex="0"></div>
             <div id="package-summary-body" class="hidden"></div>
+          </article>
+          <article class="card" id="to-preflight-card">
+            <p class="suggestion-kicker">To org check</p>
+            <div class="title">Already in To? <span id="preflight-badge" class="badge">—</span></div>
+            <p class="hint" id="preflight-hint">OrgFlow checks selected members against the To org. This does not block Deploy.</p>
+            <div id="preflight-body" class="preflight-list"></div>
+            <div class="row-actions">
+              <button type="button" id="btn-preflight" class="ghost-text">Check To org again</button>
+            </div>
           </article>
           <article id="apex-tests-card" class="card hidden">
             <p class="suggestion-kicker">Optional</p>
@@ -268,6 +277,7 @@
           <div class="actions deploy-actions">
             <button id="btn-validate-selected" class="secondary" data-busy data-needs="source,target,package,distinct,retrieve">Validate in To org</button>
             <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
+            <button type="button" id="btn-download-zip-confirm" class="ghost-text">Download zip</button>
             <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
           </div>
           <article class="card" id="deploy-result-card">
@@ -487,8 +497,9 @@
           <div id="subview-review" class="subview">
             <div class="row-actions">
               <button type="button" id="btn-retrieve-review" class="accent" data-busy data-needs="source,package">Retrieve from From org</button>
+              <button type="button" id="btn-download-zip" class="secondary">Download zip</button>
             </div>
-            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Click Retrieve when this package looks right. Jira and comment are optional on this Chrome profile.</p>
+            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Click Retrieve when this package looks right. Jira and comment are optional on this device.</p>
             <div id="file-list" class="file-list"></div>
             <label id="file-editor-wrap" class="hidden">
               <span id="file-editor-name">File</span>
@@ -530,11 +541,11 @@
 
         <section id="git-ship-panel" class="git-ship hidden">
           <h2>Snapshot details</h2>
-          <p class="hint" id="git-ship-hint">Jira key and comment are optional on this Chrome profile. They are required only for a release repo.</p>
+          <p class="hint" id="git-ship-hint">Jira key and comment are optional on this device. They are required only for a release repo.</p>
           <label>
             <span class="field-title">Jira key <span id="jira-req-mark" class="opt-mark">Optional</span></span>
             <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" spellcheck="false" aria-required="false" aria-describedby="jira-hint" />
-            <p id="jira-hint" class="field-hint" data-state="empty">Optional on this Chrome profile. Leave blank and OrgFlow mints CHANGE-YYYYMMDD-N.</p>
+            <p id="jira-hint" class="field-hint" data-state="empty">Optional on this device. Leave blank and OrgFlow mints CHANGE-YYYYMMDD-N.</p>
           </label>
           <label>
             <span class="field-title">Comment <span id="comment-req-mark" class="opt-mark">Optional</span></span>
