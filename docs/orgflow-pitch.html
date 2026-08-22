@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OrgFlow — why this tool</title>
+  <title>OrgFlow — briefing for managers</title>
   <style>
     :root {
       --bg: #12151c;
@@ -12,7 +12,6 @@
       --text: #e6e4de;
       --muted: #8f96a3;
       --copper: #c5bba8;
-      --ok: #8a9e94;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -51,11 +50,11 @@
       font-weight: 700;
       margin-bottom: 12px;
     }
-    h1 { margin: 0 0 16px; font-size: 52px; line-height: 1.1; letter-spacing: -0.03em; }
-    h2 { margin: 0 0 16px; font-size: 38px; line-height: 1.15; letter-spacing: -0.02em; }
-    p, li { font-size: 22px; line-height: 1.4; color: #d7d2c8; }
-    p { margin: 0 0 12px; max-width: 820px; }
-    .sub { color: var(--muted); font-size: 20px; }
+    h1 { margin: 0 0 16px; font-size: 46px; line-height: 1.12; letter-spacing: -0.03em; }
+    h2 { margin: 0 0 16px; font-size: 34px; line-height: 1.18; letter-spacing: -0.02em; }
+    p, li { font-size: 21px; line-height: 1.4; color: #d7d2c8; }
+    p { margin: 0 0 12px; max-width: 880px; }
+    .sub { color: var(--muted); font-size: 19px; }
     .grid { display: grid; gap: 16px; margin-top: 8px; }
     .grid.two { grid-template-columns: 1fr 1fr; }
     .grid.three { grid-template-columns: 1fr 1fr 1fr; }
@@ -65,27 +64,16 @@
       border-radius: 14px;
       padding: 18px 18px 16px;
     }
-    .card strong { display: block; color: #fff; font-size: 20px; margin-bottom: 8px; }
-    .card p, .card li { font-size: 17px; margin: 0; color: var(--muted); }
+    .card strong { display: block; color: #fff; font-size: 19px; margin-bottom: 8px; }
+    .card p, .card li { font-size: 16px; margin: 0; color: var(--muted); }
     .card ul { margin: 0; padding-left: 18px; }
-    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 10px; }
-    .steps .card { text-align: left; }
-    .steps .n { color: var(--copper); font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 8px;
-      font-size: 17px;
-    }
-    th, td {
-      text-align: left;
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--line);
-      vertical-align: top;
-    }
-    th { color: var(--copper); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .steps .n { color: var(--copper); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 16px; }
+    th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--copper); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
     td { color: #d7d2c8; }
-    td:first-child { color: #fff; font-weight: 600; width: 26%; }
+    td:first-child { color: #fff; font-weight: 600; width: 22%; }
     .nav {
       position: absolute;
       left: 64px;
@@ -106,243 +94,251 @@
       font: inherit;
       cursor: pointer;
     }
-    .notes {
-      display: none;
-      margin-top: 16px;
-      padding: 12px 14px;
-      background: #151922;
-      border-left: 3px solid #4a4034;
+    .share {
+      position: absolute;
+      top: 18px;
+      right: 24px;
+      font-size: 12px;
       color: var(--muted);
-      font-size: 15px;
-      max-width: 860px;
     }
-    body.show-notes .notes { display: block; }
     @media print {
-      html, body { height: auto; background: #fff; }
-      .stage { height: auto; width: 100%; overflow: visible; background: #12151c; page-break-after: always; }
-      .slide { position: relative; opacity: 1; page-break-after: always; min-height: 720px; }
-      .nav { display: none; }
+      .stage { height: auto; width: 100%; overflow: visible; background: #12151c; }
+      .slide { position: relative; opacity: 1 !important; page-break-after: always; min-height: 720px; }
+      .nav, .share { display: none; }
     }
   </style>
 </head>
 <body>
   <div class="stage">
+    <div class="share">OrgFlow · manager briefing · arrows or Next</div>
+
     <section class="slide on">
-      <div class="kicker">OrgFlow</div>
-      <h1>Move Salesforce config<br>the way configurators work</h1>
-      <p>Build a field, a layout, a flow in a sandbox. Send that same named package to QA, then prod — in Chrome. No project setup. Git is optional.</p>
-      <p class="sub">A sequential From → To promotion tool. Not a second IDE. Not a DevOps platform.</p>
+      <div class="kicker">Manager briefing</div>
+      <h1>Promote Salesforce configuration<br>without a developer toolchain</h1>
+      <p>OrgFlow is a Chrome extension for admins and configurators. They pick the change they just built in a sandbox and send that same package to QA, then production.</p>
+      <p class="sub">No new IDE. No mandatory Git repo. No Copado-class license. A guided From → To hop in the browser they already use.</p>
     </section>
 
     <section class="slide">
-      <div class="kicker">The gap</div>
-      <h2>A field change should not require a repo</h2>
-      <div class="grid two">
-        <article class="card">
-          <strong>What configurators actually ship</strong>
-          <p>Custom fields, record types, layouts, Lightning pages, flows, permission sets, validation rules. Named members. One hop at a time: DEC → QA → Staging → Prod.</p>
-        </article>
-        <article class="card">
-          <strong>What most tools ask for</strong>
-          <p>A DX project, a CLI, a change set, or a release train. Fine for developers. Heavy when you just built Account.Status__c and need it in QA today.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="slide">
-      <div class="kicker">Who it is for</div>
-      <h2>Salesforce configurators first</h2>
+      <div class="kicker">Why this is on a manager’s desk</div>
+      <h2>Small config changes are still expensive</h2>
       <div class="grid three">
         <article class="card">
-          <strong>Admins &amp; configurators</strong>
-          <p>Pick members by name. Tick what you just built. Deploy. Stay in the browser where you already work.</p>
+          <strong>Handoffs</strong>
+          <p>A field or layout often waits on someone who knows VS Code, a change set, or a release tool. The work itself took twenty minutes. The promotion takes a day.</p>
         </article>
         <article class="card">
-          <strong>Small teams</strong>
-          <p>Keep snapshots on this device. Promote the same package to the next org. Jira is optional.</p>
+          <strong>Tool sprawl</strong>
+          <p>Workbench for zips. VS Code for source. A DevOps platform for releases. None of those match “send this named change to the next org.”</p>
         </article>
         <article class="card">
-          <strong>Teams with a repo</strong>
-          <p>Turn on GitHub, GitLab, or Azure when you need a shared warehouse. Same wizard. Jira becomes required.</p>
+          <strong>Risk of the wrong package</strong>
+          <p>People rebuild the list in each org. OrgFlow keeps one snapshot and walks it DEC → QA → prod so QA and prod receive the same files.</p>
         </article>
       </div>
     </section>
 
     <section class="slide">
-      <div class="kicker">How it works</div>
-      <h2>Four steps. You cannot skip ahead.</h2>
+      <div class="kicker">Fit</div>
+      <h2>Who should use it — and who should not</h2>
+      <div class="grid two">
+        <article class="card">
+          <strong>Good fit</strong>
+          <ul>
+            <li>Admins and configurators who live in Setup</li>
+            <li>Teams that promote a handful of named items at a time</li>
+            <li>Orgs that want a shared history later, not on day one</li>
+            <li>Managers who want a pilot without a platform RFP</li>
+          </ul>
+        </article>
+        <article class="card">
+          <strong>Not a replacement for</strong>
+          <ul>
+            <li>Developer source work (Apex, LWC, CI) in VS Code</li>
+            <li>Enterprise release trains (Copado, Gearset, Flosum)</li>
+            <li>Data / record migration</li>
+            <li>Automatic dependency analysis of a whole org</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">The work</div>
+      <h2>One path. Four steps. They cannot skip.</h2>
       <div class="steps">
         <article class="card">
           <div class="n">1 · Start</div>
-          <strong>Detect orgs</strong>
-          <p>Log into From and To in Chrome. Detect. They must be different. Choose this device or a release repo.</p>
+          <strong>Choose the route</strong>
+          <p>Log into both Salesforce orgs in Chrome. Detect them. Set From and To. They must be different.</p>
         </article>
         <article class="card">
           <div class="n">2 · Package</div>
-          <strong>Tick members</strong>
-          <p>What’s new in the From org. Search a type if you know the name. Add a related layout in one tap — not every layout.</p>
+          <strong>Name the change</strong>
+          <p>OrgFlow shows what just changed in From. They tick the items to move — not a blank XML file.</p>
         </article>
         <article class="card">
           <div class="n">3 · Retrieve</div>
-          <strong>Pull the files</strong>
-          <p>Retrieve from From. Download a zip if you want. Compare with a saved snapshot. Then Next.</p>
+          <strong>Take a snapshot</strong>
+          <p>Pull those items from From. Optional Jira. Optional save. Same files can travel to the next org later.</p>
         </article>
         <article class="card">
           <div class="n">4 · Confirm</div>
-          <strong>Validate / Deploy</strong>
-          <p>See From → To, what is going, already-in-To, then dry-run or send. Result stays on the screen.</p>
+          <strong>Dry-run, then send</strong>
+          <p>See the path, what will land in To, and a short checklist. Validate first if you want. Then Deploy.</p>
         </article>
       </div>
     </section>
 
     <section class="slide">
-      <div class="kicker">Easy on purpose</div>
-      <h2>If you can log into Salesforce, you can use this</h2>
+      <div class="kicker">Adoption</div>
+      <h2>Training is measured in minutes, not weeks</h2>
       <div class="grid two">
         <article class="card">
-          <strong>No setup tax</strong>
-          <ul>
-            <li>No Connected App</li>
-            <li>No Salesforce CLI / VS Code project</li>
-            <li>No force-app to learn first</li>
-            <li>Uses the session you already have in Chrome</li>
-          </ul>
+          <strong>What people already have</strong>
+          <p>Chrome. Two Salesforce logins. That is the setup. OrgFlow uses the existing browser session. No Connected App, no CLI install, no project folder.</p>
         </article>
         <article class="card">
-          <strong>Guides the next click</strong>
-          <ul>
-            <li>Next stays off until From and To differ</li>
-            <li>Deploy stays off until retrieve succeeds</li>
-            <li>Changing From clears the old org’s members</li>
-            <li>Each open starts a new package</li>
-          </ul>
+          <strong>What the product refuses to do</strong>
+          <p>Next stays off until From and To are different orgs. Deploy stays off until retrieve succeeded. Changing From clears the old selection so yesterday’s package does not silently go to the wrong place.</p>
         </article>
       </div>
     </section>
 
     <section class="slide">
       <div class="kicker">Versus Workbench</div>
-      <h2>Workbench retrieves. OrgFlow promotes.</h2>
+      <h2>Workbench is a console. OrgFlow is a promotion.</h2>
       <table>
         <tr><th></th><th>Salesforce Workbench</th><th>OrgFlow</th></tr>
         <tr>
-          <td>Job</td>
-          <td>API console. Retrieve or deploy a zip you already built.</td>
-          <td>Pick named members, retrieve, then send that same package to the next org.</td>
+          <td>Role</td>
+          <td>Expert API tool. Retrieve or deploy a zip someone already prepared.</td>
+          <td>Daily path for “I built this in sandbox — send it to QA.”</td>
         </tr>
         <tr>
-          <td>Package</td>
-          <td>You write or upload package.xml.</td>
-          <td>What’s new + tick by name. package.xml is built for you.</td>
+          <td>Skill</td>
+          <td>You must know package.xml and Metadata API layout.</td>
+          <td>Tick names. The package is built for them.</td>
         </tr>
         <tr>
-          <td>Path</td>
-          <td>One org at a time. No From → To memory.</td>
-          <td>From and To stay in the path bar. Same snapshot can hop QA → prod.</td>
+          <td>Repeatability</td>
+          <td>Each org is a new session. Easy to send a different list next time.</td>
+          <td>One snapshot. Same files can hop to the next environment.</td>
         </tr>
         <tr>
-          <td>Zip</td>
-          <td>The zip is the product.</td>
-          <td>Optional. You can still upload a Workbench-style zip and deploy it.</td>
+          <td>Oversight</td>
+          <td>No From → To bar. Easy to deploy back into the same org.</td>
+          <td>From and To must differ. Confirm shows the path before send.</td>
         </tr>
       </table>
-      <p class="notes">Speaker: Workbench is still useful for raw API work. OrgFlow is the daily “I built this field, send it” path.</p>
     </section>
 
     <section class="slide">
       <div class="kicker">Versus VS Code</div>
-      <h2>VS Code is for source. OrgFlow is for a hop.</h2>
+      <h2>Do not send configurators into an IDE to move a layout</h2>
       <table>
         <tr><th></th><th>VS Code + Salesforce CLI</th><th>OrgFlow</th></tr>
         <tr>
-          <td>Who</td>
-          <td>Developers. Apex, LWC, scratch orgs, CI.</td>
-          <td>Configurators. Fields, layouts, flows, permission sets.</td>
+          <td>Staffing</td>
+          <td>Developers and technical admins. Scratch orgs, source, CI.</td>
+          <td>Configurators who work in Setup all day.</td>
         </tr>
         <tr>
-          <td>Start</td>
-          <td>Authorize an org, open a DX project, retrieve into force-app.</td>
-          <td>Open the side panel. Detect logged-in orgs. Tick names.</td>
+          <td>Onboarding</td>
+          <td>Authorize an org, create a DX project, learn retrieve/deploy commands.</td>
+          <td>Install a Chrome extension. Detect orgs. Follow Next.</td>
         </tr>
         <tr>
-          <td>Deploy</td>
-          <td>Deploy source / manifest / package.xml from the project.</td>
-          <td>Sequential retrieve then deploy. No project folder required.</td>
+          <td>System of record</td>
+          <td>The Git repo is the product. Correct for engineering.</td>
+          <td>Git is optional. A shared repo is a later decision, not a gate.</td>
         </tr>
         <tr>
-          <td>Git</td>
-          <td>The repo is the system of record.</td>
-          <td>Git is optional. This device is enough to promote the same files.</td>
+          <td>Cost of a small change</td>
+          <td>Worth it for Apex and LWC. Overhead for one field and a page layout.</td>
+          <td>Built for that small change.</td>
         </tr>
       </table>
-      <p class="notes">Speaker: Teams that already live in VS Code should stay there. OrgFlow is for people who should not have to open an IDE to move a layout.</p>
     </section>
 
     <section class="slide">
-      <div class="kicker">Versus other deploy / repo tools</div>
-      <h2>Not Copado. Not Gearset. Not a change set.</h2>
+      <div class="kicker">Versus other tools you may already pay for</div>
+      <h2>Complement, do not rip and replace</h2>
       <div class="grid two">
         <article class="card">
           <strong>Change Sets</strong>
-          <p>Upload, wait, download, remember dependencies. OrgFlow is named members, one hop, result on the same screen. No outbound/inbound pair to babysit.</p>
+          <p>Slow, easy to miss a dependency, and awkward to reuse. OrgFlow is a named list, one hop, result on the same screen. Still the person’s job to pick the right members.</p>
         </article>
         <article class="card">
           <strong>Copado / Gearset / Flosum</strong>
-          <p>Release trains, dependency graphs, data, user seats. OrgFlow does not replace them. It does the small promotion those platforms make expensive: this field, this layout, this org, now.</p>
+          <p>Right for release trains, many contributors, and compliance programs. Wrong as the only way to send two fields to QA. OrgFlow is the inexpensive daily path beside those platforms — not a bid to replace them.</p>
         </article>
         <article class="card">
-          <strong>Git-only tools</strong>
-          <p>A repo without a picker is still a developer workflow. OrgFlow can write Jira versions into GitHub, GitLab, or Azure — after you picked members in the UI.</p>
+          <strong>Git-only process</strong>
+          <p>A repo without a simple picker still requires a developer. OrgFlow can write versions into GitHub, GitLab, or Azure after the configurator chose the members.</p>
         </article>
         <article class="card">
-          <strong>What OrgFlow will not do</strong>
-          <p>No records / data deploy. No full org compare. No automatic dependency graph. Tick the members you know you built.</p>
+          <strong>Explicit limits</strong>
+          <p>No data (records). No full-org compare. No automatic dependency graph. That honesty is the control: people promote what they selected, not what a scanner guessed.</p>
         </article>
       </div>
     </section>
 
     <section class="slide">
-      <div class="kicker">What you get</div>
-      <h2>Useful on the first afternoon</h2>
+      <div class="kicker">Controls</div>
+      <h2>What you can tell security and release owners</h2>
       <div class="grid three">
         <article class="card">
-          <strong>What’s new</strong>
-          <p>Package opens on recent From-org changes, not a 400-type grid.</p>
+          <strong>Access</strong>
+          <p>Uses the Salesforce session already in Chrome. No Connected App to approve. Git tokens, if used, stay in that browser.</p>
         </article>
         <article class="card">
-          <strong>Already in To?</strong>
-          <p>See overwrite vs new vs missing custom object. Does not block Deploy.</p>
+          <strong>Blast radius</strong>
+          <p>Named members only. From and To cannot be the same org. Validate is a dry run. Production can still run Apex tests if you want coverage.</p>
         </article>
         <article class="card">
-          <strong>Same snapshot</strong>
-          <p>Auto-save on this device after a successful deploy. Promote those files to the next org.</p>
-        </article>
-        <article class="card">
-          <strong>Zip when you need it</strong>
-          <p>Download the retrieve, or start From a zip (Workbench layout).</p>
-        </article>
-        <article class="card">
-          <strong>Optional tests</strong>
-          <p>Run Apex tests in To if you want coverage. Skip them in a sandbox.</p>
-        </article>
-        <article class="card">
-          <strong>API that lasts</strong>
-          <p>After Detect, 68 / 69 appear from the org. No wait for an OrgFlow update.</p>
+          <strong>Audit</strong>
+          <p>On this device: local snapshots, optional Jira. With a release repo: Jira key and comment are required; versions live in the team warehouse.</p>
         </article>
       </div>
     </section>
 
     <section class="slide">
-      <div class="kicker">Try it</div>
-      <h1>Detect. Tick. Retrieve. Deploy.</h1>
-      <p>Chrome Web Store listing, or load unpacked from the repo zip. Two logged-in orgs. From and To must be different.</p>
-      <p class="sub">chromewebstore.google.com/detail/orgflow/cldfmnjjonlakccebbfnaaihneonhflc</p>
-      <p class="notes">Open this file in a browser. Arrow keys or click Next. Press N for speaker notes. Print to PDF if you need a leave-behind.</p>
+      <div class="kicker">Suggested next step</div>
+      <h2>A two-week pilot, not a program</h2>
+      <div class="grid two">
+        <article class="card">
+          <strong>Pilot</strong>
+          <ul>
+            <li>Two people, two disposable or sandbox orgs</li>
+            <li>One real config change (field + layout or a flow)</li>
+            <li>Promote sandbox → QA with storage on this device</li>
+            <li>Optional: turn on a test Git repo in week two</li>
+          </ul>
+        </article>
+        <article class="card">
+          <strong>Success looks like</strong>
+          <ul>
+            <li>They complete a hop without a developer</li>
+            <li>QA receives the same members they picked</li>
+            <li>No new platform license to evaluate first</li>
+            <li>You decide later if the team needs a shared repo</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">How to get it</div>
+      <h1>Install, detect, send</h1>
+      <p>Chrome Web Store listing, or load the unpacked extension from the team zip. Two logged-in Salesforce orgs. From and To must be different.</p>
+      <p class="sub">https://chromewebstore.google.com/detail/orgflow/cldfmnjjonlakccebbfnaaihneonhflc</p>
+      <p class="sub">This briefing: File → Print → Save as PDF, or import the PowerPoint into Google Slides.</p>
     </section>
 
     <div class="nav">
       <button type="button" id="prev">Back</button>
-      <span id="pos">1 / 10</span>
+      <span id="pos">1 / 11</span>
       <button type="button" id="next">Next</button>
     </div>
   </div>
@@ -366,7 +362,6 @@
         event.preventDefault();
         show(i - 1);
       }
-      if (event.key === "n" || event.key === "N") document.body.classList.toggle("show-notes");
       if (event.key === "Home") show(0);
       if (event.key === "End") show(slides.length - 1);
     });

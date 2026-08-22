@@ -23,7 +23,15 @@ Typical configuration you can pick by name: **CustomField** (`Account.Status__c`
 
 ## One-minute user manual
 
-Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minute). Open [docs/user-manual.html](docs/user-manual.html) in a browser to replay the same slides. Team-repo slides: [docs/git-repo-walkthrough.html](docs/git-repo-walkthrough.html). Marketing pitch (why OrgFlow vs Workbench, VS Code, and other deploy tools): [docs/orgflow-pitch.html](docs/orgflow-pitch.html) — paste-ready copy in [docs/orgflow-pitch.md](docs/orgflow-pitch.md).
+Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minute). Open [docs/user-manual.html](docs/user-manual.html) in a browser to replay the same slides. Team-repo slides: [docs/git-repo-walkthrough.html](docs/git-repo-walkthrough.html).
+
+**Share with managers** (11-slide briefing: fit, adoption, vs Workbench / VS Code / Copado, pilot):
+
+- Present in a browser: [docs/orgflow-pitch.html](docs/orgflow-pitch.html)
+- Direct link: https://htmlpreview.github.io/?https://github.com/rajeevketha/repositoryTool/blob/cursor/orgflow-salesforce-deploy-c0ed/docs/orgflow-pitch.html
+- Google Slides / PowerPoint: [docs/orgflow-manager-briefing.pptx](docs/orgflow-manager-briefing.pptx) (Drive → Open with Google Slides)
+- Download pack: [files/orgflow-manager-pitch.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-manager-pitch.zip)
+- How to share: [docs/HOW-TO-SHARE-PITCH.txt](docs/HOW-TO-SHARE-PITCH.txt)
 
 ## Chrome Web Store
 
