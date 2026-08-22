@@ -1,149 +1,124 @@
-# OrgFlow — manager briefing
+# OrgFlow — management briefing
 
-11 widescreen slides. Present in a browser, import into Google Slides, or print to PDF.
+Standard 11-slide executive deck (16:9). Light theme, navy headers, page footers.
 
-| Share as | File or link |
+| Share as | Location |
 | --- | --- |
-| Open in Chrome now | [orgflow-pitch.html](orgflow-pitch.html) (arrow keys / Next) |
-| Direct HTML preview | https://htmlpreview.github.io/?https://github.com/rajeevketha/repositoryTool/blob/cursor/orgflow-salesforce-deploy-c0ed/docs/orgflow-pitch.html |
-| Alternate CDN link | https://cdn.jsdelivr.net/gh/rajeevketha/repositoryTool@cursor/orgflow-salesforce-deploy-c0ed/docs/orgflow-pitch.html |
+| Present in Chrome | [orgflow-pitch.html](orgflow-pitch.html) |
+| Direct HTML link | https://htmlpreview.github.io/?https://github.com/rajeevketha/repositoryTool/blob/cursor/orgflow-salesforce-deploy-c0ed/docs/orgflow-pitch.html |
+| CDN backup | https://cdn.jsdelivr.net/gh/rajeevketha/repositoryTool@cursor/orgflow-salesforce-deploy-c0ed/docs/orgflow-pitch.html |
 | Google Slides / PowerPoint | [orgflow-manager-briefing.pptx](orgflow-manager-briefing.pptx) — Drive → Open with Google Slides |
 | Download pack | [files/orgflow-manager-pitch.zip](../files/orgflow-manager-pitch.zip) |
 | PDF | Open the HTML → Print → Save as PDF |
 
 ---
 
-## Slide 1 — Title
+## 1. Title
 
-**Promote Salesforce configuration without a developer toolchain**
+**OrgFlow**  
+Internal briefing
 
-OrgFlow is a Chrome extension for admins and configurators. They pick the change they just built in a sandbox and send that same package to QA, then production.
-
-No new IDE. No mandatory Git repo. No Copado-class license. A guided From → To hop in the browser they already use.
-
----
-
-## Slide 2 — Why this is on a manager’s desk
-
-**Small config changes are still expensive**
-
-- **Handoffs** — A field or layout often waits on someone who knows VS Code, a change set, or a release tool. The work took twenty minutes. The promotion takes a day.
-- **Tool sprawl** — Workbench for zips. VS Code for source. A DevOps platform for releases. None match “send this named change to the next org.”
-- **Wrong package risk** — People rebuild the list in each org. OrgFlow keeps one snapshot and walks it DEC → QA → prod.
+A lightweight way for Salesforce administrators to promote configuration between environments—without a developer workstation or a release-management platform.
 
 ---
 
-## Slide 3 — Fit
+## 2. Agenda
 
-**Who should use it — and who should not**
-
-Good fit  
-- Admins and configurators who live in Setup  
-- Teams that promote a handful of named items at a time  
-- Orgs that want a shared history later, not on day one  
-- Managers who want a pilot without a platform RFP  
-
-Not a replacement for  
-- Developer source work (Apex, LWC, CI) in VS Code  
-- Enterprise release trains (Copado, Gearset, Flosum)  
-- Data / record migration  
-- Automatic dependency analysis of a whole org  
+1. Context and the recommendation  
+2. Intended users and operating model  
+3. Comparison with tools already in use  
+4. Scope, governance, and a proposed pilot  
 
 ---
 
-## Slide 4 — The work
+## 3. Context
 
-**One path. Four steps. They cannot skip.**
+**Small configuration changes still consume disproportionate time**
 
-1. **Start — Choose the route** — Log into both orgs in Chrome. Detect. Set From and To. They must be different.
-2. **Package — Name the change** — What’s new in From. Tick the items to move.
-3. **Retrieve — Take a snapshot** — Pull those items. Optional Jira. Same files can travel later.
-4. **Confirm — Dry-run, then send** — See the path and what will land. Validate if you want. Then Deploy.
+Administrators typically complete a field, layout, or flow in a sandbox in well under an hour. Moving that work to QA or production often takes much longer than building it.
 
----
-
-## Slide 5 — Adoption
-
-**Training is measured in minutes, not weeks**
-
-What people already have  
-Chrome. Two Salesforce logins. That is the setup. No Connected App, no CLI, no project folder.
-
-What the product refuses to do  
-Next stays off until From and To differ. Deploy stays off until retrieve succeeded. Changing From clears the old selection so yesterday’s package does not go to the wrong place.
+- **Handoffs** — Promotion frequently waits on someone fluent in VS Code, change sets, or a release tool. The delay is process, not complexity.
+- **Fragmented tooling** — Workbench, the Salesforce CLI, and enterprise DevOps platforms each solve a different job. None is designed for a short, named configuration move.
+- **Inconsistent packages** — Rebuilding the component list in each environment increases the chance that QA and production do not receive the same change.
 
 ---
 
-## Slide 6 — Versus Workbench
+## 4. Recommendation
 
-**Workbench is a console. OrgFlow is a promotion.**
+**Adopt OrgFlow for administrator-led promotions**
 
-| | Workbench | OrgFlow |
-| --- | --- | --- |
-| Role | Expert API tool. Retrieve or deploy a zip someone already prepared. | Daily path for “I built this in sandbox — send it to QA.” |
-| Skill | You must know package.xml and Metadata API layout. | Tick names. The package is built for them. |
-| Repeatability | Each org is a new session. Easy to send a different list next time. | One snapshot. Same files can hop to the next environment. |
-| Oversight | No From → To bar. Easy to deploy back into the same org. | From and To must differ. Confirm shows the path before send. |
+OrgFlow is a Chrome extension. Staff select the configuration they built, retrieve a snapshot from the source organization, and deploy that same snapshot to the target organization.
 
----
+**What this provides**  
+Guided source-to-target path in the existing browser. No Salesforce CLI, DX project, or Connected App. Optional team repository later. No incremental platform license to evaluate first.
 
-## Slide 7 — Versus VS Code
-
-**Do not send configurators into an IDE to move a layout**
-
-| | VS Code + Salesforce CLI | OrgFlow |
-| --- | --- | --- |
-| Staffing | Developers and technical admins. Scratch orgs, source, CI. | Configurators who work in Setup all day. |
-| Onboarding | Authorize an org, create a DX project, learn retrieve/deploy. | Install a Chrome extension. Detect orgs. Follow Next. |
-| System of record | The Git repo is the product. Correct for engineering. | Git is optional. A shared repo is a later decision. |
-| Cost of a small change | Worth it for Apex and LWC. Overhead for one field and a layout. | Built for that small change. |
+**What this is not**  
+Not a replacement for VS Code or engineering CI. Not a substitute for Copado, Gearset, or Flosum. Not a data-migration or full-org compare product. Not an automated dependency analyzer.
 
 ---
 
-## Slide 8 — Versus other tools you may already pay for
+## 5. Intended users
 
-**Complement, do not rip and replace**
+**Appropriate** — Administrators and configurators working primarily in Setup. Named metadata promotions. Shared history later, not as a prerequisite. Time-boxed pilot before any platform discussion.
 
-- **Change Sets** — Slow and awkward to reuse. OrgFlow is a named list, one hop, result on the same screen.
-- **Copado / Gearset / Flosum** — Right for release trains. Wrong as the only way to send two fields to QA. OrgFlow sits beside those platforms.
-- **Git-only process** — A repo without a picker still needs a developer. OrgFlow can write versions to Git after members are chosen.
-- **Limits** — No data (records). No full-org compare. No automatic dependency graph. People promote what they selected.
+**Not appropriate** — Apex, LWC, and CI. Multi-stream release trains. Record or data movement. Discovery of unknown dependencies across an entire org.
 
 ---
 
-## Slide 9 — Controls
+## 6. Operating model
 
-**What you can tell security and release owners**
+Four sequential steps; later steps stay closed until the prior one is complete.
 
-- **Access** — Uses the Salesforce session already in Chrome. No Connected App. Git tokens, if used, stay in that browser.
-- **Blast radius** — Named members only. From and To cannot be the same org. Validate is a dry run. Production can run Apex tests.
-- **Audit** — On this device: local snapshots, optional Jira. With a release repo: Jira key and comment required; versions live in the team warehouse.
-
----
-
-## Slide 10 — Suggested next step
-
-**A two-week pilot, not a program**
-
-Pilot  
-- Two people, two sandbox or disposable orgs  
-- One real config change (field + layout or a flow)  
-- Promote sandbox → QA with storage on this device  
-- Optional: a test Git repo in week two  
-
-Success looks like  
-- They complete a hop without a developer  
-- QA receives the same members they picked  
-- No new platform license to evaluate first  
-- You decide later if the team needs a shared repo  
+1. **Start** — Sign in to source and target in Chrome. Detect. Select From and To. They must be different.  
+2. **Package** — Review recent source changes and select components. Staff do not author XML.  
+3. **Retrieve** — Snapshot from source. Jira optional on the device; required with a shared repository.  
+4. **Confirm** — Review path and contents. Validate if required. Deploy. The same snapshot can move to the next environment.
 
 ---
 
-## Slide 11 — How to get it
+## 7. Comparison — Workbench and VS Code
 
-**Install, detect, send**
+| | Workbench | VS Code and Salesforce CLI | OrgFlow |
+| --- | --- | --- | --- |
+| Primary job | API console for a prepared zip | Source-driven development and CI | Administrator-led promotion of named configuration |
+| Skill required | Metadata API and package.xml | DX project, authorize, retrieve, deploy | Salesforce Setup and a Chrome sign-in |
+| Repeatability | Each organization is a new session | Repository is the system of record | One snapshot can move source → QA → production |
+| Oversight | No enforced source and target pair | Branch and pipeline policy | Source and target must differ; confirmation precedes deploy |
 
-Chrome Web Store, or load the unpacked extension from the team zip.  
-Two logged-in Salesforce orgs. From and To must be different.
+---
+
+## 8. Comparison — change sets and DevOps platforms
+
+**Change sets** — Slow to assemble and inconvenient to reuse. OrgFlow keeps a single named list and snapshot.
+
+**Copado, Gearset, Flosum** — Appropriate for release trains and compliance. Disproportionate for a two-item move. OrgFlow sits beside those platforms.
+
+**Repository-only process** — Still requires a developer without a selection interface. OrgFlow can write versions to GitHub, GitLab, or Azure DevOps after selection.
+
+**Deliberate limits** — No record migration, full-org compare, or inferred dependencies. Staff promote what they selected.
+
+---
+
+## 9. Governance
+
+**Access** — Existing Chrome Salesforce session. No Connected App. Optional Git credentials stay in that browser profile.
+
+**Blast radius** — Named metadata only. Source and target cannot be the same organization. Validation available. Apex tests may run in production if policy requires coverage.
+
+**Audit** — Device storage: local snapshots; Jira optional. Shared repository: Jira key and comment required.
+
+---
+
+## 10. Proposed pilot
+
+**Scope** — Two administrators; two sandbox or disposable organizations; one representative change; source → QA on device storage; optional test repository in week two.
+
+**Success criteria** — Complete promotion without a developer; target receives selected components; no new platform license; decision on whether a shared repository is needed.
+
+---
+
+## 11. Requested action
+
+Approve a two-week pilot with two administrators. Defer any discussion of replacing existing DevOps tooling until that pilot has a written outcome.
 
 https://chromewebstore.google.com/detail/orgflow/cldfmnjjonlakccebbfnaaihneonhflc
