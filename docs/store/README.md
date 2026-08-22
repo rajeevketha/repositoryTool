@@ -4,7 +4,7 @@ Upload these on the Chrome Web Store **Store listing** tab. Sizes are already co
 
 - `promo-small.png` — **440×280** small promotional tile (required).
 - `screenshots/` — **1280×800** PNGs (upload all five, or replace with live captures after smoke test):
-  - `01-start.png` — Start: detect orgs, From / To, local snapshots vs Git
+  - `01-start.png` — Start: detect orgs, From / To, this Chrome profile vs Git
   - `02-type.png` — Package: type / What’s new
   - `03-members.png` — Package: members
   - `04-retrieve.png` — Retrieve: Jira + comment

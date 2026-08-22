@@ -14,7 +14,8 @@ import {
   gitShipValidationItems,
   snapshotDetailsItems,
   jiraFieldHint,
-  normalizeJiraKey
+  normalizeJiraKey,
+  mintChangeId
 } from "./lib/versions.js";
 import {
   providerMeta,
@@ -433,22 +434,30 @@ function updateActionState() {
       validateBtn.textContent = shipping && state.shipKind === "validate" ? "Validating…" : validated ? "Validated" : "Validate in To org";
     }
   }
+  const gitOn = useGitEnabled();
   const commentEl = $("comment");
   if (commentEl) {
-    const showInvalid = !gitCommitMessage() && state.gitShipWarned;
+    const showInvalid = gitOn && !gitCommitMessage() && state.gitShipWarned;
     commentEl.classList.toggle("invalid", showInvalid);
     commentEl.setAttribute("aria-invalid", showInvalid ? "true" : "false");
   }
   const jiraHint = jiraFieldHint($("jira")?.value);
   const jiraEl = $("jira");
   if (jiraEl) {
-    const showInvalid = jiraHint.state === "error" && (Boolean(String($("jira")?.value || "").trim()) || state.gitShipWarned);
+    const showInvalid = jiraHint.state === "error" && (Boolean(String($("jira")?.value || "").trim()) || (gitOn && state.gitShipWarned));
     jiraEl.classList.toggle("invalid", showInvalid);
     jiraEl.setAttribute("aria-invalid", showInvalid ? "true" : "false");
   }
   if ($("jira-hint")) {
-    $("jira-hint").textContent = jiraHint.text;
-    $("jira-hint").dataset.state = jiraHint.state === "empty" && state.gitShipWarned ? "error" : jiraHint.state;
+    if (jiraHint.state === "empty") {
+      $("jira-hint").textContent = gitOn
+        ? "Required for the release repo. Use the ticket id, like PROJ-123."
+        : "Optional on this Chrome profile. Leave blank and OrgFlow mints CHANGE-YYYYMMDD-N.";
+      $("jira-hint").dataset.state = gitOn && state.gitShipWarned ? "error" : "empty";
+    } else {
+      $("jira-hint").textContent = jiraHint.text;
+      $("jira-hint").dataset.state = jiraHint.state;
+    }
   }
   const saveBtn = $("btn-save");
   const saveHint = $("save-btn-hint");
@@ -498,13 +507,17 @@ function updateActionState() {
   const retrieveHint = $("retrieve-btn-hint");
   if (retrieveHint) {
     if (retrieveFresh) {
-      retrieveHint.textContent = "Snapshot matches this package and From org. Enter Jira and a comment, then Next to confirm deploy.";
+      retrieveHint.textContent = gitOn
+        ? "Snapshot matches this package and From org. Enter Jira and a comment, then Next to confirm deploy."
+        : "Snapshot matches this package and From org. Jira and comment are optional. Next to confirm deploy.";
       retrieveHint.dataset.state = "done";
     } else if (state.retrieveSnapshot) {
       retrieveHint.textContent = "Members, type, or From org changed — retrieve again before deploy.";
       retrieveHint.dataset.state = "off";
     } else {
-      retrieveHint.textContent = "Click Retrieve when this package looks right. Then enter Jira and a comment.";
+      retrieveHint.textContent = gitOn
+        ? "Click Retrieve when this package looks right. Then enter Jira and a comment."
+        : "Click Retrieve when this package looks right. Jira and comment are optional on this Chrome profile.";
       retrieveHint.dataset.state = "off";
     }
   }
@@ -808,11 +821,11 @@ function maybeAdvanceFromStart() {
   }
   if (useGitEnabled() && !isGitConfigured(state.settings)) {
     $("git-setup-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-    setStatus("From and To are set. Connect a release repo, or switch to Local snapshots, then click Next.", "ok");
+    setStatus("From and To are set. Connect a release repo, or switch to This Chrome profile, then click Next.", "ok");
     return;
   }
   $("snapshots-block")?.scrollIntoView({ block: "start", behavior: "smooth" });
-  setStatus("From and To are set. Choose Local snapshots or Release repo, then click Next.", "ok");
+  setStatus("From and To are set. Choose This Chrome profile or Release repo, then click Next.", "ok");
 }
 
 function renderOrgPath() {
@@ -856,7 +869,7 @@ function renderOrgPath() {
     } else {
       sub.textContent = ready
         ? (stepId === "start"
-          ? "From and To are set. Choose Local snapshots or Release repo on Start, then Next."
+          ? "From and To are set. Choose This Chrome profile or Release repo on Start, then Next."
           : `${orgKind(source)} → ${orgKind(target)}`)
         : "Next stays off until From and To are different Salesforce orgs.";
     }
@@ -959,7 +972,9 @@ function updatePickCopy() {
   } else if (stepId === "review") {
     if ($("pick-heading")) $("pick-heading").textContent = "Retrieve from the From org";
     if ($("pick-lead")) {
-      $("pick-lead").textContent = "Click Retrieve when the package is complete. Then enter Jira and a comment — both are required before Confirm deploy. Back returns to Package to add members.";
+      $("pick-lead").textContent = useGitEnabled()
+        ? "Click Retrieve when the package is complete. Then enter Jira and a comment — both are required before Confirm deploy. Back returns to Package to add members."
+        : "Click Retrieve when the package is complete. Jira and comment are optional on this Chrome profile. Back returns to Package to add members.";
     }
   }
   if ($("header-sub")) {
@@ -1043,7 +1058,7 @@ function updateWizardNav() {
     hint.textContent = state.busy ? "Waiting for Salesforce…" : (deployBlockReason() || `Ready to send this package to ${selectedOrg("target-org")?.label || "the To org"}.`);
   } else if (state.stepIndex === 0) {
     hint.textContent = pathReady()
-      ? (isZipFlow() ? "To is set. Next to upload the zip." : "Choose Local snapshots or Release repo, then Next.")
+      ? (isZipFlow() ? "To is set. Next to upload the zip." : "Choose This Chrome profile or Release repo, then Next.")
       : `Step 1 of ${flowSteps().length} · ${currentStep().label}`;
   } else if (currentStepId() === "zip") {
     hint.textContent = zipReady()
@@ -1297,11 +1312,16 @@ function jiraKeyValue() {
   return normalizeJiraKey($("jira")?.value || "");
 }
 
+function chromeProfileLabel() {
+  return "This Chrome profile";
+}
+
 function snapshotValidationItems() {
   if (isZipFlow()) return [];
   return snapshotDetailsItems({
     jiraKey: jiraKeyValue(),
-    comment: gitCommitMessage()
+    comment: gitCommitMessage(),
+    gitEnabled: useGitEnabled()
   });
 }
 
@@ -1437,7 +1457,7 @@ function renderInspector() {
   const repo = isGitConfigured(state.settings) ? repoLabel(state.settings) : "no repo connected";
   $("inspector-git").textContent = gitOn
     ? `Jira versions in the release repo · ${repo}`
-    : "Jira versions in Local snapshots · same snapshot for QA then prod";
+    : "Jira versions on this Chrome profile · same snapshot for QA then prod";
   const tests = state.specifiedTests;
   $("inspector-tests").textContent = tests.length
     ? `${tests.length} specified test${tests.length === 1 ? "" : "s"}: ${tests.slice(0, 8).join(", ")}${tests.length > 8 ? "…" : ""}`
@@ -1584,14 +1604,24 @@ function renderDeployManifest() {
   const jiraEl = $("deploy-confirm-jira");
   const commentEl = $("deploy-confirm-comment");
   const destEl = $("deploy-confirm-dest");
-  if (jiraEl) jiraEl.textContent = isZipFlow() ? "Not used for zip deploy" : (isJiraKey(jiraKeyValue()) ? jiraKeyValue().toUpperCase() : "Enter on Retrieve");
-  if (commentEl) commentEl.textContent = isZipFlow() ? (state.zipName || "Uploaded zip") : (gitCommitMessage() || "Enter on Retrieve");
+  if (jiraEl) {
+    if (isZipFlow()) jiraEl.textContent = "Not used for zip deploy";
+    else if (isJiraKey(jiraKeyValue())) jiraEl.textContent = jiraKeyValue().toUpperCase();
+    else if (useGitEnabled()) jiraEl.textContent = "Enter on Retrieve";
+    else jiraEl.textContent = "Optional — blank mints CHANGE-…";
+  }
+  if (commentEl) {
+    if (isZipFlow()) commentEl.textContent = state.zipName || "Uploaded zip";
+    else if (gitCommitMessage()) commentEl.textContent = gitCommitMessage();
+    else if (useGitEnabled()) commentEl.textContent = "Enter on Retrieve";
+    else commentEl.textContent = "Optional";
+  }
   if (destEl) {
     destEl.textContent = isZipFlow()
       ? "Zip file"
       : (useGitEnabled() && isGitConfigured(state.settings)
         ? repoLabel(state.settings)
-        : "Local snapshots");
+        : chromeProfileLabel());
   }
   if (!el) return;
   const columns = categoryColumns(state.packageTypes);
@@ -1615,17 +1645,17 @@ function renderGitUi() {
     ? connected
       ? `Compare this retrieve with a saved snapshot before Deploy. Shared Jira versions are in ${repoLabel(state.settings)}.`
       : `${host} is on — connect a repo on Start so the team can reuse versions. Compare before you deploy.`
-    : "Compare this retrieve with a saved snapshot before Deploy. Jira versions stay in Local snapshots unless you connect a release repo.";
+    : "Compare this retrieve with a saved snapshot before Deploy. Versions stay on this Chrome profile unless you connect a release repo.";
   $("git-status").textContent = on
     ? connected
       ? `Saving versions to ${repoLabel(state.settings)}.`
       : (($("gh-repo")?.value || $("gh-repo-input")?.value.trim())
         ? "A repo is selected in the list, but it is not connected yet. Click Use this repo."
-        : `Connect a ${host} repo on Start. Until then, versions stay in Local snapshots.`)
-    : "Saving versions in Local snapshots (no token).";
+        : `Connect a ${host} repo on Start. Until then, versions stay on this Chrome profile.`)
+    : "Saving versions on this Chrome profile (no token). Jira is optional.";
   $("git-hint").textContent = on
     ? "Each Jira save creates v1, v2, … in the repo so QA/UAT/prod get the same snapshot."
-    : "Each Jira save creates v1, v2, … in Local snapshots. A release repo is optional sharing so QA and prod reuse the same snapshot.";
+    : "Jira is optional here. If you enter a key, saves create v1, v2, … on this Chrome profile.";
   $("git-setup-block")?.classList.toggle("hidden", !on);
   document.body.classList.toggle("mode-simple", !on);
   document.body.classList.toggle("mode-git", on);
@@ -1640,9 +1670,23 @@ function renderGitUi() {
   const showGitShip = currentStepId() === "review";
   $("git-ship-panel")?.classList.toggle("hidden", !showGitShip);
   if ($("git-ship-hint")) {
-    $("git-ship-hint").textContent = useGitEnabled()
+    $("git-ship-hint").textContent = on
       ? `Jira key (PROJ-123) and comment are required here before Confirm deploy. The comment is also the ${host} commit message.`
-      : "Jira key (PROJ-123) and comment are required here before Confirm deploy.";
+      : "Jira key and comment are optional on this Chrome profile. Leave them blank to deploy; OrgFlow mints CHANGE-YYYYMMDD-N if you save a snapshot.";
+  }
+  for (const id of ["jira-req-mark", "comment-req-mark"]) {
+    const mark = $(id);
+    if (!mark) continue;
+    mark.textContent = on ? "Required" : "Optional";
+    mark.classList.toggle("req-mark", on);
+    mark.classList.toggle("opt-mark", !on);
+  }
+  $("jira")?.setAttribute("aria-required", on ? "true" : "false");
+  $("comment")?.setAttribute("aria-required", on ? "true" : "false");
+  if ($("comment")) {
+    $("comment").placeholder = on
+      ? "What changed. Example: Account status field + layout for PROJ-123"
+      : "Optional. What changed.";
   }
   fillGitHostUi();
   renderPipelines();
@@ -2795,7 +2839,7 @@ function renderVersions() {
     return `${v.id} ${v.jira} ${v.comment}`.toLowerCase().includes(q);
   });
   if (!items.length) {
-    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to repo." : "No versions in Local snapshots yet. Retrieve, then save a snapshot."}</div>`;
+    $("version-list").innerHTML = `<div class="empty">${useGitEnabled() ? "No versions in the connected repo yet. Retrieve, then Save to repo." : "No versions on this Chrome profile yet. Retrieve, then save a snapshot."}</div>`;
     return;
   }
   $("version-list").innerHTML = items
@@ -2805,7 +2849,7 @@ function renderVersions() {
       return `<article class="card" data-id="${escapeHtml(v.id)}">
         <div class="title">${escapeHtml(v.id)}</div>
         <div class="meta">${escapeHtml(v.comment || "No comment")}</div>
-        <div class="meta">${escapeHtml(v.storage === "git" ? providerMeta(providerId(state.settings)).label : "Local snapshots")} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
+        <div class="meta">${escapeHtml(v.storage === "git" ? providerMeta(providerId(state.settings)).label : chromeProfileLabel())} · ${escapeHtml(v.sourceOrg?.label || "")} · ${escapeHtml(new Date(v.createdAt).toLocaleString())}${v.fileCount ? ` · ${v.fileCount} files` : ""}</div>
         ${comps ? `<div class="meta">${escapeHtml(comps)}</div>` : ""}
         ${deploys ? `<div class="meta">${escapeHtml(deploys)}</div>` : ""}
         <div class="tiny">
@@ -3320,7 +3364,9 @@ function resolveTicket(store) {
       validationItems: details
     });
   }
-  return { ticket: jiraKeyValue().toUpperCase(), comment: gitCommitMessage() };
+  const typed = jiraKeyValue();
+  const ticket = isJiraKey(typed) ? typed.toUpperCase() : mintChangeId(store?.versions || []);
+  return { ticket, comment: gitCommitMessage() };
 }
 
 async function retrieveIntoReview() {
@@ -3665,8 +3711,8 @@ async function saveVersion(options = {}) {
     state.lastSaved = { id: record.id, fingerprint: stagedFilesFingerprint() };
     renderVersions();
     $("jira").value = record.jira;
-    log(`Saved ${record.id} in Local snapshots (${files.length} files).`);
-    setStatus(`Saved ${record.id} in Local snapshots`, "ok");
+    log(`Saved ${record.id} on this Chrome profile (${files.length} files).`);
+    setStatus(`Saved ${record.id} on this Chrome profile`, "ok");
     setTimeout(() => maybeRefreshRetrieveCompare(), 0);
     return record;
   }
@@ -3723,7 +3769,7 @@ async function deployVersion(explicitId) {
   if (version.storage === "local" || !useGitEnabled()) {
     files = await loadLocalRelease(version.id);
     if (!files.length) throw new Error(`No local files found for ${version.id}. Save the version again from Review.`);
-    log(`Loading ${version.id} from Local snapshots…`);
+    log(`Loading ${version.id} from this Chrome profile…`);
   } else {
     requireGithub();
     const creds = gitCreds();

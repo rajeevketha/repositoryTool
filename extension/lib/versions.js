@@ -175,31 +175,45 @@ export function sortVersions(versions) {
 }
 
 /**
- * Jira key and comment are required on Retrieve before Confirm deploy.
+ * Jira key and comment are required only when Release repo is on.
+ * On this Chrome profile they are optional. A typed key still has to look like PROJ-123.
  */
-export function snapshotDetailsItems({ jiraKey, comment } = {}) {
+export function snapshotDetailsItems({ jiraKey, comment, gitEnabled } = {}) {
   const items = [];
-  if (!isJiraKey(jiraKey)) {
+  const typedJira = String(jiraKey || "").trim();
+  const typedComment = String(comment || "").trim();
+  if (gitEnabled) {
+    if (!isJiraKey(jiraKey)) {
+      items.push({
+        kind: "error",
+        kicker: "Jira key",
+        text: typedJira
+          ? "Use a Jira key like PROJ-123 (project, hyphen, number)."
+          : "Enter a Jira key on Retrieve (for example PROJ-123) to save to the release repo."
+      });
+    }
+    if (!typedComment) {
+      items.push({
+        kind: "error",
+        kicker: "Comment",
+        text: "Enter a comment on Retrieve — it becomes the Git commit message."
+      });
+    }
+    return items;
+  }
+  if (typedJira && !isJiraKey(jiraKey)) {
     items.push({
       kind: "error",
       kicker: "Jira key",
-      text: String(jiraKey || "").trim()
-        ? "Use a Jira key like PROJ-123 (project, hyphen, number)."
-        : "Enter a Jira key on Retrieve (for example PROJ-123)."
-    });
-  }
-  if (!String(comment || "").trim()) {
-    items.push({
-      kind: "error",
-      kicker: "Comment",
-      text: "Enter a comment on Retrieve describing this change."
+      text: "Use a Jira key like PROJ-123, or leave it blank for this Chrome profile."
     });
   }
   return items;
 }
 
 /**
- * Snapshot details always, plus a connected repo when Release repo is on.
+ * Snapshot details when Release repo is on, plus a connected repo.
+ * This Chrome profile does not require Jira or a comment.
  */
 export function gitShipValidationItems({
   gitEnabled,
@@ -208,7 +222,7 @@ export function gitShipValidationItems({
   hostLabel = "Git",
   jiraKey
 } = {}) {
-  const items = snapshotDetailsItems({ jiraKey, comment: commitMessage });
+  const items = snapshotDetailsItems({ jiraKey, comment: commitMessage, gitEnabled });
   if (gitEnabled && !gitConfigured) {
     items.push({
       kind: "error",

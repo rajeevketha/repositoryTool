@@ -92,8 +92,8 @@
             <p class="suggestion-kicker">Choose one</p>
             <div class="mode-grid">
               <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
-                <strong>Local snapshots</strong>
-                <span>Versions stay on this Chrome profile</span>
+                <strong>This Chrome profile</strong>
+                <span>Versions stay here. Jira is optional.</span>
               </button>
               <button type="button" class="mode-card" id="mode-git" data-mode="git">
                 <strong>Release repo</strong>
@@ -232,7 +232,7 @@
             <dl class="confirm-dl">
               <div><dt>Jira</dt><dd id="deploy-confirm-jira">Enter on Retrieve</dd></div>
               <div><dt>Comment</dt><dd id="deploy-confirm-comment">Enter on Retrieve</dd></div>
-              <div><dt>Saved to</dt><dd id="deploy-confirm-dest">Local snapshots</dd></div>
+              <div><dt>Saved to</dt><dd id="deploy-confirm-dest">This Chrome profile</dd></div>
             </dl>
           </article>
           <article class="card" id="package-summary-card">
@@ -488,7 +488,7 @@
             <div class="row-actions">
               <button type="button" id="btn-retrieve-review" class="accent" data-busy data-needs="source,package">Retrieve from From org</button>
             </div>
-            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Click Retrieve when this package looks right. Then enter Jira and a comment.</p>
+            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Click Retrieve when this package looks right. Jira and comment are optional on this Chrome profile.</p>
             <div id="file-list" class="file-list"></div>
             <label id="file-editor-wrap" class="hidden">
               <span id="file-editor-name">File</span>
@@ -530,15 +530,15 @@
 
         <section id="git-ship-panel" class="git-ship hidden">
           <h2>Snapshot details</h2>
-          <p class="hint" id="git-ship-hint">Jira key and comment are required on Retrieve before you can confirm deploy.</p>
+          <p class="hint" id="git-ship-hint">Jira key and comment are optional on this Chrome profile. They are required only for a release repo.</p>
           <label>
-            <span class="field-title">Jira key <span class="req-mark">Required</span></span>
-            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" spellcheck="false" aria-required="true" aria-describedby="jira-hint" />
-            <p id="jira-hint" class="field-hint" data-state="empty">Use the ticket id, like PROJ-123.</p>
+            <span class="field-title">Jira key <span id="jira-req-mark" class="opt-mark">Optional</span></span>
+            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" spellcheck="false" aria-required="false" aria-describedby="jira-hint" />
+            <p id="jira-hint" class="field-hint" data-state="empty">Optional on this Chrome profile. Leave blank and OrgFlow mints CHANGE-YYYYMMDD-N.</p>
           </label>
           <label>
-            <span class="field-title">Comment <span class="req-mark">Required</span></span>
-            <textarea id="comment" rows="3" placeholder="What changed. Example: Account status field + layout for PROJ-123" aria-required="true"></textarea>
+            <span class="field-title">Comment <span id="comment-req-mark" class="opt-mark">Optional</span></span>
+            <textarea id="comment" rows="3" placeholder="Optional. What changed." aria-required="false"></textarea>
           </label>
           <div class="row-actions git-only">
             <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to repo</button>

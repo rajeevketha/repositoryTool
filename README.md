@@ -2,15 +2,15 @@
 
 Chrome extension for **Salesforce configurators**: build fields, layouts, flows, permission sets (and other metadata) in a sandbox, then deploy that same package to QA, UAT, or production.
 
-GitHub, GitLab, or Azure DevOps is **optional**. OrgFlow always versions by Jira (`PROJ-123-v1`). Without a team repo, snapshots live in this Chrome profile so you can promote the same package sandbox → QA → prod. Choose **GitHub, GitLab, or Azure** when the team needs a shared warehouse.
+GitHub, GitLab, or Azure DevOps is **optional**. Without a team repo, snapshots live on **this Chrome profile** so you can promote the same package sandbox → QA → prod. Jira is optional on that path. Choose **Release repo** (GitHub, GitLab, or Azure) when the team needs a shared warehouse — then a Jira key and comment are required.
 
 ## Configurator workflow
 
 Use **Back** / **Next** at the bottom. The numbered stepper (Start → Package → Retrieve → Confirm) is sequential: you cannot skip ahead.
 
-1. **Start** — Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). Stay on Start and choose **Local snapshots** or **Release repo** (GitHub, GitLab, or Azure). Click **Next** when that choice is done. If a release repo: follow **Help · connecting Git**, then **Use this repo**. OrgFlow saves From → To as the promotion path (for example DEC → QA). Add Staging and Prod when those orgs are logged in so the same Jira snapshot can travel Dev → QA → Staging → Prod. Pipelines are optional — connecting the repo is enough.
+1. **Start** — Detect logged-in orgs. Set **From** and **To** in the path bar (they must be different). Stay on Start and choose **This Chrome profile** or **Release repo** (GitHub, GitLab, or Azure). Click **Next** when that choice is done. If a release repo: follow **Help · connecting Git**, then **Use this repo**. OrgFlow saves From → To as the promotion path (for example DEC → QA). Add Staging and Prod when those orgs are logged in so the same Jira snapshot can travel Dev → QA → Staging → Prod. Pipelines are optional — connecting the repo is enough.
 2. **Package** — empty package opens on **What's new?** in the From org (a short list, not the full type grid). Tap to add. **Browse types** is one click away. After you tick something on an object, OrgFlow offers **one** same-object add (for example 2 Account layouts) — never a dump of every layout. Permission sets stay a review step, not auto-add. Pick another type to add more; earlier ticks stay in the package. **Back** from Retrieve returns here so you can add more — nothing is frozen.
-3. **Retrieve** — click **Retrieve from From org** when the package is complete. Then enter a **Jira key** like `PROJ-123` (spaces are OK — OrgFlow turns `Proj 123` into `PROJ-123`) and a **comment**. **Save to repo** stays off until that key looks right. After retrieve, **This retrieve vs saved snapshot** shows moving files on the left and the saved Jira version on the right. **Back** returns to Package. After you add members, retrieve again before Confirm.
+3. **Retrieve** — click **Retrieve from From org** when the package is complete. On **This Chrome profile**, a Jira key and comment are optional (blank saves as `CHANGE-YYYYMMDD-N`). On **Release repo**, both are required (`PROJ-123`; spaces are OK — OrgFlow turns `Proj 123` into `PROJ-123`). **Save to repo** stays off until that key looks right. After retrieve, **This retrieve vs saved snapshot** shows moving files on the left and a saved version on the right. **Back** returns to Package. After you add members, retrieve again before Confirm.
 4. **Confirm** — review org names, Jira, comment, and what is going to the To org. If the package includes Apex, **Run Apex tests** is optional: pick classes to run in the To org for a coverage percentage. Test classes do not have to be in the package. Skip tests and Deploy still works in a sandbox. **Validate in To org** is a dry run (nothing is saved). **Deploy** sends it. The result stays on this screen. After a successful deploy, **New package** starts over from Start.
 
 ### Deploy a zip (Workbench-style)
@@ -30,7 +30,7 @@ Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minu
 Full dashboard paste kit (what to upload, every listing/privacy field, and what you still must do): [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 - **Load unpacked:** [files/orgflow-extension.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-extension.zip) (unzip to an `orgflow/` folder)
-- **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.19**)
+- **Store upload:** [files/orgflow-chrome-web-store.zip](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-chrome-web-store.zip) (`manifest.json` at the zip root, version **1.11.20**)
 - **Privacy policy:** [docs/privacy.html](https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/docs/privacy.html)
 
 ## Install (unpacked Chrome extension)
@@ -62,8 +62,8 @@ If an org does not appear, open it (Lightning or Setup) so a `*.my.salesforce.co
 
 On **Start**, choose where snapshots are stored:
 
-- **Local snapshots** — no token. Jira versions (`PROJ-123-v1`) stay on this Chrome profile. Promote that same snapshot to QA, then prod.
-- **GitHub, GitLab, or Azure** — same Jira versions, written to the host you pick so teammates can reuse them. Token stays in this browser.
+- **This Chrome profile** — no token. Jira is optional. If you enter a key, versions (`PROJ-123-v1`) stay on this computer. Blank keys save as `CHANGE-YYYYMMDD-N`. Promote that same snapshot to QA, then prod.
+- **GitHub, GitLab, or Azure** — Jira key and comment are required (the comment is the Git commit message). Same versions, written to the host you pick so teammates can reuse them. Token stays in this browser.
 
 Git hosts are the shared warehouse, not the versioning itself. Without a place to keep the retrieved files, there is no version — only a one-shot copy, which OrgFlow no longer treats as the main path.
 
@@ -83,7 +83,7 @@ Each configurator can version **without Git**. Connect a Git host only when the 
 2. **Selected package** (side of the workbench, or below the picker in the side panel) updates on every tick:
    - **By category** — columns/groups by metadata type, and by object for fields/layouts
    - **package.xml** — the exact manifest Salesforce will retrieve
-3. **Retrieve** — retrieve the package when it looks complete. Then enter a **Jira key** and **comment** (both required). **Back** returns to Package unlocked so you can add more members, then retrieve again. Errors from Salesforce show in the result panel (component name + problem).
+3. **Retrieve** — retrieve the package when it looks complete. On **This Chrome profile**, Jira and comment are optional. On **Release repo**, both are required. **Back** returns to Package unlocked so you can add more members, then retrieve again. Errors from Salesforce show in the result panel (component name + problem).
 4. **Confirm** — org names, Jira, comment, and the component list. **Validate in To org** is a dry run. **Deploy** sends it. The Salesforce result stays on this screen.
 
 Wildcard `*` for a type still works if you want everything of that type. For real releases, pick named members so the version is reviewable.
@@ -98,7 +98,7 @@ Wildcard `*` for a type still works if you want everything of that type. For rea
 | Target org | UAT |
 | Tests | Optional. If Apex is in the package, Confirm can run specified test classes **without adding them to the package**. Skip tests for sandbox deploys. Coverage % shows after Validate or Deploy when tests ran. |
 
-- **Local snapshots / GitHub, GitLab, or Azure** — versioning is always on. A team repo is optional sharing.
+- **This Chrome profile / GitHub, GitLab, or Azure** — versioning is always on. A team repo is optional sharing. Jira is required only for the repo path.
 - **Workbench** — wide window: picker on the left, live selected package on the right (category columns + package.xml). On Retrieve/Deploy the right pane is the Salesforce result panel.
 - **Deploy** — one button on the last step. It stays off until Salesforce returns success or failure. Component and test errors (name + problem) show in the result panel.
 

@@ -76,8 +76,11 @@ describe("jira / version ids", () => {
     assert.equal(store.versions[0].deployments[0].org.label, "UAT");
   });
 
-  it("requires a Jira key and comment on Retrieve, and a repo when Git is on", () => {
-    const missing = snapshotDetailsItems({ jiraKey: "", comment: "" });
+  it("requires a Jira key and comment only when Release repo is on", () => {
+    assert.deepEqual(snapshotDetailsItems({ jiraKey: "", comment: "" }), []);
+    assert.deepEqual(snapshotDetailsItems({ jiraKey: "", comment: "", gitEnabled: false }), []);
+
+    const missing = snapshotDetailsItems({ jiraKey: "", comment: "", gitEnabled: true });
     assert.equal(missing.length, 2);
     assert.equal(missing[0].kicker, "Jira key");
     assert.equal(missing[1].kicker, "Comment");
@@ -113,11 +116,22 @@ describe("jira / version ids", () => {
     });
     assert.deepEqual(ready, []);
 
+    const localEmpty = gitShipValidationItems({
+      gitEnabled: false,
+      jiraKey: "",
+      commitMessage: ""
+    });
+    assert.deepEqual(localEmpty, []);
+
     const localReady = gitShipValidationItems({
       gitEnabled: false,
       jiraKey: "PROJ-9",
       commitMessage: "Layout fix"
     });
     assert.deepEqual(localReady, []);
+
+    const localBadKey = snapshotDetailsItems({ jiraKey: "hello", comment: "", gitEnabled: false });
+    assert.equal(localBadKey.length, 1);
+    assert.equal(localBadKey[0].kicker, "Jira key");
   });
 });
