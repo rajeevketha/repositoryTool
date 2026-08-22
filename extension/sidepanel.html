@@ -229,73 +229,104 @@
         </section>
 
         <section id="view-ship" class="view">
-          <p class="step-kicker">Step 4 of 4</p>
-          <h2 class="page-title">Confirm deploy</h2>
-          <p class="hint" id="deploy-path-line">Set From and To in the path bar.</p>
-          <article class="card" id="deploy-confirm-card">
-            <div class="title">This snapshot</div>
-            <dl class="confirm-dl">
-              <div><dt>Jira</dt><dd id="deploy-confirm-jira">Enter on Retrieve</dd></div>
-              <div><dt>Comment</dt><dd id="deploy-confirm-comment">Enter on Retrieve</dd></div>
-              <div><dt>API</dt><dd id="deploy-confirm-api">67.0</dd></div>
-              <div><dt>Saved to</dt><dd id="deploy-confirm-dest">On this device</dd></div>
-            </dl>
-          </article>
-          <article class="card" id="package-summary-card">
-            <div class="title">Going to the To org <span id="package-count-deploy" class="badge">0</span></div>
-            <p class="hint">This is the package Salesforce will receive. Validate first if you want a dry run — nothing is saved in the To org until Deploy.</p>
-            <div id="deploy-manifest" class="deploy-manifest" tabindex="0"></div>
-            <div id="package-summary-body" class="hidden"></div>
-          </article>
-          <article class="card" id="to-preflight-card">
-            <p class="suggestion-kicker">To org check</p>
-            <div class="title">Already in To? <span id="preflight-badge" class="badge">—</span></div>
-            <p class="hint" id="preflight-hint">OrgFlow checks selected members against the To org. This does not block Deploy.</p>
-            <div id="preflight-body" class="preflight-list"></div>
-            <div class="row-actions">
-              <button type="button" id="btn-preflight" class="ghost-text">Check To org again</button>
-            </div>
-          </article>
-          <article id="apex-tests-card" class="card hidden">
-            <p class="suggestion-kicker">Optional</p>
-            <div class="title">Run Apex tests <span id="test-count" class="badge">0</span></div>
-            <p class="hint">Test classes do not have to be in this package. Pick classes to run in the To org if you want a coverage percentage. Skip this and Deploy still works in a sandbox.</p>
-            <div id="suggested-tests"></div>
-            <div class="member-toolbar">
-              <input id="test-filter" type="search" placeholder="Filter test classes" autocomplete="off" />
-            </div>
-            <p id="test-runner-status" class="muted"></p>
-            <div id="test-class-list" class="type-list member-list test-class-list"></div>
-            <div class="row-actions">
-              <button type="button" id="btn-scan-tests" class="secondary" data-busy data-needs="source">List test classes in From org</button>
-              <button type="button" id="btn-clear-tests" class="ghost-text">Don't run tests</button>
-            </div>
-            <label>
-              Add a test class name
-              <div class="inline-add">
-                <input id="manual-test" type="text" placeholder="MyClassTest" autocomplete="off" />
-                <button type="button" id="btn-add-test" class="secondary">Run this</button>
+          <div class="confirm-main">
+            <p class="step-kicker">Step 4 of 4</p>
+            <h2 class="page-title">Confirm deploy</h2>
+            <p class="hint" id="deploy-path-line">Set From and To in the path bar.</p>
+            <article class="card" id="deploy-confirm-card">
+              <div class="title">This snapshot</div>
+              <dl class="confirm-dl">
+                <div><dt>Jira</dt><dd id="deploy-confirm-jira">Enter on Retrieve</dd></div>
+                <div><dt>Comment</dt><dd id="deploy-confirm-comment">Enter on Retrieve</dd></div>
+                <div><dt>API</dt><dd id="deploy-confirm-api">67.0</dd></div>
+                <div><dt>Saved to</dt><dd id="deploy-confirm-dest">On this device</dd></div>
+              </dl>
+            </article>
+            <article class="card" id="package-summary-card">
+              <div class="title">Going to the To org <span id="package-count-deploy" class="badge">0</span></div>
+              <p class="hint">This is the package Salesforce will receive. Validate first if you want a dry run — nothing is saved in the To org until Deploy.</p>
+              <div id="deploy-manifest" class="deploy-manifest" tabindex="0"></div>
+              <div id="package-summary-body" class="hidden"></div>
+            </article>
+            <article class="card" id="to-preflight-card">
+              <p class="suggestion-kicker">To org check</p>
+              <div class="title">Already in To? <span id="preflight-badge" class="badge">—</span></div>
+              <p class="hint" id="preflight-hint">OrgFlow checks selected members against the To org. This does not block Deploy.</p>
+              <div id="preflight-body" class="preflight-list"></div>
+              <div class="row-actions">
+                <button type="button" id="btn-preflight" class="ghost-text">Check To org again</button>
               </div>
-            </label>
-            <p id="apex-coverage-line" class="field-hint" data-state="empty">Coverage appears after Validate or Deploy if you ran tests.</p>
-          </article>
-          <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
-          <div class="actions deploy-actions">
-            <button id="btn-validate-selected" class="secondary" data-busy data-needs="source,target,package,distinct,retrieve">Validate in To org</button>
-            <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
-            <button type="button" id="btn-download-zip-confirm" class="ghost-text">Download zip</button>
-            <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
+            </article>
+            <article id="apex-tests-card" class="card hidden">
+              <p class="suggestion-kicker">Optional</p>
+              <div class="title">Run Apex tests <span id="test-count" class="badge">0</span></div>
+              <p class="hint">Test classes do not have to be in this package. Pick classes to run in the To org if you want a coverage percentage. Skip this and Deploy still works in a sandbox.</p>
+              <div id="suggested-tests"></div>
+              <div class="member-toolbar">
+                <input id="test-filter" type="search" placeholder="Filter test classes" autocomplete="off" />
+              </div>
+              <p id="test-runner-status" class="muted"></p>
+              <div id="test-class-list" class="type-list member-list test-class-list"></div>
+              <div class="row-actions">
+                <button type="button" id="btn-scan-tests" class="secondary" data-busy data-needs="source">List test classes in From org</button>
+                <button type="button" id="btn-clear-tests" class="ghost-text">Don't run tests</button>
+              </div>
+              <label>
+                Add a test class name
+                <div class="inline-add">
+                  <input id="manual-test" type="text" placeholder="MyClassTest" autocomplete="off" />
+                  <button type="button" id="btn-add-test" class="secondary">Run this</button>
+                </div>
+              </label>
+              <p id="apex-coverage-line" class="field-hint" data-state="empty">Coverage appears after Validate or Deploy if you ran tests.</p>
+            </article>
           </div>
-          <article class="card" id="deploy-result-card">
-            <div class="title" id="deploy-result-head">
-              <span id="deploy-result-title">Deploy result</span>
-              <span id="deploy-result-badge" class="badge">—</span>
+          <aside id="confirm-rail" aria-label="Send this package">
+            <article class="card confirm-path-card">
+              <p class="suggestion-kicker">This send</p>
+              <div class="title">From → To</div>
+              <div class="confirm-hop">
+                <div class="confirm-hop-node">
+                  <span class="path-role">From</span>
+                  <strong id="confirm-rail-from">—</strong>
+                  <span id="confirm-rail-from-meta" class="path-meta"></span>
+                </div>
+                <div class="path-arrow" aria-hidden="true"><span></span></div>
+                <div class="confirm-hop-node">
+                  <span class="path-role">To</span>
+                  <strong id="confirm-rail-to">—</strong>
+                  <span id="confirm-rail-to-meta" class="path-meta"></span>
+                </div>
+              </div>
+              <dl class="confirm-dl confirm-rail-dl">
+                <div><dt>Members</dt><dd id="confirm-rail-members">0</dd></div>
+                <div><dt>Files</dt><dd id="confirm-rail-files">—</dd></div>
+                <div><dt>API</dt><dd id="confirm-rail-api">67.0</dd></div>
+                <div><dt>Saved to</dt><dd id="confirm-rail-dest">On this device</dd></div>
+              </dl>
+            </article>
+            <article class="card" id="confirm-checklist-card">
+              <div class="title">Before you send</div>
+              <ul id="confirm-checklist" class="confirm-check"></ul>
+            </article>
+            <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
+            <div class="actions deploy-actions">
+              <button id="btn-validate-selected" class="secondary" data-busy data-needs="source,target,package,distinct,retrieve">Validate in To org</button>
+              <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
+              <button type="button" id="btn-download-zip-confirm" class="ghost-text">Download zip</button>
+              <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
             </div>
-            <p class="hint" id="deploy-result-sub">Nothing sent yet. Confirm the org names and component list, then Deploy.</p>
-            <div id="deploy-result-body" class="outcome-body">
-              <p class="muted">The deploy result will show here after you send the package.</p>
-            </div>
-          </article>
+            <article class="card" id="deploy-result-card">
+              <div class="title" id="deploy-result-head">
+                <span id="deploy-result-title">Deploy result</span>
+                <span id="deploy-result-badge" class="badge">—</span>
+              </div>
+              <p class="hint" id="deploy-result-sub">Nothing sent yet. Confirm the org names and component list, then Deploy.</p>
+              <div id="deploy-result-body" class="outcome-body">
+                <p class="muted">The deploy result will show here after you send the package.</p>
+              </div>
+            </article>
+          </aside>
         </section>
 
         <section id="view-versions" class="view">

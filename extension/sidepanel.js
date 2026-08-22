@@ -551,6 +551,7 @@ function updateActionState() {
     callout.className = `callout ${reason ? "warn" : "ok"}`;
     callout.classList.toggle("hidden", !reason);
   }
+  renderConfirmRail();
   renderOrgPath();
   applyRetrieveLockUi();
   updateWizardNav();
@@ -1778,6 +1779,109 @@ function renderDeployManifest() {
       return `<section class="cat-col"><h3><span>${escapeHtml(col.type)}</span><span class="badge">${col.count}</span></h3><ul>${members}</ul></section>`;
     })
     .join("");
+  renderConfirmRail();
+}
+
+function confirmChecklistItems() {
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  const same = source && target && orgsAreSame(orgKey(source), orgKey(target));
+  const pack = memberCount(state.packageTypes);
+  const items = [];
+  if (isZipFlow()) {
+    items.push({
+      ok: Boolean(target),
+      text: target ? `To is ${target.label}` : "Set a To org in the path bar"
+    });
+    items.push({
+      ok: zipReady(),
+      text: zipReady() ? `${state.zipName || "package.zip"} matches package.xml` : "Upload a valid Metadata API zip"
+    });
+  } else {
+    items.push({
+      ok: Boolean(source && target && !same),
+      text: same
+        ? "From and To are the same org — pick a different To"
+        : source && target
+          ? `${source.label} → ${target.label}`
+          : "Set From and To in the path bar"
+    });
+    items.push({
+      ok: pack > 0,
+      text: pack > 0 ? `${pack} named member${pack === 1 ? "" : "s"} in this package` : "No members selected"
+    });
+    items.push({
+      ok: hasFreshRetrieve() && state.retrieveOk,
+      text: hasFreshRetrieve() && state.retrieveOk
+        ? `Retrieve is current (${state.stagedFiles?.length || 0} files)`
+        : "Retrieve again before deploy"
+    });
+  }
+  const tests = specifiedTests();
+  if (target && !target.isSandbox && !tests.length) {
+    items.push({
+      ok: false,
+      warn: true,
+      text: "To is production and no Apex tests are selected"
+    });
+  } else if (tests.length) {
+    items.push({
+      ok: true,
+      text: `${tests.length} Apex test class${tests.length === 1 ? "" : "es"} will run in To`
+    });
+  }
+  const missing = Number(state.preflight?.report?.missingParent || 0);
+  if (missing) {
+    items.push({
+      ok: false,
+      warn: true,
+      text: `${missing} custom object${missing === 1 ? "" : "s"} missing in To`
+    });
+  }
+  if (alreadyDeployedToCurrentTarget()) {
+    items.push({ ok: true, text: `Already deployed to ${target?.label || "this org"}` });
+  }
+  return items;
+}
+
+function renderConfirmRail() {
+  const fromEl = $("confirm-rail-from");
+  if (!fromEl) return;
+  const source = selectedOrg("source-org");
+  const target = selectedOrg("target-org");
+  const same = source && target && orgsAreSame(orgKey(source), orgKey(target));
+  if (isZipFlow()) {
+    fromEl.textContent = state.zipName || "Zip file";
+    if ($("confirm-rail-from-meta")) $("confirm-rail-from-meta").textContent = "Metadata API zip";
+  } else {
+    fromEl.textContent = source?.label || "Select From";
+    if ($("confirm-rail-from-meta")) $("confirm-rail-from-meta").textContent = source ? orgKind(source) : "Where you built the change";
+  }
+  if ($("confirm-rail-to")) $("confirm-rail-to").textContent = target?.label || "Select To";
+  if ($("confirm-rail-to-meta")) {
+    $("confirm-rail-to-meta").textContent = target ? orgKind(target) : "Where it should go";
+  }
+  if ($("confirm-rail-members")) $("confirm-rail-members").textContent = String(memberCount(state.packageTypes));
+  if ($("confirm-rail-files")) {
+    $("confirm-rail-files").textContent = state.stagedFiles?.length
+      ? String(state.stagedFiles.length)
+      : "Retrieve first";
+  }
+  if ($("confirm-rail-api")) $("confirm-rail-api").textContent = apiVersionLabel(apiVersion(), currentApiVersionRows());
+  if ($("confirm-rail-dest")) {
+    $("confirm-rail-dest").textContent = isZipFlow()
+      ? "Zip file"
+      : (useGitEnabled() && isGitConfigured(state.settings) ? repoLabel(state.settings) : localStoreLabel());
+  }
+  $("confirm-rail")?.classList.toggle("same-org", Boolean(same));
+  const list = $("confirm-checklist");
+  if (list) {
+    const items = confirmChecklistItems();
+    list.innerHTML = items.map((item) => {
+      const stateName = item.ok ? "ok" : (item.warn ? "warn" : "off");
+      return `<li data-state="${stateName}">${escapeHtml(item.text)}</li>`;
+    }).join("");
+  }
 }
 
 function renderGitUi() {
