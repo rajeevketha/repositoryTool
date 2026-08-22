@@ -1,4 +1,6 @@
-const API_VERSION = "61.0";
+import { DEFAULT_API_VERSION } from "./apiVersion.js";
+
+const DISCOVERY_API_VERSIONS = [...new Set([DEFAULT_API_VERSION, "61.0", "58.0"])];
 
 function originFromUrl(url) {
   try {
@@ -67,12 +69,14 @@ export async function discoverOrgsFromCookies() {
 export async function describeOrg(instanceUrl, sid) {
   const base = instanceUrl.replace(/\/$/, "");
   const headers = { Authorization: `Bearer ${sid}`, Accept: "application/json" };
-  const identity = await jsonFetch(`${base}/services/data/v${API_VERSION}/`, headers);
-  const orgRes = await jsonFetch(
-    `${base}/services/data/v${API_VERSION}/query?q=${encodeURIComponent("SELECT Id, Name, IsSandbox, OrganizationType, InstanceName FROM Organization")}`,
-    headers
+  const identity = await jsonFetchFirst(base, headers, "/", DISCOVERY_API_VERSIONS);
+  const orgRes = await jsonFetchFirst(
+    base,
+    headers,
+    `/query?q=${encodeURIComponent("SELECT Id, Name, IsSandbox, OrganizationType, InstanceName FROM Organization")}`,
+    DISCOVERY_API_VERSIONS
   );
-  const userRes = await jsonFetch(`${base}/services/data/v${API_VERSION}/chatter/users/me`, headers).catch(() => null);
+  const userRes = await jsonFetchFirst(base, headers, "/chatter/users/me", DISCOVERY_API_VERSIONS).catch(() => null);
   const org = orgRes.records?.[0];
   if (!org) throw new Error("Could not read Organization");
   const username = userRes?.username || userRes?.name || "";
@@ -95,6 +99,19 @@ export async function probeOrg(instanceUrl, sid) {
   return describeOrg(instanceUrl.replace(/\/$/, ""), sid);
 }
 
+async function jsonFetchFirst(base, headers, suffix, versions) {
+  let lastErr;
+  for (const version of versions) {
+    try {
+      return await jsonFetch(`${base}/services/data/v${version}${suffix === "/" ? "/" : suffix}`, headers);
+    } catch (err) {
+      lastErr = err;
+      if (err.status !== 404 && err.status !== 400) throw err;
+    }
+  }
+  throw lastErr || new Error("Salesforce REST versions failed");
+}
+
 async function jsonFetch(url, headers) {
   const res = await fetch(url, { headers });
   const text = await res.text();
@@ -111,4 +128,4 @@ export function orgKey(org) {
   return org?.id || org?.instanceUrl || "";
 }
 
-export { API_VERSION };
+export { DEFAULT_API_VERSION as API_VERSION };

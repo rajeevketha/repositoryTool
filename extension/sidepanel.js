@@ -50,6 +50,7 @@ import {
   sameOrg
 } from "./lib/pipelines.js";
 import { discoverOrgsFromCookies, orgKey } from "./lib/salesforce.js";
+import { DEFAULT_API_VERSION, METADATA_API_VERSIONS, normalizeApiVersion, apiVersionLabel } from "./lib/apiVersion.js";
 import { retrieveMetadata, deployMetadata, unzipToFiles, zipFromFiles, listMetadataType, describeOrgMetadata, existingMembersInOrg } from "./lib/metadata.js";
 import { decodeUtf8Base64, withEditedText, isEditablePath } from "./lib/files.js";
 import {
@@ -1237,7 +1238,33 @@ async function openVersionsPanel() {
 }
 
 function apiVersion() {
-  return state.settings?.apiVersion || "61.0";
+  return normalizeApiVersion($("api-version")?.value || state.settings?.apiVersion || DEFAULT_API_VERSION);
+}
+
+function fillApiVersionSelect() {
+  const select = $("api-version");
+  if (!select) return;
+  const current = normalizeApiVersion(state.settings?.apiVersion || DEFAULT_API_VERSION);
+  select.innerHTML = METADATA_API_VERSIONS.map((row) => {
+    const selected = row.version === current ? " selected" : "";
+    return `<option value="${row.version}"${selected}>${row.version} · ${row.season}</option>`;
+  }).join("");
+  select.value = current;
+}
+
+async function persistApiVersion() {
+  const next = apiVersion();
+  const prev = normalizeApiVersion(state.settings?.apiVersion);
+  await saveSettings({ apiVersion: next });
+  state.settings = await loadSettings();
+  if (prev !== next) {
+    state.membersCache = {};
+    state.availableTypes = fallbackTypeRecords();
+    if (!state.xmlDirty) $("package-xml").value = currentXml();
+    invalidateStaged();
+    setStatus(`API version set to ${apiVersionLabel(next)}. Retrieve again before deploy.`, "ok");
+    log(`Metadata API version is ${apiVersionLabel(next)}.`);
+  }
 }
 
 function currentXml() {
@@ -1621,6 +1648,7 @@ function renderDeployManifest() {
   const jiraEl = $("deploy-confirm-jira");
   const commentEl = $("deploy-confirm-comment");
   const destEl = $("deploy-confirm-dest");
+  const apiEl = $("deploy-confirm-api");
   if (jiraEl) {
     if (isZipFlow()) jiraEl.textContent = "Not used for zip deploy";
     else if (isJiraKey(jiraKeyValue())) jiraEl.textContent = jiraKeyValue().toUpperCase();
@@ -1633,6 +1661,7 @@ function renderDeployManifest() {
     else if (useGitEnabled()) commentEl.textContent = "Enter on Retrieve";
     else commentEl.textContent = "Optional";
   }
+  if (apiEl) apiEl.textContent = apiVersionLabel(apiVersion());
   if (destEl) {
     destEl.textContent = isZipFlow()
       ? "Zip file"
@@ -2958,6 +2987,7 @@ async function refreshAll() {
   $("test-level").value = state.settings.testLevel || "NoTestRun";
   $("check-only").checked = Boolean(state.settings.checkOnly);
   $("use-git").checked = Boolean(state.settings.useGit) || isGitConfigured(state.settings);
+  fillApiVersionSelect();
   state.specifiedTests = normalizeTestNames(state.settings.specifiedTests);
   $("package-xml").value = currentXml();
   state.xmlDirty = false;
@@ -3215,7 +3245,8 @@ async function persistShipOptions() {
     useGit: useGitEnabled(),
     specifiedTests: state.specifiedTests,
     lastSourceOrgId: $("source-org").value,
-    lastTargetOrgId: $("target-org").value
+    lastTargetOrgId: $("target-org").value,
+    apiVersion: apiVersion()
   });
   state.settings = await loadSettings();
 }
@@ -4515,6 +4546,7 @@ $("suggested-tests")?.addEventListener("click", (event) => {
   run(() => setSpecifiedTest(name, on));
 });
 $("test-level")?.addEventListener("change", () => run(persistShipOptions));
+$("api-version")?.addEventListener("change", () => run(persistApiVersion));
 
 if (isWorkbench()) {
   chrome.runtime?.sendMessage?.({ type: "closeSidePanel" })?.catch?.(() => {});

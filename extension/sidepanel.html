@@ -109,6 +109,11 @@
               <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
             </div>
             <div id="org-list" class="list org-list-compact"></div>
+            <label>
+              API version
+              <select id="api-version"></select>
+            </label>
+            <p class="hint" id="api-version-hint">Retrieve and deploy use this Metadata API version. Summer '26 is 67.0. Pick a lower version if an org is not on 67 yet.</p>
           </div>
 
           <div id="git-setup-block" class="start-block hidden">
@@ -232,6 +237,7 @@
             <dl class="confirm-dl">
               <div><dt>Jira</dt><dd id="deploy-confirm-jira">Enter on Retrieve</dd></div>
               <div><dt>Comment</dt><dd id="deploy-confirm-comment">Enter on Retrieve</dd></div>
+              <div><dt>API</dt><dd id="deploy-confirm-api">67.0</dd></div>
               <div><dt>Saved to</dt><dd id="deploy-confirm-dest">On this device</dd></div>
             </dl>
           </article>

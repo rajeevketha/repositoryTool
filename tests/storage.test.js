@@ -8,7 +8,7 @@ describe("settings", () => {
       github: { token: "ghp_x", owner: "acme", repo: "sf" }
     });
     assert.equal(merged.github.branch, "main");
-    assert.equal(merged.apiVersion, "61.0");
+    assert.equal(merged.apiVersion, "67.0");
     assert.deepEqual(merged.metadataTypes, DEFAULT_METADATA_TYPES);
     assert.equal(isGithubConfigured(merged), true);
     assert.equal(repoLabel(merged), "acme/sf@main (GitHub)");

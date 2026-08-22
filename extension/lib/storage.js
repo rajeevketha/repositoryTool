@@ -1,3 +1,5 @@
+import { DEFAULT_API_VERSION, normalizeApiVersion } from "./apiVersion.js";
+
 const DEFAULT_METADATA_TYPES = [
   "CustomField",
   "RecordType",
@@ -41,7 +43,7 @@ const DEFAULTS = {
   checkOnly: false,
   useGit: false,
   specifiedTests: [],
-  apiVersion: "61.0",
+  apiVersion: DEFAULT_API_VERSION,
   packageTypes: [],
   setupComplete: false,
   lastPipelineId: "",
@@ -123,7 +125,8 @@ export function mergeSettings(input = {}) {
     specifiedTests: Array.isArray(input.specifiedTests) ? input.specifiedTests : [],
     useGit: input.useGit === true,
     setupComplete: Boolean(input.setupComplete),
-    lastPipelineId: input.lastPipelineId || ""
+    lastPipelineId: input.lastPipelineId || "",
+    apiVersion: normalizeApiVersion(input.apiVersion || DEFAULTS.apiVersion)
   };
 }
 

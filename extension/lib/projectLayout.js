@@ -1,4 +1,6 @@
 /** Salesforce DX / Metadata API folders people already know from VS Code. */
+import { DEFAULT_API_VERSION } from "./apiVersion.js";
+
 export const SALESFORCE_METADATA_FOLDERS = [
   "applications",
   "aura",
@@ -149,14 +151,14 @@ function gitkeep(folder) {
   return `force-app/main/default/${folder}/.gitkeep`;
 }
 
-export function scaffoldProjectFiles({ apiVersion = "61.0", repoName = "orgflow" } = {}) {
+export function scaffoldProjectFiles({ apiVersion = DEFAULT_API_VERSION, repoName = "orgflow" } = {}) {
   const name = String(repoName || "orgflow").replace(/[^A-Za-z0-9._-]/g, "-") || "orgflow";
   const sfdx = `${JSON.stringify({
     packageDirectories: [{ path: "force-app", default: true }],
     name,
     namespace: "",
     sfdcLoginUrl: "https://login.salesforce.com",
-    sourceApiVersion: String(apiVersion || "61.0")
+    sourceApiVersion: String(apiVersion || DEFAULT_API_VERSION)
   }, null, 2)}\n`;
   const forceignore = `# Salesforce CLI should not push OrgFlow version snapshots
 .orgflow/**

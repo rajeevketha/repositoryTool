@@ -1,3 +1,5 @@
+import { DEFAULT_API_VERSION } from "./apiVersion.js";
+
 export function escapeXml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -24,7 +26,7 @@ export function normalizePackageTypes(types) {
     .map(([name, members]) => ({ name, members }));
 }
 
-export function buildPackageXmlFromTypes(types, apiVersion = "61.0") {
+export function buildPackageXmlFromTypes(types, apiVersion = DEFAULT_API_VERSION) {
   const cleaned = normalizePackageTypes(types);
   const blocks = cleaned
     .map((t) => {
@@ -43,7 +45,7 @@ ${blocks}
 `;
 }
 
-export function buildPackageXml(typeNames, apiVersion = "61.0") {
+export function buildPackageXml(typeNames, apiVersion = DEFAULT_API_VERSION) {
   return buildPackageXmlFromTypes(
     (typeNames || []).map((name) => ({ name, members: ["*"] })),
     apiVersion
@@ -52,7 +54,7 @@ export function buildPackageXml(typeNames, apiVersion = "61.0") {
 
 export function parsePackageXml(xml) {
   const raw = String(xml || "");
-  const version = xmlText(raw, "version") || "61.0";
+  const version = xmlText(raw, "version") || DEFAULT_API_VERSION;
   const types = [];
   const re = /<(?:[\w]+:)?types>([\s\S]*?)<\/(?:[\w]+:)?types>/gi;
   let match;
