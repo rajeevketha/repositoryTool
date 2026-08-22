@@ -23,7 +23,7 @@ Typical configuration you can pick by name: **CustomField** (`Account.Status__c`
 
 ## One-minute user manual
 
-Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minute). Open [docs/user-manual.html](docs/user-manual.html) in a browser to replay the same slides. Team-repo slides: [docs/git-repo-walkthrough.html](docs/git-repo-walkthrough.html).
+Watch [docs/orgflow-user-manual.mp4](docs/orgflow-user-manual.mp4) (about 1 minute). Open [docs/user-manual.html](docs/user-manual.html) in a browser to replay the same slides. Team-repo slides: [docs/git-repo-walkthrough.html](docs/git-repo-walkthrough.html). Marketing pitch (why OrgFlow vs Workbench, VS Code, and other deploy tools): [docs/orgflow-pitch.html](docs/orgflow-pitch.html) — paste-ready copy in [docs/orgflow-pitch.md](docs/orgflow-pitch.md).
 
 ## Chrome Web Store
 
