@@ -1,0 +1,26 @@
+OrgFlow manager briefing — how to share
+
+1) Send a link (no download)
+   Chrome / any browser, click through with arrow keys:
+   https://htmlpreview.github.io/?https://github.com/rajeevketha/repositoryTool/blob/cursor/orgflow-salesforce-deploy-c0ed/docs/orgflow-pitch.html
+
+   Backup link (CDN):
+   https://cdn.jsdelivr.net/gh/rajeevketha/repositoryTool@cursor/orgflow-salesforce-deploy-c0ed/docs/orgflow-pitch.html
+
+2) Google Slides (Chrome Slides)
+   Upload docs/orgflow-manager-briefing.pptx to Google Drive.
+   Right-click → Open with → Google Slides.
+   Share that Slides file with managers (Commenter or Viewer).
+
+3) PowerPoint
+   Open docs/orgflow-manager-briefing.pptx in Microsoft PowerPoint or Teams.
+
+4) PDF leave-behind
+   Open orgflow-pitch.html in Chrome → Print → Save as PDF (Destination: Save as PDF).
+   Or print the Google Slides file to PDF.
+
+5) Download this pack
+   files/orgflow-manager-pitch.zip
+   https://raw.githubusercontent.com/rajeevketha/repositoryTool/cursor/orgflow-salesforce-deploy-c0ed/files/orgflow-manager-pitch.zip
+
+Do not send the Chrome extension zip as the briefing. That zip is the product install, not the slides.

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OrgFlow — team repo walkthrough</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0c0f14;
+      color: #e6e4de;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      overflow: hidden;
+    }
+    .stage {
+      width: 1280px;
+      height: 720px;
+      position: relative;
+      background: radial-gradient(circle at 18% 12%, #1a2230, #0c0f14 58%);
+    }
+    .slide {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      padding: 44px 52px;
+      display: flex;
+      gap: 36px;
+    }
+    .slide.on { opacity: 1; }
+    .copy { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .step {
+      font-size: 13px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #c5bba8;
+      margin-bottom: 10px;
+      font-weight: 650;
+    }
+    h1, h2 { margin: 0 0 14px; font-size: 38px; line-height: 1.15; font-weight: 560; }
+    p { margin: 0 0 10px; font-size: 20px; line-height: 1.4; color: #b8c0cc; max-width: 620px; }
+    .note { font-size: 15px; color: #8f96a3; }
+    .brand-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    .logo {
+      width: 52px; height: 52px; border-radius: 12px;
+      background: #0e1118 url("../extension/icons/logo.svg") center/cover;
+    }
+    .panel {
+      width: 420px;
+      background: #171b24;
+      border: 1px solid rgba(226, 228, 234, 0.08);
+      color: #e6e4de;
+      border-radius: 16px;
+      overflow: hidden;
+      align-self: center;
+      font-size: 13px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.35);
+    }
+    .ph {
+      background: #151922;
+      padding: 12px 14px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      border-bottom: 1px solid rgba(226, 228, 234, 0.08);
+    }
+    .ph strong { display: block; font-size: 14px; }
+    .ph span { font-size: 11px; color: #8f96a3; }
+    .path {
+      padding: 8px 14px;
+      font-size: 12px;
+      color: #8f96a3;
+      border-bottom: 1px solid rgba(226, 228, 234, 0.08);
+    }
+    .path b { color: #e6e4de; font-weight: 600; }
+    .body { padding: 14px; }
+    .card {
+      background: #1c212c;
+      border: 1px solid #3a3a3a;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .card.sel { border-color: #4a5568; background: #1e2430; }
+    .card strong { display: block; font-size: 14px; }
+    .muted { color: #8f96a3; font-size: 12px; }
+    .btn {
+      margin-top: 8px;
+      background: #2a3140;
+      color: #fff;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-weight: 650;
+      text-align: center;
+    }
+    .btn.accent { background: #3a342c; outline: 1px solid #6a5d4e; }
+    .ok { color: #8a9e94; font-size: 12px; margin-top: 8px; }
+    .diff { font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; background: #12141a; border-radius: 8px; padding: 10px; }
+    .del { color: #d99a9a; }
+    .add { color: #9ccc9c; }
+    .eq { color: #8f96a3; }
+    .chip { display: inline-block; background: #2a2a2a; border-radius: 999px; padding: 4px 8px; margin: 2px 4px 2px 0; font-size: 11px; }
+    .chip.on { background: #2a3140; color: #d2cdc4; }
+    .list { margin: 0; padding-left: 18px; color: #b8c0cc; font-size: 18px; }
+    .list li { margin: 6px 0; }
+    .tree { font: 13px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #d2cdc4; background: #12141a; border-radius: 10px; padding: 12px 14px; }
+    .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: #1a1f28; }
+    .bar { height: 100%; width: 0; background: #c5bba8; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <section class="slide on" data-ms="7000">
+      <div class="copy">
+        <div class="brand-row"><div class="logo"></div><div class="step">Team repo · ~2 minutes</div></div>
+        <h1>Share versions in GitHub, GitLab, or Azure</h1>
+        <p>OrgFlow always versions by Jira (<b style="color:#e6e4de">PROJ-123-v1</b>). A team repo is the shared warehouse so QA and prod load the same snapshot.</p>
+        <p class="note">On this device stays the default. Connect a host only when the team needs one history.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>OrgFlow</strong><span>Config sandbox → other orgs</span></div></div>
+        <div class="path">From <b>Dev sandbox</b> → To <b>UAT</b></div>
+        <div class="body">
+          <div class="card">On this device</div>
+          <div class="card sel"><strong>GitHub, GitLab, or Azure</strong><span class="muted">Share snapshots with the team</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="9000">
+      <div class="copy">
+        <div class="step">1 · Connect the host</div>
+        <h2>Pick GitHub, GitLab, or Azure</h2>
+        <p>Open <b style="color:#e6e4de">How to connect</b> for that host. Create a token, paste it, Connect, then <b style="color:#e6e4de">Use this repo</b>.</p>
+        <ul class="list">
+          <li>GitHub — PAT with repo / Contents: Read and write</li>
+          <li>GitLab — api, or read_repository + write_repository</li>
+          <li>Azure — Code: Read &amp; write, then org/project/repo</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>Connect the team repo</strong><span>Host + token stay in this browser</span></div></div>
+        <div class="body">
+          <div class="muted">Host</div>
+          <div class="card sel">GitHub</div>
+          <div class="card">How to connect GitHub ▾</div>
+          <div class="card muted">Personal access token · ghp_…</div>
+          <div class="btn">Connect GitHub</div>
+          <div class="card" style="margin-top:10px">acme/salesforce-metadata @ main</div>
+          <div class="btn accent">Use this repo</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="8000">
+      <div class="copy">
+        <div class="step">2 · Optional pipeline</div>
+        <h2>Remember From, To, and tests</h2>
+        <p>Save a pipeline to <b style="color:#e6e4de">.orgflow/pipelines.json</b> in the connected repo. Next time, pick it and keep going.</p>
+        <p class="note">No passwords. No Salesforce session ids. Just org labels and test level.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>Pipeline</strong><span>Saved in the team repo</span></div></div>
+        <div class="body">
+          <div class="card">Config sandbox → UAT</div>
+          <div class="muted">From Dev sandbox · To UAT · No tests</div>
+          <div class="btn accent">Save pipeline to repo</div>
+          <div class="ok">Saved to .orgflow/pipelines.json</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="10000">
+      <div class="copy">
+        <div class="step">3 · Save a Jira version</div>
+        <h2>Retrieve, then Save to repo</h2>
+        <p>Tick members, retrieve from From, write a <b style="color:#e6e4de">commit message</b>, Save. OrgFlow writes <b style="color:#e6e4de">PROJ-123-v1</b> into the repo.</p>
+        <p class="note">Jira key and comment are required on Retrieve before Confirm deploy when a release repo is on.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>Save to the team repo</strong><span>GitHub · acme/sf@main</span></div></div>
+        <div class="body">
+          <div class="muted">Jira key</div>
+          <div class="card">PROJ-123</div>
+          <div class="muted">Commit message</div>
+          <div class="card">Account status field + layout for PROJ-123</div>
+          <div class="btn accent">Save to repo</div>
+          <div class="ok">Saved PROJ-123-v1 · 2 files</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="9000">
+      <div class="copy">
+        <div class="step">How versions live</div>
+        <h2>One folder per increment</h2>
+        <p>v1 stays deployable when you save v2. Teammates open OrgFlow, connect the same repo, and see every Jira snapshot.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>.orgflow/</strong><span>Normal Git files — review in the host</span></div></div>
+        <div class="body">
+          <div class="tree">.orgflow/<br/>├─ versions.json<br/>├─ pipelines.json<br/>└─ releases/<br/>&nbsp;&nbsp;&nbsp;└─ PROJ-123/<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ v1/package.xml<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ v1/objects/Account.object<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ v2/…</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="8000">
+      <div class="copy">
+        <div class="step">4 · Same ticket again</div>
+        <h2>Save once more → v2</h2>
+        <p>Change members or files, retrieve, save with a new commit message. OrgFlow keeps <b style="color:#e6e4de">v1</b> and adds <b style="color:#e6e4de">PROJ-123-v2</b>.</p>
+        <p class="note">You can still deploy v1 to an org that should not get the later change.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>Versions</strong><span>Latest first</span></div></div>
+        <div class="body">
+          <div class="card sel"><strong>PROJ-123-v2</strong><span class="muted">GitHub · added validation rule</span></div>
+          <div class="card"><strong>PROJ-123-v1</strong><span class="muted">GitHub · field + layout</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="12000">
+      <div class="copy">
+        <div class="step">5 · Diff check</div>
+        <h2>Compare retrieve vs a version</h2>
+        <p>Left is usually the current retrieve. Right is a saved snapshot, newest first. Open a metadata or Apex file for a line diff.</p>
+        <p class="note">Changed / only left / only right — then revert just the files you want.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>Compare</strong><span>Current retrieve → PROJ-123-v1</span></div></div>
+        <div class="body">
+          <div class="chip on">objects/Account.object · changed</div>
+          <div class="chip">package.xml · same</div>
+          <div class="diff" style="margin-top:10px">
+            <div class="eq">   &lt;fullName&gt;Status__c&lt;/fullName&gt;</div>
+            <div class="del">-  &lt;label&gt;Status&lt;/label&gt;</div>
+            <div class="add">+  &lt;label&gt;Customer status&lt;/label&gt;</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="10000">
+      <div class="copy">
+        <div class="step">6 · Revert files</div>
+        <h2>Restore selected files into retrieve</h2>
+        <p>Pick a version, list files, tick the ones to bring back. Other retrieved files stay as they are. Then deploy that mix.</p>
+        <p class="note">This does not rewrite Git history. Save again if you want a new increment.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>Revert specific files</strong><span>From PROJ-123-v1</span></div></div>
+        <div class="body">
+          <div class="card">☑ objects/Account.object</div>
+          <div class="card">☐ package.xml</div>
+          <div class="btn accent">Revert selected files into retrieve</div>
+          <div class="ok">Restored Account.object from v1</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="10000">
+      <div class="copy">
+        <div class="step">7 · Deploy a saved version</div>
+        <h2>QA and prod get the same zip</h2>
+        <p><b style="color:#e6e4de">Deploy this version</b> loads files from the repo commit, not a new retrieve. Change To, deploy, and OrgFlow records the org on that version.</p>
+        <p class="note">Sandbox → QA → prod can all take PROJ-123-v2 without picking members again.</p>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="logo" style="width:28px;height:28px;border-radius:8px"></div><div><strong>PROJ-123-v2</strong><span>GitHub · 2 files</span></div></div>
+        <div class="body">
+          <div class="muted">Deployments</div>
+          <div class="card">UAT · Succeeded</div>
+          <div class="btn accent">Deploy this version</div>
+          <div class="ok">Ready for prod — same snapshot</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-ms="8000">
+      <div class="copy">
+        <div class="step">What a team repo can do</div>
+        <h2>The full Git loop</h2>
+        <ul class="list">
+          <li>Connect GitHub, GitLab, or Azure</li>
+          <li>Save pipelines and Jira versions (v1, v2, …)</li>
+          <li>Compare / diff metadata and Apex</li>
+          <li>Revert selected files into the current retrieve</li>
+          <li>Deploy a saved version to the next org</li>
+        </ul>
+        <p class="note">Token stays in this browser. Review files in the Git host like any other commit.</p>
+      </div>
+    </section>
+  </div>
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const slides = [...document.querySelectorAll(".slide")];
+    const bar = document.getElementById("bar");
+    const times = slides.map((s) => Number(s.dataset.ms));
+    const total = times.reduce((a, b) => a + b, 0);
+    const only = params.get("slide");
+    if (only !== null) {
+      slides.forEach((s, idx) => s.classList.toggle("on", String(idx) === only));
+      bar.style.width = ((Number(only) + 1) / slides.length * 100) + "%";
+      document.body.dataset.done = "1";
+    } else {
+      let i = 0;
+      let elapsed = 0;
+      function show(n) {
+        slides.forEach((s, idx) => s.classList.toggle("on", idx === n));
+      }
+      function tick() {
+        show(i);
+        const wait = times[i];
+        const startElapsed = elapsed;
+        const startedAt = performance.now();
+        function progress() {
+          const p = Math.min(1, (startElapsed + (performance.now() - startedAt)) / total);
+          bar.style.width = (p * 100) + "%";
+          if (performance.now() - startedAt < wait) requestAnimationFrame(progress);
+        }
+        progress();
+        setTimeout(() => {
+          elapsed = startElapsed + wait;
+          i += 1;
+          if (i < slides.length) tick();
+          else {
+            bar.style.width = "100%";
+            document.body.dataset.done = "1";
+          }
+        }, wait);
+      }
+      tick();
+    }
+  </script>
+</body>
+</html>

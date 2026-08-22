@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OrgFlow privacy policy</title>
+  <style>
+    body { font: 16px/1.55 system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; }
+    h1 { font-size: 28px; }
+    h2 { font-size: 18px; margin-top: 28px; }
+    code { background: #f3f3f3; padding: 1px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>OrgFlow privacy policy</h1>
+  <p>Last updated: 21 August 2026</p>
+  <p>OrgFlow is a Chrome extension for Salesforce metadata retrieve and deploy. This policy describes data the extension handles on your computer.</p>
+  <p>The use of information received from Chrome APIs and from Salesforce or Git hosts you connect will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements. OrgFlow uses that information only to retrieve, version, and deploy Salesforce metadata you select.</p>
+
+  <h2>What OrgFlow stores on this device</h2>
+  <ul>
+    <li>Salesforce session identifiers already present as the <code>sid</code> cookie in Chrome, used only to call the Salesforce APIs for orgs you are logged into.</li>
+    <li>Org labels, usernames, and instance URLs returned by those APIs, so you can pick From and To.</li>
+    <li>Optional GitHub, GitLab, or Azure DevOps personal access tokens, plus the repository you choose.</li>
+    <li>Jira-keyed version snapshots, package selections, pipelines, and commit messages you enter.</li>
+  </ul>
+  <p>This data stays in Chrome’s local extension storage on this profile. OrgFlow does not operate an OrgFlow server, does not create an OrgFlow account, and does not sell data.</p>
+
+  <h2>What OrgFlow sends over the network</h2>
+  <ul>
+    <li><strong>Salesforce</strong> — retrieve, deploy, describe, and list metadata on the org you select, using your existing session.</li>
+    <li><strong>GitHub, GitLab, or Azure DevOps</strong> — only if you turn on a team repo. OrgFlow then reads and writes <code>.orgflow/</code> files in the repository you connected, using the token you pasted.</li>
+    <li><strong>Company GitLab</strong> — if you enter a self-hosted GitLab URL, Chrome asks you to grant access to that host. OrgFlow does not request that permission until you do.</li>
+  </ul>
+  <p>Tokens and session ids are not written into the Git repository. Pipelines stored in Git contain org labels and test settings only.</p>
+
+  <h2>What OrgFlow does not do</h2>
+  <ul>
+    <li>No advertising, analytics SDKs, or tracking pixels.</li>
+    <li>No remote extension code. All logic ships in the packaged files.</li>
+    <li>No transfer of your Salesforce or Git data to the OrgFlow developer except what you choose to put in a Git host you control.</li>
+  </ul>
+
+  <h2>Retention and deletion</h2>
+  <p>Data remains until you remove it (clear the package, disconnect the repo, log out of Salesforce, or uninstall OrgFlow). Uninstalling the extension deletes its local storage. Revoke Git tokens in GitHub, GitLab, or Azure DevOps if the browser is shared.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: open an issue on the <a href="https://github.com/rajeevketha/repositoryTool/issues">OrgFlow GitHub repository</a> you installed from.</p>
+</body>
+</html>

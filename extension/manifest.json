@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "OrgFlow",
+  "version": "1.11.25",
+  "description": "Sequential Salesforce metadata deploys with Jira versions in this browser, GitHub, GitLab, or Azure DevOps.",
+  "homepage_url": "https://github.com/rajeevketha/repositoryTool",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "OrgFlow — Salesforce deployments",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "cookies",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://*.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://*.cloudforce.com/*",
+    "https://*.salesforce-setup.com/*",
+    "https://*.sfcrmapps.cn/*",
+    "https://api.github.com/*",
+    "https://gitlab.com/*",
+    "https://*.gitlab.com/*",
+    "https://dev.azure.com/*",
+    "https://*.dev.azure.com/*",
+    "https://*.visualstudio.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ]
+}

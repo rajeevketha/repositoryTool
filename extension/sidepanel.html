@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OrgFlow</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body data-layout="sidepanel" data-step="start">
+    <header class="app-header">
+      <div class="brand">
+        <img class="brand-mark" src="icons/logo.svg" width="28" height="28" alt="" />
+        <div>
+          <strong>OrgFlow</strong>
+          <span id="header-sub">Config sandbox → other orgs</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="open-versions" class="ghost-text hidden" type="button" title="Compare this retrieve with a saved snapshot before you deploy">Compare / revert</button>
+        <button id="open-workbench" class="ghost-text" type="button" title="Open a wide tab and close this side panel">Workbench</button>
+        <button id="refresh-all" class="ghost" data-busy title="Refresh orgs and versions">↻</button>
+      </div>
+    </header>
+
+    <div id="status-bar" class="status-bar">Log into your Salesforce orgs, then pick configuration to deploy.</div>
+
+    <nav class="stepper" id="stepper" role="tablist" aria-label="Deployment steps"></nav>
+
+    <section id="org-path" class="org-path incomplete" aria-label="Deployment path">
+      <div class="path-copy">
+        <span class="path-kicker">Deployment path</span>
+        <strong id="path-caption">Select source and target orgs</strong>
+        <span id="path-sub" class="path-sub">Next stays off until From and To are different Salesforce orgs.</span>
+      </div>
+      <div class="path-flow">
+        <label class="path-node source">
+          <span class="path-role">From</span>
+          <select id="source-org"></select>
+          <span id="path-zip-from" class="path-zip-from hidden">Zip file</span>
+          <span id="source-org-meta" class="path-meta">Source org</span>
+        </label>
+        <div class="path-arrow" id="path-arrow" aria-hidden="true">
+          <span></span>
+        </div>
+        <label class="path-node target">
+          <span class="path-role">To</span>
+          <select id="target-org"></select>
+          <span id="target-org-meta" class="path-meta">Target org</span>
+        </label>
+      </div>
+      <div id="retrieve-lock" class="retrieve-lock hidden">
+        <p id="retrieve-lock-copy">Retrieved files are frozen to this From org and package.</p>
+        <button type="button" id="btn-unlock-retrieve" class="ghost-text hidden">Back to Package to add members</button>
+      </div>
+    </section>
+
+    <div class="app-body">
+      <main>
+        <section id="view-zip" class="view">
+          <p class="step-kicker">Step 2 of 3</p>
+          <h2 class="page-title">Zip package</h2>
+          <p class="hint">Choose a Metadata API zip — the same layout Workbench retrieve gives you. OrgFlow will not deploy until <code>package.xml</code> matches the folders in the zip.</p>
+          <label class="zip-drop">
+            <input id="zip-file" type="file" accept=".zip,application/zip" />
+            <strong id="zip-file-label">Choose a .zip</strong>
+            <span>Needs package.xml plus Salesforce folders such as classes/, objects/, layouts/, lwc/, flows/.</span>
+          </label>
+          <div id="zip-report" class="zip-report"></div>
+        </section>
+
+        <section id="view-start" class="view active">
+          <p class="step-kicker">Step 1 of 4</p>
+          <h2 class="page-title">Start</h2>
+
+          <div class="start-block" id="deploy-kind-block">
+            <h2 class="start-block-title">How you deploy</h2>
+            <div class="mode-grid">
+              <button type="button" class="mode-card selected" id="flow-org" data-flow="org">
+                <strong>From an org</strong>
+                <span>Build a package in From, retrieve, deploy to To</span>
+              </button>
+              <button type="button" class="mode-card" id="flow-zip" data-flow="zip">
+                <strong>From a zip</strong>
+                <span>Metadata API zip (Workbench layout) to any org</span>
+              </button>
+            </div>
+            <div id="flow-status" class="muted">Build a package in the From org, then deploy to To.</div>
+          </div>
+
+          <div class="start-block" id="snapshots-block">
+            <h2 class="start-block-title">Where snapshots go</h2>
+            <p class="suggestion-kicker">Choose one</p>
+            <div class="mode-grid">
+              <button type="button" class="mode-card" id="mode-simple" data-mode="simple">
+                <strong>On this device</strong>
+                <span>Versions stay on this computer. Jira is optional.</span>
+              </button>
+              <button type="button" class="mode-card" id="mode-git" data-mode="git">
+                <strong>Release repo</strong>
+                <span>Same Jira snapshot: Dev → QA → Staging → Prod</span>
+              </button>
+            </div>
+            <div id="mode-status" class="muted">Keeping versions on this device.</div>
+          </div>
+
+          <div class="start-block">
+            <h2 class="start-block-title">Salesforce orgs</h2>
+            <div class="actions">
+              <button id="btn-refresh-orgs" class="primary" data-busy>Detect logged-in orgs</button>
+            </div>
+            <div id="org-list" class="list org-list-compact"></div>
+            <label>
+              API version
+              <select id="api-version"></select>
+            </label>
+            <p class="hint" id="api-version-hint">After Detect, this list comes from the org so later Salesforce releases (68, 69, …) appear here. Pick a lower version if an org is not on the newest yet.</p>
+          </div>
+
+          <div id="git-setup-block" class="start-block hidden">
+            <h2 class="start-block-title" id="git-setup-title">Release repo</h2>
+            <p class="hint" id="release-path-copy">This Git repo stores Jira versions. From and To are one hop (DEC → QA). Add Staging and Prod when those orgs are logged in — the same committed files travel the path.</p>
+            <aside class="suggestion" id="git-connect-help">
+              <p class="suggestion-kicker" id="git-help-kicker">Help · connecting GitHub</p>
+              <ol class="suggestion-steps" id="git-help-preview">
+                <li>Create a personal access token on GitHub.</li>
+                <li>Paste it below and click Connect GitHub.</li>
+                <li>Pick a repo, then click Use this repo.</li>
+              </ol>
+              <details class="help-card" id="git-help">
+                <summary id="git-help-title">More detail for GitHub</summary>
+                <ol class="help-steps" id="git-help-steps"></ol>
+              </details>
+            </aside>
+            <div class="start-fields">
+              <label>Host
+                <select id="git-provider">
+                  <option value="github">GitHub</option>
+                  <option value="gitlab">GitLab</option>
+                  <option value="azuredevops">Azure DevOps</option>
+                </select>
+              </label>
+              <label id="git-token-label">Personal access token
+                <input id="gh-token" type="password" placeholder="ghp_… or github_pat_…" autocomplete="off" />
+              </label>
+            </div>
+            <label id="git-base-url-wrap" class="hidden">GitLab instance URL
+              <input id="git-base-url" type="url" placeholder="https://gitlab.com" />
+            </label>
+            <label id="git-org-wrap" class="hidden">Azure DevOps organization
+              <input id="git-org" type="text" placeholder="mycompany" autocomplete="off" />
+            </label>
+            <div class="actions">
+              <button id="btn-connect-github" class="secondary" data-busy>Connect GitHub</button>
+            </div>
+            <div id="github-user" class="muted"></div>
+            <div class="start-fields">
+              <label>
+                Select a repo
+                <select id="gh-repo"></select>
+              </label>
+              <label>
+                Branch
+                <input id="gh-branch" type="text" placeholder="main" />
+              </label>
+            </div>
+            <p class="hint hidden" id="repo-pick-hint">Pick a repo, then Use this repo.</p>
+            <details class="start-fold" id="git-repo-paste-fold">
+              <summary>Or paste owner/repo</summary>
+              <label id="git-repo-paste-label">
+                <input id="gh-repo-input" type="text" placeholder="acme/salesforce-metadata" />
+              </label>
+            </details>
+            <div class="actions">
+              <button id="btn-save-repo" class="primary" data-busy>Use this repo</button>
+            </div>
+            <p id="repo-btn-hint" class="btn-state" data-state="off"></p>
+            <aside class="suggestion" id="git-layout-hint">
+              <p class="suggestion-kicker">Suggested project structure</p>
+              <p class="hint layout-hint" id="git-layout-copy">force-app/main/default/{classes, objects, layouts, lwc}. Existing Salesforce folders are never overwritten.</p>
+            </aside>
+            <p id="git-layout-status" class="muted hidden"></p>
+            <div id="git-layout-card" class="hint-actions hidden">
+              <button type="button" id="btn-view-git-files" class="linkish">Open in Git</button>
+              <button type="button" id="btn-create-sf-layout" class="linkish hidden" data-busy>Add folders</button>
+            </div>
+
+            <div id="promotion-path" class="promotion-path hidden">
+              <p class="suggestion-kicker">Promotion path</p>
+              <p id="promotion-path-line" class="path-line">Set From and To, then Use this repo.</p>
+              <div class="start-fields">
+                <label>Add next org
+                  <select id="add-stage-org"></select>
+                </label>
+              </div>
+              <button type="button" id="btn-add-stage" class="linkish" data-busy>Add to path</button>
+            </div>
+
+            <details class="start-fold" id="pipeline-fold">
+              <summary>Switch saved path</summary>
+              <p class="hint">Optional. Connecting a repo already saves From → To. Use this only to switch to another path in the same repo.</p>
+              <div id="pipeline-welcome" class="card hidden">
+                <div class="title">Welcome back</div>
+                <div class="meta" id="pipeline-welcome-body"></div>
+              </div>
+              <label>
+                Saved paths
+                <select id="pipeline-select">
+                  <option value="">No paths yet — connecting a repo creates one</option>
+                </select>
+              </label>
+              <div class="row-actions hidden">
+                <button type="button" id="btn-use-pipeline" class="primary" data-busy>Use this pipeline</button>
+              </div>
+              <label class="hidden">
+                New pipeline name
+                <input id="pipeline-name" type="text" placeholder="DEC → QA → Staging → Prod" />
+              </label>
+              <p class="hint" id="pipeline-path-copy">Uses From and To in the path above.</p>
+              <div class="actions hidden">
+                <button type="button" id="btn-save-pipeline" class="secondary" data-busy>Save pipeline to repo</button>
+              </div>
+              <div id="pipeline-status" class="muted"></div>
+            </details>
+          </div>
+
+          <div class="actions hidden">
+            <button type="button" id="btn-start-continue" class="accent">Continue to Pick configuration</button>
+          </div>
+        </section>
+
+        <section id="view-ship" class="view">
+          <div class="confirm-main">
+            <p class="step-kicker">Step 4 of 4</p>
+            <h2 class="page-title">Confirm deploy</h2>
+            <p class="hint" id="deploy-path-line">Set From and To in the path bar.</p>
+            <article class="card" id="deploy-confirm-card">
+              <div class="title">This snapshot</div>
+              <dl class="confirm-dl">
+                <div><dt>Jira</dt><dd id="deploy-confirm-jira">Enter on Retrieve</dd></div>
+                <div><dt>Comment</dt><dd id="deploy-confirm-comment">Enter on Retrieve</dd></div>
+                <div><dt>API</dt><dd id="deploy-confirm-api">67.0</dd></div>
+                <div><dt>Saved to</dt><dd id="deploy-confirm-dest">On this device</dd></div>
+              </dl>
+            </article>
+            <article class="card" id="package-summary-card">
+              <div class="title">Going to the To org <span id="package-count-deploy" class="badge">0</span></div>
+              <p class="hint">This is the package Salesforce will receive. Validate first if you want a dry run — nothing is saved in the To org until Deploy.</p>
+              <div id="deploy-manifest" class="deploy-manifest" tabindex="0"></div>
+              <div id="package-summary-body" class="hidden"></div>
+            </article>
+            <article class="card" id="to-preflight-card">
+              <p class="suggestion-kicker">To org check</p>
+              <div class="title">Already in To? <span id="preflight-badge" class="badge">—</span></div>
+              <p class="hint" id="preflight-hint">OrgFlow checks selected members against the To org. This does not block Deploy.</p>
+              <div id="preflight-body" class="preflight-list"></div>
+              <div class="row-actions">
+                <button type="button" id="btn-preflight" class="ghost-text">Check To org again</button>
+              </div>
+            </article>
+            <article id="apex-tests-card" class="card hidden">
+              <p class="suggestion-kicker">Optional</p>
+              <div class="title">Run Apex tests <span id="test-count" class="badge">0</span></div>
+              <p class="hint">Test classes do not have to be in this package. Pick classes to run in the To org if you want a coverage percentage. Skip this and Deploy still works in a sandbox.</p>
+              <div id="suggested-tests"></div>
+              <div class="member-toolbar">
+                <input id="test-filter" type="search" placeholder="Filter test classes" autocomplete="off" />
+              </div>
+              <p id="test-runner-status" class="muted"></p>
+              <div id="test-class-list" class="type-list member-list test-class-list"></div>
+              <div class="row-actions">
+                <button type="button" id="btn-scan-tests" class="secondary" data-busy data-needs="source">List test classes in From org</button>
+                <button type="button" id="btn-clear-tests" class="ghost-text">Don't run tests</button>
+              </div>
+              <label>
+                Add a test class name
+                <div class="inline-add">
+                  <input id="manual-test" type="text" placeholder="MyClassTest" autocomplete="off" />
+                  <button type="button" id="btn-add-test" class="secondary">Run this</button>
+                </div>
+              </label>
+              <p id="apex-coverage-line" class="field-hint" data-state="empty">Coverage appears after Validate or Deploy if you ran tests.</p>
+            </article>
+          </div>
+          <aside id="confirm-rail" aria-label="Send this package">
+            <article class="card confirm-path-card">
+              <p class="suggestion-kicker">This send</p>
+              <div class="title">From → To</div>
+              <div class="confirm-hop">
+                <div class="confirm-hop-node">
+                  <span class="path-role">From</span>
+                  <strong id="confirm-rail-from">—</strong>
+                  <span id="confirm-rail-from-meta" class="path-meta"></span>
+                </div>
+                <div class="path-arrow" aria-hidden="true"><span></span></div>
+                <div class="confirm-hop-node">
+                  <span class="path-role">To</span>
+                  <strong id="confirm-rail-to">—</strong>
+                  <span id="confirm-rail-to-meta" class="path-meta"></span>
+                </div>
+              </div>
+              <dl class="confirm-dl confirm-rail-dl">
+                <div><dt>Members</dt><dd id="confirm-rail-members">0</dd></div>
+                <div><dt>Files</dt><dd id="confirm-rail-files">—</dd></div>
+                <div><dt>API</dt><dd id="confirm-rail-api">67.0</dd></div>
+                <div><dt>Saved to</dt><dd id="confirm-rail-dest">On this device</dd></div>
+              </dl>
+            </article>
+            <article class="card" id="confirm-checklist-card">
+              <div class="title">Before you send</div>
+              <ul id="confirm-checklist" class="confirm-check"></ul>
+            </article>
+            <div id="deploy-reason" class="callout warn">Select a target org in the path bar before you can deploy.</div>
+            <div class="actions deploy-actions">
+              <button id="btn-validate-selected" class="secondary" data-busy data-needs="source,target,package,distinct,retrieve">Validate in To org</button>
+              <button id="btn-deploy-selected" class="accent" data-busy data-needs="source,target,package,distinct,retrieve">Deploy</button>
+              <button type="button" id="btn-download-zip-confirm" class="ghost-text">Download zip</button>
+              <p id="deploy-btn-hint" class="btn-state" data-state="off">Not ready yet</p>
+            </div>
+            <article class="card" id="deploy-result-card">
+              <div class="title" id="deploy-result-head">
+                <span id="deploy-result-title">Deploy result</span>
+                <span id="deploy-result-badge" class="badge">—</span>
+              </div>
+              <p class="hint" id="deploy-result-sub">Nothing sent yet. Confirm the org names and component list, then Deploy.</p>
+              <div id="deploy-result-body" class="outcome-body">
+                <p class="muted">The deploy result will show here after you send the package.</p>
+              </div>
+            </article>
+          </aside>
+        </section>
+
+        <section id="view-versions" class="view">
+          <p class="step-kicker">Saved snapshots</p>
+          <h2 class="page-title">Versions</h2>
+          <p class="hint" id="versions-hint">Compare the current retrieve with a saved snapshot, then revert files if needed, <strong>before</strong> you deploy.</p>
+          <input id="version-filter" type="search" placeholder="Filter by Jira or comment" />
+
+          <article class="card" id="version-compare-card">
+            <div class="title">This retrieve vs a saved snapshot</div>
+            <p class="hint">Left is what is moving to the To org. Right is a saved Jira version. Pick a file to see both sides.</p>
+            <div class="compare-picks">
+              <label>Moving now
+                <select id="compare-left">
+                  <option value="current">This retrieve</option>
+                </select>
+              </label>
+              <label>Saved snapshot
+                <select id="compare-right"></select>
+              </label>
+            </div>
+            <div class="row-actions">
+              <button type="button" id="btn-compare-versions" class="primary">Show both sides</button>
+            </div>
+            <div id="compare-summary" class="muted"></div>
+            <div id="compare-file-list" class="file-list compare-files"></div>
+            <div id="version-compare-split" class="diff-split hidden">
+              <div class="diff-col">
+                <div class="diff-col-head" id="version-diff-left-head">Moving now</div>
+                <pre class="diff-pane diff-side" id="version-diff-left"></pre>
+              </div>
+              <div class="diff-col">
+                <div class="diff-col-head" id="version-diff-right-head">Saved snapshot</div>
+                <pre class="diff-pane diff-side" id="version-diff-right"></pre>
+              </div>
+            </div>
+            <pre id="compare-diff" class="diff-pane" hidden></pre>
+          </article>
+
+          <article class="card" id="version-revert-card">
+            <div class="title">Revert specific files</div>
+            <p class="hint">Restore selected files from that version into the current retrieve. Other files stay as they are. Then review on Retrieve and deploy.</p>
+            <label>Restore from (latest first)
+              <select id="revert-from"></select>
+            </label>
+            <div class="row-actions">
+              <button type="button" id="btn-load-revert-files" class="secondary">List files</button>
+              <button type="button" id="btn-revert-select-changed" class="ghost-text">Select changed</button>
+            </div>
+            <div id="revert-file-list" class="file-list compare-files"></div>
+            <div class="row-actions">
+              <button type="button" id="btn-revert-files" class="primary">Revert selected files into retrieve</button>
+            </div>
+          </article>
+
+          <h2>All versions</h2>
+          <div id="version-list" class="list"></div>
+        </section>
+
+          <div id="hidden-ship-fields" class="hidden" hidden>
+            <button type="button" id="goto-components"></button>
+            <button type="button" id="goto-workbench"></button>
+            <button type="button" id="btn-deploy"></button>
+            <button type="button" id="btn-both"></button>
+            <button type="button" id="btn-goto-versions"></button>
+            <select id="deploy-pipeline"></select>
+            <div id="deploy-pipeline-wrap"></div>
+            <input id="use-git" type="checkbox" />
+            <p id="git-hint"></p>
+            <div id="git-status"></div>
+            <div id="git-actions"></div>
+            <select id="test-level">
+              <option value="NoTestRun" selected>No tests (config-only)</option>
+              <option value="RunSpecifiedTests">Run specified tests</option>
+              <option value="RunLocalTests">Run local tests</option>
+              <option value="RunAllTestsInOrg">Run all tests</option>
+            </select>
+            <input id="check-only" type="checkbox" />
+          </div>
+
+        <section id="view-components" class="view">
+          <p class="step-kicker" id="pick-kicker">Step 2 of 4</p>
+          <h2 class="page-title" id="pick-heading">Build the package</h2>
+          <p class="hint" id="pick-lead">Start with what just changed in the From org — or search a type if you already know it.</p>
+          <nav class="subtabs" role="tablist">
+            <button type="button" class="subtab active" data-subtab="pick">Pick</button>
+            <button type="button" class="subtab" data-subtab="xml">package.xml</button>
+            <button type="button" class="subtab" data-subtab="review">Review / edit</button>
+          </nav>
+
+          <div id="subview-pick" class="subview active">
+            <div class="workbench-banner" id="workbench-banner">
+              The Chrome side panel is narrow. Open the <button type="button" class="linkish" id="open-workbench-banner">wide workbench</button> — this side panel will close.
+            </div>
+            <article id="package-start" class="package-start hidden">
+              <p class="suggestion-kicker" id="package-start-kicker">From org</p>
+              <h3 class="package-start-title" id="package-start-title">What's new?</h3>
+              <p class="hint" id="package-start-lead">Tap something you just built. OrgFlow looks at recent Apex, fields, layouts, flows, and permission sets.</p>
+              <div id="package-start-list" class="start-list"></div>
+              <button type="button" id="btn-browse-types" class="ghost-text">Browse types instead</button>
+            </article>
+            <div id="package-hints" class="package-hints hidden">
+              <div id="companion-hint" class="companion-card hidden">
+                <p class="suggestion-kicker">Same object</p>
+                <p class="companion-title" id="companion-title">Add related members</p>
+                <p class="hint" id="companion-detail"></p>
+                <div class="companion-actions">
+                  <button type="button" id="btn-companion-add" class="accent">Add</button>
+                  <button type="button" id="btn-companion-skip" class="ghost-text">Not now</button>
+                </div>
+              </div>
+              <div id="related-hints" class="hint-band hidden">
+                <p class="suggestion-kicker" id="related-hint-kicker">Also on this object</p>
+                <p class="hint hint-lead">Opens that list. Nothing extra is added until you tick.</p>
+                <div id="related-hint-chips" class="hint-chips"></div>
+              </div>
+            </div>
+            <div id="type-browse">
+              <button type="button" id="btn-show-recent" class="ghost-text hidden">Show what changed instead</button>
+              <div class="type-find">
+                <label class="grow">Search types
+                  <input id="type-search" type="search" placeholder="field, object, flow, layout, permission…" autocomplete="off" />
+                </label>
+                <label class="grow">Or pick from the list
+                  <select id="type-picklist">
+                    <option value="">Pick a type…</option>
+                  </select>
+                </label>
+              </div>
+              <div id="type-shortcuts" class="type-shortcuts"></div>
+              <div class="row-actions">
+                <button type="button" id="btn-load-types" class="secondary" data-busy data-needs="source">Load all types from source org</button>
+              </div>
+              <div id="type-count" class="muted"></div>
+              <div id="type-picker" class="type-picker"></div>
+            </div>
+            <div id="type-chosen" class="card hidden">
+              <div class="title" id="active-type-title">Selected type</div>
+              <div class="meta" id="active-type-meta"></div>
+              <p class="hint" id="member-count">Nothing selected yet</p>
+              <button type="button" id="btn-change-type" class="ghost-text hidden">Change type</button>
+            </div>
+            <div id="member-panel" class="hidden">
+              <p class="hint" id="member-help">Tick the orange boxes for members that belong in this deploy. Filter by object first when the list is long.</p>
+              <div class="row-actions">
+                <button type="button" id="btn-load-members" class="secondary" data-busy data-needs="source">Reload members from source org</button>
+                <button type="button" id="btn-select-visible" class="secondary">Tick visible</button>
+                <button type="button" id="btn-clear-type" class="secondary">Clear type</button>
+              </div>
+              <label id="object-filter-wrap" class="hidden">
+                Object
+                <select id="object-filter">
+                  <option value="">All objects</option>
+                </select>
+              </label>
+              <div id="object-chips" class="object-chips hidden"></div>
+              <div class="member-toolbar">
+                <input id="member-filter" type="search" placeholder="Filter members" />
+                <label class="check compact">
+                  <input id="show-newest-first" type="checkbox" checked />
+                  Newest first
+                </label>
+                <label class="check compact">
+                  <input id="show-selected-only" type="checkbox" />
+                  Selected only
+                </label>
+              </div>
+              <div id="member-status" class="muted"></div>
+              <div class="scroll-shell">
+                <div id="member-list" class="type-list member-list" tabindex="0"></div>
+                <div id="member-scroll-hint" class="scroll-hint hidden">Scroll for more members ↓</div>
+              </div>
+              <label>
+                Add member by name
+                <div class="inline-add">
+                  <input id="manual-member" type="text" placeholder="Account.Customer_Status__c" />
+                  <button type="button" id="btn-add-member" class="secondary">Add</button>
+                </div>
+              </label>
+            </div>
+            <article class="card sidepanel-only" id="compact-package-card">
+              <div class="title">In this package <span id="package-count" class="badge">0</span></div>
+              <div id="selected-package" class="package-preview">Tick members below. Retrieve waits until you click Next, then Retrieve.</div>
+              <div class="tiny">
+                <button type="button" id="btn-clear-package" class="secondary">Clear package</button>
+              </div>
+            </article>
+            <div class="actions hidden">
+              <button type="button" id="btn-retrieve" class="secondary" data-busy data-needs="source,package,distinct">Retrieve</button>
+              <button type="button" id="btn-deploy-from-pick" class="hidden"></button>
+            </div>
+          </div>
+
+          <div id="subview-xml" class="subview">
+            <p class="hint">Edit package.xml directly. Apply writes it back to the picker. Invalid XML is not used for retrieve/deploy.</p>
+            <textarea id="package-xml" class="xml-editor" spellcheck="false"></textarea>
+            <div id="xml-status" class="muted"></div>
+            <div class="row-actions">
+              <button type="button" id="btn-apply-xml" class="primary">Apply XML to picker</button>
+              <button type="button" id="btn-rebuild-xml" class="secondary">Rebuild from picker</button>
+              <button type="button" id="btn-back-to-files" class="ghost-text">Back to retrieved files</button>
+            </div>
+          </div>
+
+          <div id="subview-review" class="subview">
+            <div class="row-actions">
+              <button type="button" id="btn-retrieve-review" class="accent" data-busy data-needs="source,package,distinct">Retrieve from From org</button>
+              <button type="button" id="btn-download-zip" class="secondary">Download zip</button>
+            </div>
+            <p id="retrieve-btn-hint" class="btn-state" data-state="off">Click Retrieve when this package looks right. Jira and comment are optional on this device.</p>
+            <div id="file-list" class="file-list"></div>
+            <label id="file-editor-wrap" class="hidden">
+              <span id="file-editor-name">File</span>
+              <textarea id="file-editor" class="xml-editor" spellcheck="false"></textarea>
+              <div class="row-actions">
+                <button type="button" id="btn-save-file" class="primary">Save file edits</button>
+              </div>
+            </label>
+            <p class="hint" id="compare-before-hint">Left is this retrieve (moving to the To org). Right is a saved Jira snapshot from this browser or the repo.</p>
+            <article id="retrieve-compare" class="compare-board hidden">
+              <p class="suggestion-kicker">Before you deploy</p>
+              <h3 class="compare-board-title">This retrieve vs saved snapshot</h3>
+              <label>Saved snapshot
+                <select id="retrieve-compare-saved">
+                  <option value="">No saved snapshots yet</option>
+                </select>
+              </label>
+              <p id="retrieve-compare-empty" class="hint">Save a snapshot (local or repo) after Retrieve to compare. Nothing extra is required to deploy.</p>
+              <p id="retrieve-compare-summary" class="muted"></p>
+              <div id="retrieve-compare-files" class="file-list compare-files"></div>
+              <div id="retrieve-compare-split" class="diff-split hidden">
+                <div class="diff-col">
+                  <div class="diff-col-head" id="retrieve-diff-left-head">Moving now</div>
+                  <pre class="diff-pane diff-side" id="retrieve-diff-left"></pre>
+                </div>
+                <div class="diff-col">
+                  <div class="diff-col-head" id="retrieve-diff-right-head">Saved snapshot</div>
+                  <pre class="diff-pane diff-side" id="retrieve-diff-right"></pre>
+                </div>
+              </div>
+              <button type="button" id="btn-compare-before-deploy" class="ghost-text">Revert files from a snapshot</button>
+            </article>
+            <div class="actions">
+              <button type="button" id="btn-show-xml" class="ghost-text">Edit package.xml instead</button>
+              <button type="button" id="btn-deploy-review" class="hidden"></button>
+            </div>
+          </div>
+        </section>
+
+        <section id="git-ship-panel" class="git-ship hidden">
+          <h2>Snapshot details</h2>
+          <p class="hint" id="git-ship-hint">Jira key and comment are optional on this device. They are required only for a release repo.</p>
+          <label>
+            <span class="field-title">Jira key <span id="jira-req-mark" class="opt-mark">Optional</span></span>
+            <input id="jira" type="text" placeholder="PROJ-123" autocomplete="off" spellcheck="false" aria-required="false" aria-describedby="jira-hint" />
+            <p id="jira-hint" class="field-hint" data-state="empty">Optional on this device. Leave blank and OrgFlow mints CHANGE-YYYYMMDD-N.</p>
+          </label>
+          <label>
+            <span class="field-title">Comment <span id="comment-req-mark" class="opt-mark">Optional</span></span>
+            <textarea id="comment" rows="3" placeholder="Optional. What changed." aria-required="false"></textarea>
+          </label>
+          <div class="row-actions git-only">
+            <button type="button" id="btn-save" class="secondary" data-busy data-needs="source,package,retrieve">Save to repo</button>
+            <p id="save-btn-hint" class="btn-state" data-state="off">Enter a Jira key like PROJ-123, then a comment.</p>
+          </div>
+        </section>
+      </main>
+
+      <aside id="selection-inspector" class="inspector" aria-label="Selected metadata">
+        <header class="inspector-head">
+          <div>
+            <strong>Selected package</strong>
+            <span id="inspector-count" class="badge">0</span>
+          </div>
+          <p class="hint">Updates as you tick fields. Use this to confirm the right members before deploy.</p>
+          <div class="inspector-tabs">
+            <button type="button" class="insp-tab active" data-insp="categories">By category</button>
+            <button type="button" class="insp-tab" data-insp="xml">package.xml</button>
+          </div>
+        </header>
+        <input id="inspector-filter" type="search" placeholder="Filter selected members" />
+        <div id="insp-categories" class="inspector-pane">
+          <div id="category-table" class="category-columns"></div>
+        </div>
+        <div id="insp-xml" class="inspector-pane hidden">
+          <pre id="inspector-xml" class="xml-preview"></pre>
+        </div>
+        <div class="inspector-foot">
+          <div id="inspector-git" class="muted"></div>
+          <div id="inspector-tests" class="muted"></div>
+          <button type="button" id="btn-clear-package-inspector" class="secondary">Clear package</button>
+        </div>
+      </aside>
+
+      <aside id="outcome-panel" class="outcome-panel hidden" aria-label="Retrieve and deploy results">
+        <header class="outcome-head" id="outcome-head">
+          <div>
+            <strong id="outcome-title">Result</strong>
+            <span id="outcome-badge" class="badge">—</span>
+          </div>
+          <p class="hint" id="outcome-sub">Each item below is a Salesforce message (component name + problem). Success lists deployed members.</p>
+        </header>
+        <div id="outcome-body" class="outcome-body">
+          <p class="muted">No result yet.</p>
+        </div>
+      </aside>
+    </div>
+
+    <section class="log-panel">
+      <div class="log-head">Activity</div>
+      <pre id="log"></pre>
+    </section>
+
+    <footer class="wizard-nav">
+      <button type="button" id="btn-back" class="secondary">Back</button>
+      <p class="wizard-hint" id="wizard-hint">Set From and To, then Next.</p>
+      <button type="button" id="btn-next" class="primary">Next</button>
+    </footer>
+
+    <script src="lib/jszip.min.js"></script>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>
